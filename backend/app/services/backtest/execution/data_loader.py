@@ -28,33 +28,57 @@ class DataLoader:
         min_rows: int = 30,
         min_coverage_ratio: float = 0.7,
     ) -> bool:
-        """简单的数据有效性过滤：行数>0 且 覆盖足够长，避免抽样到缺失股票影响结果"""
+        """数据有效性过滤：行数>0 且 覆盖足够长，避免抽样到缺失股票影响结果
+
+        2026-10-26 修复三个静默失效点（之前全被 except 吞成 False，
+        导致 10 年回测只跑起来 234/5514 只股票却看不出来）：
+        1. `pd.DatetimeIndex(data.index)` 对 qlib 预计算数据的 **MultiIndex**
+           （symbol, timestamp）直接抛 TypeError → 全部判为无效。
+        2. coverage 用 `len(data)` 而不是**窗口内**行数 → 窗口外的数据被算进来。
+        3. leading gap 用「数据首日 vs 窗口起点」判断 → 窗口起点早于数据起点
+           （正常的“该股那时还没上市/数据还没覆盖”）被误判为无效。
+        现在：coverage 按窗口内行数算；leading gap 允许数据晚于窗口起点
+        （那部分就是不覆盖，coverage 已经反映了）；只保留 trailing gap 检查
+        （数据必须顶到窗口末尾，否则是陈旧数据）。
+        """
         try:
             if data is None or data.empty:
                 return False
-            # coverage ratio: rows / expected business days. Short, fully-covered
-            # windows can legitimately contain fewer rows than the default
-            # long-window minimum. Treat coverage as the primary validity signal,
-            # while still rejecting obvious stale/truncated data.
-            expected_index = pd.bdate_range(
-                start=start_date.date(), end=end_date.date()
-            )
+            # ── 取时间索引（兼容 MultiIndex）────────────────────────
+            raw_index = data.index
+            if isinstance(raw_index, pd.MultiIndex):
+                data_index = pd.DatetimeIndex(raw_index.get_level_values(-1))
+            else:
+                data_index = pd.DatetimeIndex(raw_index)
+            if data_index.isna().any():
+                data_index = data_index.dropna()
+
+            # ── coverage：只算窗口内的行数 ──────────────────────────
+            # 注意：必须用 Timestamp 比较。`datetime64[ns] >= date` 会抛
+            # TypeError（Invalid comparison），之前被 except 吞成 False，
+            # 导致所有股票都被判无效。
+            start_ts = pd.Timestamp(start_date).normalize()
+            end_ts = pd.Timestamp(end_date).normalize()
+            expected_index = pd.bdate_range(start=start_ts, end=end_ts)
             expected = max(1, len(expected_index))
-            coverage = len(data) / expected
+            in_window = (data_index >= start_ts) & (data_index <= end_ts)
+            rows_in_window = int(in_window.sum())
+            coverage = rows_in_window / expected
             if coverage < min_coverage_ratio:
                 return False
 
-            data_index = pd.DatetimeIndex(data.index)
             first_date = data_index.min().date()
             last_date = data_index.max().date()
-            max_leading_gap_days = 7
-            if (first_date - start_date.date()).days > max_leading_gap_days:
-                return False
+            # trailing gap：数据必须顶到窗口末尾（陈旧数据要拒）
             max_trailing_gap_days = 7
-            if (end_date.date() - last_date).days > max_trailing_gap_days:
+            if (end_ts.date() - last_date).days > max_trailing_gap_days:
+                return False
+            # leading gap：数据起点晚于窗口起点是正常的（未上市/数据未覆盖），
+            # 已由 coverage 反映；这里只挡「首日远超窗口末尾」这种脏数据。
+            if first_date > end_ts.date():
                 return False
 
-            return len(data) >= min_rows or coverage >= min_coverage_ratio
+            return rows_in_window >= min_rows or coverage >= min_coverage_ratio
         except Exception:
             return False
 

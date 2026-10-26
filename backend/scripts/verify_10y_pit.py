@@ -162,6 +162,19 @@ def run_one(
         "strategy": strategy,
         "wall_s": round(time.perf_counter() - t0, 1),
     }
+    _n_actual = (res.get("stock_count") or res.get("actual_stock_count")
+                 or (res.get("perf_breakdown") or {}).get("loaded_stocks"))
+    out["requested_stocks"] = len(codes)
+    out["loaded_stocks"] = _n_actual
+    if _n_actual is not None and len(codes) and (_n_actual / len(codes)) < 0.80:
+        out["SAMPLE_TOO_SMALL"] = (
+            f"实际加载 {_n_actual}/{len(codes)} = {_n_actual/len(codes)*100:.1f}% < 80%，"
+            f"结论不可信")
+    if "SAMPLE_TOO_SMALL" in out:
+        print(f"  ❌ {out['SAMPLE_TOO_SMALL']}", flush=True)
+    elif _n_actual:
+        print(f"  [样本] 加载 {_n_actual}/{len(codes)} "
+              f"({_n_actual/len(codes)*100:.1f}%)", flush=True)
     for k in ("total_return", "annual_return", "sharpe_ratio", "max_drawdown",
               "total_trades", "win_rate", "volatility", "final_value",
               "avg_positions", "calmar_ratio", "annualized_return"):

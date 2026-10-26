@@ -98,6 +98,16 @@ class HonestCompositeStrategy(BaseStrategy):
         # 变成「行业内选相对最强的」。逐日横截面，无未来函数。
         # 实测（3 年全市场周频）：夏普 0.965 → 1.441，回撤基本不变。
         self.industry_neutral = bool(config.get("industry_neutral", False))
+        # 2026-10-26 新增：回撤刹车（组合层择时）
+        # 动机：10 年回测里所有策略 2018 年都亏 24%~42% —— 没有一条线能躲开
+        # 系统性熊市。这层在**选股之上**决定「满仓还是减仓」，不预测涨跌。
+        #   regime_filter: ""(关闭) | "breadth"(市场宽度) | "ma"(等权指数均线)
+        #   regime_threshold: 触发减仓的阈值
+        #   regime_keep_ratio: 坏时保留的持仓比例（0.5 = 只留一半）
+        self.regime_filter = str(config.get("regime_filter", "") or "").lower()
+        self.regime_threshold = float(config.get("regime_threshold", 0.35))
+        self.regime_keep_ratio = float(config.get("regime_keep_ratio", 0.5))
+        self.regime_ma_window = int(config.get("regime_ma_window", 20))
         self.score_scale = float(config.get("score_scale", 10.0))
         self.panel_dir = config.get(
             "panel_dir", "../data/qlib_data/features/day"
@@ -261,6 +271,46 @@ class HonestCompositeStrategy(BaseStrategy):
             composite[weekday != self.rebalance_weekday] = np.nan
         elif self.rebalance_days == "monthly":
             composite[master.day != 1] = np.nan
+
+        # ── 回撤刹车（组合层择时）────────────────────────────────────
+        # 10 年回测显示所有策略 2018 年都亏 24%~42%，没有一条能躲开系统性熊市。
+        # 这层不预测涨跌，只在「市场状态差」时把持仓砍掉一部分（其余资金留现金）。
+        #
+        # 两种状态判定（都用当日及之前的数据，无未来函数）：
+        #   breadth  市场宽度 = 当日上涨股票占比 < 阈值 → 减仓
+        #   ma       等权指数收盘 < 其 N 日均线 → 减仓
+        #
+        # 减仓方式：把超出保留比例的分数置 NaN。目标权重仍是 (1-0.05)/topk，
+        # 所以保留一半持仓 ≈ 总仓位降到一半（其余是现金）。
+        if self.regime_filter:
+            if self.regime_filter == "breadth":
+                with np.errstate(invalid="ignore"):
+                    breadth = np.nanmean((day_ret > 0).astype(float), axis=1)
+                bad = breadth < self.regime_threshold
+            elif self.regime_filter == "ma":
+                mkt = np.nanmean(close.to_numpy(dtype=np.float64), axis=1)
+                ma = pd.Series(mkt).rolling(self.regime_ma_window, min_periods=20).mean()
+                bad = (mkt < ma.to_numpy())
+            else:
+                bad = np.zeros(n_dates, dtype=bool)
+
+            n_keep = max(1, int(round(self.topk * self.regime_keep_ratio)))
+            n_bad = 0
+            for k in np.where(bad)[0]:
+                row = composite[k]
+                valid = np.where(np.isfinite(row))[0]
+                if len(valid) <= n_keep:
+                    continue
+                order = valid[np.argsort(row[valid])[::-1]]
+                drop = order[n_keep:]
+                composite[k, drop] = np.nan
+                n_bad += 1
+            if n_bad:
+                logger.info(
+                    f"honest_composite 回撤刹车({self.regime_filter}"
+                    f" thr={self.regime_threshold} keep={self.regime_keep_ratio}): "
+                    f"{n_bad}/{n_dates} 天减仓至 {n_keep} 只"
+                )
 
         # lag: 0 = 当日分数，1 = 前一日分数
         if self.lag > 0:

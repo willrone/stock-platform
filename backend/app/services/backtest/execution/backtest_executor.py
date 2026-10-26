@@ -1920,6 +1920,11 @@ class BacktestExecutor:
                             strategy=strategy,
                             strategy_config=trade_mode_config,
                             stock_universe=list(stock_data.keys()),
+                            # 2026-10-26：传 backtest_config 让 trade mode 能读到
+                            # stop_loss_pct / take_profit_pct（之前是死参数）
+                            # 注意：_execute_backtest_loop 没有 backtest_config 形参，
+                            # 配置挂在 portfolio_manager 上 → 从那里取。
+                            backtest_config=getattr(portfolio_manager, "config", None),
                         )
                     )
                     executed_trade_signals = mode_result.executed_trade_signals
