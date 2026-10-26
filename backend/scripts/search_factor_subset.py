@@ -472,7 +472,7 @@ def build_cache(window_key: str, force: bool = False) -> str:
 
     t1 = time.perf_counter()
     pmats = _panel_factor_matrices(
-        codes, master, start, end, list(hcs._ALPHAPANEL_FACTORS)
+        codes, master, load_start, end, list(hcs._ALPHAPANEL_FACTORS)
     )
     print(f"[cache] 面板因子读取完成 ({time.perf_counter()-t1:.0f}s)")
     for name, sign in hcs._ALPHAPANEL_FACTORS.items():
@@ -494,6 +494,8 @@ def build_cache(window_key: str, force: bool = False) -> str:
         "window": window_key,
         "start": start.date().isoformat(),
         "end": end.date().isoformat(),
+        "lookback_days": lookback,
+        "load_start": load_start.date().isoformat(),
         "dates": [pd.Timestamp(d).strftime("%Y-%m-%d") for d in master],
         "codes": list(codes),
         "n_dates": int(len(master)),
@@ -556,8 +558,10 @@ def _register_variant_strategy() -> None:
             ic = self._ic_cache()
             dates = pd.to_datetime(pd.Index(meta["dates"]))
             if self.weight_mode == "icir":
-                # 静态 ICIR 权重：只用 IS 段（窗口结束前 2 年）的 IC 估计
-                cut = pd.Timestamp(WINDOW_IS[1])
+                # 静态 ICIR 权重：只用"选择期"的 IC 估计（避免用未来数据定权重）
+                meta = self._meta_cache()
+                sel_end = meta.get("weight_fit_end") or WINDOW_IS[1]
+                cut = pd.Timestamp(sel_end)
                 is_mask = dates < cut
                 if is_mask.sum() < 30:  # 窗口内没有 IS 段 → 退回等权
                     is_mask = np.ones(len(dates), dtype=bool)
@@ -615,30 +619,29 @@ def _register_variant_strategy() -> None:
             cdir = cache_dir_for(self.cache_key)
             meta = self._meta_cache()
 
-            # 缓存与本次回测必须逐行逐列对齐，否则直接报错（不做静默重排）
-            if list(meta["codes"]) != list(codes):
-                raise RuntimeError(
-                    "缓存股票池与回测不一致："
-                    f"cache={len(meta['codes'])} run={len(codes)}"
-                )
-            # 缓存日期可以比回测窗口更长（lookback 预热），
-            # 但必须完整覆盖回测窗口 → 按日期取子集
+            # ── 对齐：缓存按"代码"和"日期"两个轴映射到本次回测 ──
+            # 缓存股票池可以与回测不同（冷启动 OOS 回测时更宽/更窄），
+            # 只要回测用到的每个代码在缓存里存在即可。
+            cache_codes = list(meta["codes"])
             cache_dates = [pd.Timestamp(d) for d in meta["dates"]]
+            code_pos = pd.Index(cache_codes).get_indexer(codes)
+            if (code_pos < 0).any():
+                missing = [c for c, p in zip(codes, code_pos) if p < 0]
+                raise RuntimeError(
+                    f"缓存缺少 {len(missing)} 个回测股票（如 {missing[:5]}）"
+                )
+            # 日期：缓存必须覆盖回测窗口（可以更长 → lookback 预热）
             want = [pd.Timestamp(d) for d in master]
-            if cache_dates == want:
-                row_idx = None
-            else:
-                pos = pd.Index(cache_dates).get_indexer(want)
-                if (pos < 0).any():
-                    raise RuntimeError(
-                        f"缓存日期未覆盖回测窗口（缺 {int((pos < 0).sum())} 天）"
-                    )
-                row_idx = pos
+            row_pos = pd.Index(cache_dates).get_indexer(want)
+            if (row_pos < 0).any():
+                raise RuntimeError(
+                    f"缓存日期未覆盖回测窗口（缺 {int((row_pos < 0).sum())} 天）"
+                )
             n_cache = len(cache_dates)
 
             wvecs = self._weight_vectors(n_cache)
-            acc = np.zeros((n_cache, n_stocks), dtype=np.float64)
-            wsum = np.zeros((n_cache, n_stocks), dtype=np.float64)
+            acc = np.zeros((n_cache, len(cache_codes)), dtype=np.float64)
+            wsum = np.zeros((n_cache, len(cache_codes)), dtype=np.float64)
             for name in self.factors:
                 z = np.load(os.path.join(cdir, f"z_{name}.npy"), mmap_mode="r")
                 w = wvecs[name][:, None]
@@ -648,10 +651,9 @@ def _register_variant_strategy() -> None:
                 acc += np.where(good, w * z, 0.0)
                 wsum += np.where(good, w, 0.0)
                 del z, good
-            if row_idx is not None:
-                acc = acc[row_idx]
-                wsum = wsum[row_idx]
-                n_cache = len(row_idx)
+            # 只保留回测需要的行（日期）与列（股票）
+            acc = acc[np.ix_(row_pos, code_pos)]
+            wsum = wsum[np.ix_(row_pos, code_pos)]
 
             composite = np.where(
                 wsum > 0, acc / np.where(wsum > 0, wsum, 1.0), np.nan
@@ -827,12 +829,16 @@ def run_variant(
     weight_window: int = 60,
     label: str = "",
     subwindow: Optional[Tuple[str, str]] = None,
+    cache_key: Optional[str] = None,
 ) -> Dict[str, Any]:
     """跑一次真实盘口径回测（lag=1 + 可成交性 + PIT 股票池 + 周频）。
 
     subwindow 非空时，在 3 年缓存内只回测 [start, end] 这一段
     （用于滚动窗口稳定性检验）；打分仍用 3 年缓存的 z 矩阵，
     因此因子计算口径与整段回测完全一致。
+
+    cache_key 与 window_key 可以不同：例如 window=oos1y（冷启动回测）
+    + cache=full3y（因子在 OOS 首日就是热的）。
     """
     from app.services.backtest.models import BacktestConfig
 
@@ -848,7 +854,7 @@ def run_variant(
             "factors": list(factors),
             "weight_mode": weight_mode,
             "weight_window": weight_window,
-            "cache_key": window_key,
+            "cache_key": cache_key or window_key,
         }
     )
 
@@ -960,6 +966,7 @@ def _worker_run(task: Dict[str, Any]) -> Dict[str, Any]:
             weight_mode=task.get("weight_mode", "equal"),
             weight_window=task.get("weight_window", 60),
             label=task.get("label", ""),
+            cache_key=task.get("cache_key"),
         )
     except Exception as exc:  # noqa: BLE001
         import traceback
@@ -1784,6 +1791,92 @@ def stage_stability(args) -> None:
         os.path.join(OUT_DIR, f"factor_subset_stability_table_{args.window}.json"),
         {"table": table},
     )
+
+
+def stage_oosval(args) -> None:
+    """OOS 独立验证：在 2025-05 → 2026-05 上**重新起跑**一次回测。
+
+    与"从 3 年净值曲线上切 OOS 段"不同，这里是**冷启动独立回测**：
+    组合从 100 万现金重新开始，只用 IS 期选出来的因子子集。
+    因子 z 矩阵用 full3y 缓存（保证 60 日滚动因子在 OOS 首日就是热的），
+    但回测只跑 OOS 窗口 → 分数仍无未来函数。
+
+    这是对"IS 选出来的子集能不能在没见过的行情里活下来"最硬的检验。
+    """
+    all_f, honest_f, _ = _factor_sets()
+    path = os.path.join(OUT_DIR, f"factor_subset_oosval_{args.window}.json")
+    store = _load_store(path)
+    results: Dict[str, Any] = store.get("results", {})
+
+    cands: Dict[str, List[str]] = {
+        "42f_all": list(all_f),
+        "25f_honest_only": list(honest_f),
+    }
+    for src, key in (
+        (f"factor_subset_greedy_{args.window}.json", "trace"),
+        (f"factor_subset_family_{args.window}.json", "subsets"),
+    ):
+        p = os.path.join(OUT_DIR, src)
+        if not os.path.exists(p):
+            continue
+        st = _load_store(p)
+        if key == "trace":
+            for t in st.get("trace", []):
+                cands[f"greedy_step{t['step']}"] = list(t["factors"])
+        else:
+            for sname, sub in (st.get(key) or {}).items():
+                cands[sname] = list(sub)
+    g2 = _load_store(os.path.join(OUT_DIR, f"factor_subset_greedy2_{args.window}.json"))
+    for sname, trace in (g2.get("traces") or {}).items():
+        if trace:
+            cands[f"g2_{sname}"] = list(trace[-1]["factors"])
+
+    tasks = []
+    for cname, sub in cands.items():
+        k = variant_key(sub)
+        if k in results:
+            continue
+        tasks.append(
+            {
+                "factors": sub,
+                "label": cname,
+                "window": "oos1y",
+                "cache_key": "full3y",  # 用 3 年缓存 → 因子在 OOS 首日就是热的
+                "weight_mode": "equal",
+                "_key": k,
+            }
+        )
+    print(f"[oosval] 待跑 {len(tasks)} 个子集（OOS 冷启动独立回测）")
+    outs = run_tasks(
+        [{k: v for k, v in t.items() if k != "_key"} for t in tasks],
+        args.workers,
+        "oos1y",
+    )
+    for t, r in zip(tasks, outs):
+        results[t["_key"]] = r
+    _save_store(
+        path,
+        {
+            "stage": "oosval",
+            "window": args.window,
+            "candidates": {k: v for k, v in cands.items()},
+            "results": results,
+            "n_variants": len(results),
+        },
+    )
+    print(f"\n[oosval] {'子集':<30}{'因子数':>6}{'OOS夏普':>10}{'收益':>9}{'回撤':>9}{'胜率':>8}{'笔数':>7}")
+    rows = []
+    for cname, sub in cands.items():
+        r = results.get(variant_key(sub))
+        if not r or "sharpe_ratio" not in r:
+            print(f"[oosval] {cname:<30}  FAILED {r.get('error','')[:50] if r else ''}")
+            continue
+        rows.append((r["sharpe_ratio"], cname, len(sub), r))
+    for sh, cname, n, r in sorted(rows, key=lambda x: -x[0]):
+        print(
+            f"[oosval] {cname:<30}{n:>6}{sh:>10.4f}{r['total_return']:>9.4f}"
+            f"{r['max_drawdown']:>9.4f}{r.get('win_rate', 0):>8.3f}{r['total_trades']:>7}"
+        )
 
 
 def stage_report(args) -> None:
