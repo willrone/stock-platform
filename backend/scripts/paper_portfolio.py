@@ -695,7 +695,24 @@ def run_line(
                      "factors": _explain_factors(c, comp.columns)})
 
     end_value = cash + sum(_pos_value(c) for c in positions)
+
+    # ── 净值历史（2026-10-27）────────────────────────────────────
+    # 为什么加：6 窗口稳定性检验显示策略**最近一年（2025Q4）夏普只有 0.221**
+    # （而 2025 上半年是 2.887）→ 策略当下处于低效期，必须能对用户诚实披露
+    # 「这一年赚了多少」，而不是只报累计收益。
+    _cap0 = float(paper.get("initial_capital") or 1_000_000)
+    _nav_hist = list(paper.get("nav_history") or [])
+    _nav_hist.append({
+        "date": str(trade_day.date()),
+        "value": round(end_value, 2),
+        "return_pct": round((end_value / _cap0 - 1.0) * 100, 4) if _cap0 else 0.0,
+    })
+    # 只保留最近 3 年，避免文件无限增长
+    if len(_nav_hist) > 800:
+        _nav_hist = _nav_hist[-800:]
+
     paper.update({"cash": round(cash, 2), "positions": positions,
+                  "nav_history": _nav_hist,
                   # last_signal = **信号日**（周五出信号）
                   # last_trade  = **成交日**（下一交易日成交，lag1 口径）
                   "last_signal": str(signal_day.date()),
@@ -783,13 +800,28 @@ def rebuild_line_from_files(strategy: str, capital: float) -> Dict[str, Any]:
             for r in rows:
                 if str(r.get("date")) != str(trade_date):
                     continue
+                # ⚠️ 2026-10-27：ledger.csv 的列名是 **shares**（不是 quantity）。
+                #    原来读 r.get("quantity") → 永远 None → 股数 0、费用 0，
+                #    用户看到的执行清单是「× 0 股 = 0 元」→ 无法照着下单。
+                _sh = _tofloat(r.get("shares"))
+                if _sh is None:
+                    _sh = _tofloat(r.get("quantity"))
+                # 费用 = 佣金 + 印花税（仅卖出）+ 滑点
+                # （ledger.csv 没有 fee 列 → 不能读，直接按明细求和）
+                _fee = ((_tofloat(r.get("commission")) or 0.0)
+                        + (_tofloat(r.get("stamp_tax")) or 0.0)
+                        + (_tofloat(r.get("slippage")) or 0.0))
                 item = {
                     "code": r.get("code", ""),
                     "name": r.get("name", ""),
                     "price": _tofloat(r.get("price")),
-                    "quantity": int(_tofloat(r.get("quantity")) or 0),
+                    "shares": int(_sh or 0),
+                    "quantity": int(_sh or 0),      # 向后兼容旧字段名
                     "amount": _tofloat(r.get("amount")),
-                    "fee": _tofloat(r.get("fee")) or 0.0,
+                    "fee": _fee,
+                    "commission": _tofloat(r.get("commission")) or 0.0,
+                    "stamp_tax": _tofloat(r.get("stamp_tax")) or 0.0,
+                    "slippage": _tofloat(r.get("slippage")) or 0.0,
                 }
                 if str(r.get("action", "")).upper() == "BUY":
                     buys.append(item)

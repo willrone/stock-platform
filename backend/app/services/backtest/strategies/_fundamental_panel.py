@@ -59,9 +59,13 @@ def _load_fundamental_panel(
     ps = np.array([b for _, b in col_map], dtype=int)
 
     # 日期映射：master 日 t → 可得日 ≤ t 的最后一个面板行
-    # master 已排序 → searchsorted 有效
-    src_idx = master.searchsorted(p_dates, side="right") - 1   # (n_d,)
+    # ⚠️ searchsorted 的方向极易搞反：`a.searchsorted(b)` 是在 **a** 里找 **b**
+    #    的位置，返回长度 = len(b)。这里要的是「对每个 master 日，在面板日期里
+    #    找 ≤ 它的最后一个」→ 必须是 `p_dates.searchsorted(master)`。
+    #    （用反了会让长度变成 len(master_dates) → 越界 IndexError。）
+    src_idx = p_dates.searchsorted(master, side="right") - 1   # (n_d,)
     ok = src_idx >= 0
+    ok &= src_idx < len(p_dates)
 
     fnames = list(factors.keys()) if isinstance(factors, dict) else list(factors)
 

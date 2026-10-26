@@ -99,29 +99,74 @@ def build_line(key: str, portfolio: dict, names: dict) -> str | None:
     if _t5:
         out.append(f"  信号质量 T+5 胜率 {_t5['win_rate']*100:.0f}% · "
                    f"平均超额 {_t5['avg_excess']*100:+.2f}%（{_t5['n']} 个历史信号）")
+    # ⚠️ 2026-10-27：最近 12 个月的表现（诚实披露「当下处于什么状态」）
+    # 背景：6 个半年窗口的稳定性检验显示，最近窗口（2025Q4）夏普只有 0.221，
+    # 而 2025 上半年是 2.887 —— 策略当下处于低效期，必须让用户知道。
+    _nav = _perf.get("nav_history") or []
+    if len(_nav) >= 2:
+        try:
+            _last = _nav[-1]
+            # 找到约 12 个月前的点
+            _tgt = None
+            _d0 = str(_last.get("date") or "")[:10]
+            _best = None
+            for _p in _nav:
+                _d = str(_p.get("date") or "")[:10]
+                if not _d or not _d0:
+                    continue
+                _gap = (int(_d0[:4]) - int(_d[:4])) * 365 + \
+                       (int(_d0[5:7]) - int(_d[5:7])) * 30
+                if _best is None or _gap > _best[0]:
+                    _best = (_gap, _p)
+            _tgt = _best[1] if _best else None
+            if _tgt and _tgt is not _last:
+                _r12 = (float(_last.get("value") or 0)
+                        / float(_tgt.get("value") or 1) - 1.0)
+                out.append(f"  近 12 个月 {_r12*100:+.1f}%"
+                           f"（{_tgt.get('date')} → {_last.get('date')}）")
+        except Exception:
+            pass
+    def _shares_of(d: dict):
+        """兼容 shares / quantity 两种字段名（portfolio.json 用 quantity，
+        ledger.csv 用 shares —— 2026-10-27 前推送读错了字段名导致显示 None 股）"""
+        v = d.get("shares")
+        if v is None:
+            v = d.get("quantity")
+        try:
+            return int(v or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    def _fee_of(d: dict):
+        """费用 = 佣金 + 印花税 + 滑点（fee 字段缺失或为 0 时按明细求和）"""
+        detail = ((d.get("commission") or 0) + (d.get("stamp_tax") or 0)
+                  + (d.get("slippage") or 0))
+        v = d.get("fee")
+        try:
+            fv = float(v or 0.0)
+        except (TypeError, ValueError):
+            fv = 0.0
+        return detail if detail else fv
+
     if buys:
         out.append("买入：")
         for b in buys:
             code = b.get("code", "")
             nm = b.get("name") or names.get(code, "")
-            shares = b.get("shares")
             amount = b.get("amount")
-            cost = (b.get("commission") or 0) + (b.get("slippage") or 0)
             out.append(
-                f"  {code} {nm}  {b.get('price')} 元 × {shares} 股"
-                f" = {fmt_money(amount)} 元（费 {cost:.1f}）"
+                f"  {code} {nm}  {b.get('price')} 元 × {_shares_of(b)} 股"
+                f" = {fmt_money(amount)} 元（费 {_fee_of(b):.1f}）"
             )
     if sells:
         out.append("卖出：")
         for s in sells:
             code = s.get("code", "")
             nm = s.get("name") or names.get(code, "")
-            shares = s.get("shares")
             amount = s.get("amount")
-            fee = (s.get("commission") or 0) + (s.get("stamp_tax") or 0) + (s.get("slippage") or 0)
             out.append(
-                f"  {code} {nm}  {s.get('price')} 元 × {shares} 股"
-                f" = {fmt_money(amount)} 元（费 {fee:.1f}）"
+                f"  {code} {nm}  {s.get('price')} 元 × {_shares_of(s)} 股"
+                f" = {fmt_money(amount)} 元（费 {_fee_of(s):.1f}）"
             )
     if holds and not buys and not sells:
         out.append(f"继续持有 {len(holds)} 只，无操作")
