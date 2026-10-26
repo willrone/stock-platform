@@ -734,6 +734,81 @@ def run_line(
     }
 
 
+
+def rebuild_line_from_files(strategy: str, capital: float) -> Dict[str, Any]:
+    """从持仓文件 + ledger 重建一条线的展示数据（不重新调仓）。
+
+    为什么需要：portfolio.json 是给前端看的汇总，而它原来只写「本次运行」的
+    结果 → 一旦某条线因为「重复调仓」被跳过、或某条线中途报错导致整个
+    进程退出，portfolio.json 就会停留在旧数据 —— 而持仓文件已经是新的，
+    **前端展示的买卖价与实际成交对不上**（实测 2026-10-26 就是这个情况）。
+
+    这里从 ledger 的最近一个成交日取买卖明细，从持仓文件取现金/市值。
+    """
+    spec = STRATEGIES.get(strategy) or {}
+    h = load_holdings(strategy, capital)
+    positions = h.get("positions") or {}
+    cash = float(h.get("cash", capital))
+    # 市值：优先用持仓文件里的现值字段
+    value = float(h.get("last_value") or h.get("value") or 0)
+    if not value:
+        value = cash + sum(
+            float((pos or {}).get("market_value") or
+                  float((pos or {}).get("quantity") or 0) *
+                  float((pos or {}).get("last_price") or
+                        (pos or {}).get("avg_cost") or 0))
+            for pos in positions.values()
+        )
+    buys: List[Dict[str, Any]] = []
+    sells: List[Dict[str, Any]] = []
+    trade_date = h.get("last_trade") or h.get("last_signal")
+    _lp = ledger_path(strategy)
+    if trade_date and os.path.exists(_lp):
+        try:
+            import csv as _csv
+            with open(_lp, newline="") as fh:
+                rows = list(_csv.DictReader(fh))
+            for r in rows:
+                if str(r.get("date")) != str(trade_date):
+                    continue
+                item = {
+                    "code": r.get("code", ""),
+                    "name": r.get("name", ""),
+                    "price": _tofloat(r.get("price")),
+                    "quantity": int(_tofloat(r.get("quantity")) or 0),
+                    "amount": _tofloat(r.get("amount")),
+                    "fee": _tofloat(r.get("fee")) or 0.0,
+                }
+                if str(r.get("action", "")).upper() == "BUY":
+                    buys.append(item)
+                else:
+                    sells.append(item)
+        except Exception:
+            pass
+    return {
+        "strategy": strategy,
+        "desc": spec.get("desc", strategy),
+        "signal_date": h.get("last_signal"),
+        "trade_date": trade_date,
+        "date": trade_date,
+        "cash": round(cash, 2),
+        "value": round(value, 2),
+        "n_positions": len(positions),
+        "sells": sells,
+        "buys": buys,
+        "blocked_buys": [],
+        "blocked_sells": [],
+        "holds": list(positions.keys()),
+    }
+
+
+def _tofloat(v) -> float:
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return 0.0
+    return f if f == f else 0.0
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="多策略纸面盘（每策略一条独立线）")
     ap.add_argument("--strategies", nargs="*", default=list(STRATEGIES))
@@ -773,6 +848,7 @@ def main() -> None:
     #   会拿过去的分数调仓 = 时间倒流。
     latest_all = master[-1]
     today = pd.Timestamp(date.today())
+    _skipped = False
 
     # 真实今天（或之前）最近的周五
     days_since_friday = (today.dayofweek - 4) % 7
@@ -835,7 +911,29 @@ def main() -> None:
                 f"如需重跑请加 --force。",
                 flush=True,
             )
-            return
+            # 跳过也要更新 meta —— 否则推送脚本读不到 signal_date/trade_date，
+            # 标题会退回旧的「每日信号 X」格式，看不出该哪天操作。
+            _ppath = os.path.join(PAPER_DIR, "portfolio.json")
+            if os.path.exists(_ppath):
+                try:
+                    with open(_ppath) as _fh:
+                        _pd = json.load(_fh)
+                    _md = _pd.get("meta") or {}
+                    _md["signal_date"] = str(rebalance_day.date())
+                    _md["trade_date"] = (
+                        str(trade_day.date()) if trade_day is not None else None
+                    )
+                    _md["data_latest"] = str(latest_all.date())
+                    _md["last_run_at"] = datetime.now().isoformat()
+                    _pd["meta"] = _md
+                    with open(_ppath, "w") as _fh:
+                        json.dump(_pd, _fh, ensure_ascii=False, indent=1)
+                    print("  （已更新 portfolio.json 的 meta）", flush=True)
+                except Exception as e:  # noqa: BLE001
+                    print(f"  meta 更新失败（不影响）: {e}", flush=True)
+            # 不 return —— 继续往下走，让「从持仓文件重建所有线」的逻辑执行，
+            # 否则 portfolio.json 会停留在旧数据（前端展示的买卖价与实际成交对不上）
+            _skipped = True
     if not args.force:
         print(
             f"信号日（周五）= {rebalance_day.date()}"
@@ -845,7 +943,9 @@ def main() -> None:
         )
 
     results = []
-    for s in args.strategies:
+    if locals().get("_skipped"):
+        print("（本次未调仓，仅重建 portfolio.json）", flush=True)
+    for s in (args.strategies if not locals().get("_skipped") else []):
         spec = STRATEGIES[s]
         print(f"\n{'='*60}\n[{s}] {spec['desc']}", flush=True)
         r = run_line(s, spec, frames, panel, master, names, args.capital,
@@ -871,9 +971,29 @@ def main() -> None:
             existing = {}
 
     prev_meta = existing.get("meta") or {}
+    # 2026-10-27：**总是从持仓文件 + ledger 重建所有线**。
+    # 原来只写「本次运行」的结果 → 某条线被跳过（重复调仓）或某条线报错
+    # 导致进程退出时，portfolio.json 会停留在旧数据，而持仓文件已是新的
+    # → **前端展示的买卖价与实际成交对不上**（2026-10-26 实测到这个）。
     merged_lines = dict(existing.get("lines") or {})
+    for _name in (list(STRATEGIES.keys()) + [r["strategy"] for r in results]):
+        try:
+            merged_lines[_name] = rebuild_line_from_files(_name, args.capital)
+        except Exception as e:  # noqa: BLE001
+            print(f"  重建 {_name} 失败（保留旧值）: {e}", flush=True)
+    # 本次实际成交的明细（blocked_buys 等只有本次运行才有）覆盖回去
     for r in results:
-        merged_lines[r["strategy"]] = r
+        _prev = merged_lines.get(r["strategy"]) or {}
+        _prev.update({
+            "buys": r.get("buys", []),
+            "sells": r.get("sells", []),
+            "blocked_buys": r.get("blocked_buys", []),
+            "blocked_sells": r.get("blocked_sells", []),
+            "signal_date": r.get("signal_date"),
+            "trade_date": r.get("trade_date"),
+            "desc": r.get("desc", _prev.get("desc")),
+        })
+        merged_lines[r["strategy"]] = _prev
 
     summary = {
         "meta": {

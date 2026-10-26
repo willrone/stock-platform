@@ -1294,6 +1294,11 @@ def stage_weights(args) -> None:
     }
     if gtrace:
         subsets["greedy_best"] = list(gtrace[-1]["factors"])
+    # 多起点贪心的各条路径终点也要试权重
+    g2 = _load_store(os.path.join(OUT_DIR, f"factor_subset_greedy2_{args.window}.json"))
+    for sname, trace in (g2.get("traces") or {}).items():
+        if trace:
+            subsets[f"g2_{sname}"] = list(trace[-1]["factors"])
     # 族级消融里 IS 夏普最好的几个子集也一起试权重方案
     fam_path = os.path.join(OUT_DIR, f"factor_subset_family_{args.window}.json")
     fam = _load_store(fam_path)
