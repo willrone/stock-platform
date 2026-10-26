@@ -273,6 +273,9 @@ class TradingSignalService:
             "buys": buys,
             "sells": sells,
             "holds": holds,
+            # 因可成交性被拦下的标的 —— 让用户知道「信号里有它但没成交」
+            "blocked_buys": (line or {}).get("blocked_buys") or [],
+            "blocked_sells": (line or {}).get("blocked_sells") or [],
             "cost_model": {
                 "commission": COMMISSION,
                 "stamp_tax": STAMP_TAX,
@@ -282,6 +285,29 @@ class TradingSignalService:
             },
             "fill_assumption": "信号在收盘后生成，按下一交易日开盘/收盘价成交",
         }
+
+    # ── 信号质量（信任凭证）──
+    def signal_quality(self, strategy: str) -> Dict[str, Any]:
+        """某条线的信号质量统计：T+1/T+5/T+10/T+20 的超额收益与胜率。
+
+        数据来自 backend/scripts/signal_quality.py 的产出
+        （data/paper/<strategy>_signal_quality.json）。
+        """
+        path = os.path.join(PAPER_DIR, f"{strategy}_signal_quality.json")
+        data = _read_json(path)
+        if not data:
+            return {
+                "strategy": strategy,
+                "status": "no_data",
+                "message": (
+                    "信号质量统计尚未生成。平台在每次调仓后自动计算"
+                    "（需要至少 1 次买入信号 + 后续行情），请稍后再看。"
+                ),
+                "horizons": {},
+                "recent_10": [],
+            }
+        data["status"] = "ok"
+        return data
 
     # ── 纸面业绩（故事证据）──
     def performance(self, strategy: str) -> Dict[str, Any]:

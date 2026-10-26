@@ -130,6 +130,38 @@ async def get_daily_signal(
     return result
 
 
+@router.get("/signal-quality", summary="信号质量（胜率与超额收益）")
+async def get_signal_quality(
+    strategy: str = Query("honest_42f", description="策略 key"),
+    user: Any = Depends(require_current_user),
+) -> Dict[str, Any]:
+    """信号质量统计：T+1/T+5/T+10/T+20 的胜率与超额收益。
+
+    这是「凭什么信你的信号」的回答 —— 每个历史买入信号发出后的
+    实际表现，相对全市场等权基准。
+    """
+    tier = _tier_of(user)
+    ent = entitlement_for(tier)
+
+    if strategy not in SIGNAL_STRATEGIES:
+        raise HTTPException(
+            status_code=404,
+            detail=f"未知策略 {strategy}，可选: {list(SIGNAL_STRATEGIES)}",
+        )
+
+    hint = upgrade_required(tier, strategy)
+    if hint:
+        raise HTTPException(status_code=403, detail=hint)
+
+    result = TradingSignalService().signal_quality(strategy)
+    result["tier"] = tier
+    result["tier_label"] = ent.label
+    if not ent.include_full_ledger:
+        # 免费用户：只给汇总指标，不给逐笔信号明细
+        result["recent_10"] = []
+    return result
+
+
 @router.get("/performance", summary="纸面业绩（真实 track record）")
 async def get_performance(
     strategy: str = Query("honest_42f", description="策略 key"),

@@ -22,6 +22,7 @@ import {
   Chip,
   CircularProgress,
   Divider,
+  Grid,
   MenuItem,
   Select,
   Stack,
@@ -33,7 +34,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { RefreshCw, TrendingUp, TrendingDown, Info, Wallet } from 'lucide-react';
+import { RefreshCw, TrendingUp, TrendingDown, Info, Wallet, Target } from 'lucide-react';
 import { apiRequest } from '@/services/api';
 
 type Trade = {
@@ -94,6 +95,34 @@ type DailySignal = {
   delayed?: boolean;
   upgrade_hint?: string;
   execution_detail_locked?: boolean;
+  blocked_buys?: { code: string; name?: string; reason: string }[];
+  blocked_sells?: { code: string; name?: string; reason: string }[];
+};
+
+type SignalQuality = {
+  status: string;
+  message?: string;
+  n_signals?: number;
+  horizons?: Record<
+    string,
+    {
+      n: number;
+      win_rate: number;
+      avg_excess: number;
+      median_excess: number;
+      worst: number;
+      best: number;
+    }
+  >;
+  recent_10?: {
+    date: string;
+    code: string;
+    name?: string;
+    excess_T1?: number | null;
+    excess_T5?: number | null;
+    excess_T10?: number | null;
+    excess_T20?: number | null;
+  }[];
 };
 
 type StrategyInfo = {
@@ -135,6 +164,7 @@ export default function TodaySignalPage() {
   const [tierLabel, setTierLabel] = useState('体验版');
   const [delayDays, setDelayDays] = useState(0);
   const [hasDetail, setHasDetail] = useState(true);
+  const [quality, setQuality] = useState<SignalQuality | null>(null);
 
   useEffect(() => {
     const token = window.localStorage.getItem('access_token');
@@ -168,6 +198,15 @@ export default function TodaySignalPage() {
     try {
       const res = await apiRequest.get<DailySignal>(`/trading/signal?strategy=${active}`);
       setSignal(res);
+      // 信号质量（付费墙可能 403，失败就静默）
+      try {
+        const q = await apiRequest.get<SignalQuality>(
+          `/trading/signal-quality?strategy=${active}`
+        );
+        setQuality(q);
+      } catch {
+        setQuality(null);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : '加载信号失败');
       setSignal(null);
@@ -339,6 +378,85 @@ export default function TodaySignalPage() {
               {signal.fill_assumption ? ` · ${signal.fill_assumption}` : ''}
             </Typography>
           </Alert>
+
+          {/* 信号质量：凭什么信这个信号 */}
+          {quality && quality.status === 'ok' && quality.horizons && (
+            <Card sx={{ mb: 2 }}>
+              <CardContent>
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                  <Target size={18} color="#6a1b9a" />
+                  <Typography variant="subtitle1">信号质量</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    历史上 {quality.n_signals} 个买入信号发出后的实际表现（相对全市场等权）
+                  </Typography>
+                </Stack>
+                <Grid container spacing={1.5}>
+                  {Object.entries(quality.horizons).map(([h, v]) => (
+                    <Grid size={{ xs: 6, sm: 3 }} key={h}>
+                      <Box
+                        sx={{
+                          p: 1.5,
+                          border: 1,
+                          borderColor: 'divider',
+                          borderRadius: 1.5,
+                        }}
+                      >
+                        <Typography variant="caption" color="text.secondary">
+                          {h} 超额
+                        </Typography>
+                        <Typography
+                          variant="h6"
+                          sx={{
+                            color:
+                              v.avg_excess >= 0 ? 'success.main' : 'error.main',
+                          }}
+                        >
+                          {v.avg_excess >= 0 ? '+' : ''}
+                          {(v.avg_excess * 100).toFixed(2)}%
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          胜率 {(v.win_rate * 100).toFixed(0)}% · {v.n} 次
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                  超额 = 该信号股票收益 − 同期全市场等权收益。中位{' '}
+                  {Object.values(quality.horizons)[0]
+                    ? (
+                        Object.values(quality.horizons)[0].median_excess * 100
+                      ).toFixed(2)
+                    : '0.00'}
+                  % ，最差{' '}
+                  {Object.values(quality.horizons)[0]
+                    ? (Object.values(quality.horizons)[0].worst * 100).toFixed(1)
+                    : '0.0'}
+                  %
+                </Typography>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* 因可成交性未成交的信号 */}
+          {((signal?.blocked_buys?.length ?? 0) > 0 ||
+            (signal?.blocked_sells?.length ?? 0) > 0) && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.5 }}>
+                有信号没成交（实盘同样买不进/卖不出）
+              </Typography>
+              {(signal?.blocked_buys ?? []).slice(0, 6).map((b, i) => (
+                <Typography variant="caption" key={`b${b.code}`} sx={{ display: 'block' }}>
+                  买不进 {b.code} {b.name} —— {b.reason}
+                </Typography>
+              ))}
+              {(signal?.blocked_sells ?? []).slice(0, 6).map((b) => (
+                <Typography variant="caption" key={`s${b.code}`} sx={{ display: 'block' }}>
+                  卖不出 {b.code} {b.name} —— {b.reason}
+                </Typography>
+              ))}
+            </Alert>
+          )}
 
           <Stack spacing={2}>
             <Card>
