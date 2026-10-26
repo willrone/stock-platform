@@ -517,6 +517,33 @@ def run_line(
     )
     target_weight = (1.0 - CASH_RESERVE) / topk
 
+    # ── 持仓估值（复权口径）─────────────────────────────────────────
+    # 关键：未复权价在除权日跳空（实测 -50%），用它算持仓市值会
+    # **系统性低估收益**（实测 1193 只等权组合年化差 5.45 个百分点）。
+    #
+    # 这里用「总回报」口径：
+    #   持仓市值 = 股数 × 当前未复权价 × (当前后复权价 / 买入日后复权价)
+    # 买入金额仍按**未复权真实价**算（用户照着这个金额下单，不含水分）；
+    # 卖出金额同口径（含分红/送转的再投资效应，与总回报指数一致）。
+    def _adj_ratio(code: str) -> float:
+        if adj_close is None or code not in adj_close.columns:
+            return 1.0
+        try:
+            a_now = float(adj_close.at[latest, code])
+            a_cost = float(positions.get(code, {}).get("adj_cost", 0) or 0)
+        except (KeyError, TypeError, ValueError):
+            return 1.0
+        if not np.isfinite(a_now) or not np.isfinite(a_cost) or a_cost <= 0:
+            return 1.0
+        return a_now / a_cost
+
+    def _pos_value(code: str) -> float:
+        sh = float(positions.get(code, {}).get("shares", 0) or 0)
+        raw = float(close.get(code, np.nan))
+        if not np.isfinite(raw):
+            return 0.0
+        return sh * raw * _adj_ratio(code)
+
     def px(c: str) -> float:
         v = close.get(c, np.nan)
         return float(v) if np.isfinite(v) else float("nan")
@@ -607,33 +634,6 @@ def run_line(
                      "slippage": round(slip, 2), "total_cost": round(cost, 2),
                      "score": round(float(rank.get(c, np.nan)), 4),
                      "factors": _explain_factors(c, comp.columns)})
-
-    # ── 持仓估值（复权口径）─────────────────────────────────────────
-    # 关键：未复权价在除权日跳空（实测 -50%），用它算持仓市值会
-    # **系统性低估收益**（实测 1193 只等权组合年化差 5.45 个百分点）。
-    #
-    # 这里用「总回报」口径：
-    #   持仓市值 = 股数 × 当前未复权价 × (当前后复权价 / 买入日后复权价)
-    # 买入金额仍按**未复权真实价**算（用户照着这个金额下单，不含水分）；
-    # 卖出金额同口径（含分红/送转的再投资效应，与总回报指数一致）。
-    def _adj_ratio(code: str) -> float:
-        if adj_close is None or code not in adj_close.columns:
-            return 1.0
-        try:
-            a_now = float(adj_close.at[latest, code])
-            a_cost = float(positions.get(code, {}).get("adj_cost", 0) or 0)
-        except (KeyError, TypeError, ValueError):
-            return 1.0
-        if not np.isfinite(a_now) or not np.isfinite(a_cost) or a_cost <= 0:
-            return 1.0
-        return a_now / a_cost
-
-    def _pos_value(code: str) -> float:
-        sh = float(positions[c].get("shares", 0) or 0)
-        raw = float(close.get(code, np.nan))
-        if not np.isfinite(raw):
-            return 0.0
-        return sh * raw * _adj_ratio(code)
 
     end_value = cash + sum(_pos_value(c) for c in positions)
     paper.update({"cash": round(cash, 2), "positions": positions,
