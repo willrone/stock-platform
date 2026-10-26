@@ -76,6 +76,23 @@ _ALPHAPANEL_FACTORS: Dict[str, float] = {
 }
 
 
+
+#: Alpha158 面板因子的默认目录（**绝对路径**）
+#: 2026-10-26 修正：原来写的是相对 CWD 的 "../data/qlib_data/features/day"。
+#: 从仓库根跑脚本时它解析到 ~/Projects/data/... → 不存在 → 17 个面板因子
+#: 全 NaN → 42 因子策略**静默退化成 25 因子版**（实测 0.8796 vs
+#: 真正的 42 因子 0.7992）。所有验证脚本都从仓库根跑 → 一直在跑错的东西。
+#: 现在按 __file__ 上溯到项目根，任何 CWD 下都指向同一个目录。
+# 路径：backend/app/services/backtest/strategies/xxx.py
+#   dirname 1 = strategies, 2 = backtest, 3 = services, 4 = app,
+#   5 = backend, 6 = 项目根
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+))))
+DEFAULT_PANEL_DIR = os.path.join(
+    _PROJECT_ROOT, "data", "qlib_data", "features", "day"
+)
+
 class HonestCompositeStrategy(BaseStrategy):
     """25 因子等权复合横截面排名策略（TopK/Dropout 执行模式）。"""
 
@@ -110,9 +127,7 @@ class HonestCompositeStrategy(BaseStrategy):
         self.regime_keep_ratio = float(config.get("regime_keep_ratio", 0.5))
         self.regime_ma_window = int(config.get("regime_ma_window", 20))
         self.score_scale = float(config.get("score_scale", 10.0))
-        self.panel_dir = config.get(
-            "panel_dir", "../data/qlib_data/features/day"
-        )
+        self.panel_dir = config.get("panel_dir", DEFAULT_PANEL_DIR)
 
         # max_position_size: 默认等权公式 (1-cash_reserve)/topk
         cash_reserve = float(config.get("cash_reserve_ratio", 0.05))

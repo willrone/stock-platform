@@ -257,7 +257,6 @@ def score_factor_ranking(frames, master, panel=None) -> pd.DataFrame:
         is_st=load_st_flags(_codes),
     )
     comp[_lu] = np.nan
-    comp[lu] = np.nan
     return pd.DataFrame(comp, index=master, columns=list(frames))
 
 
@@ -811,19 +810,27 @@ def main() -> None:
         _after = master[master > rebalance_day]
         trade_day = _after[0] if len(_after) else None
 
-    # 已有持仓的线：调仓日不得早于上次调仓日
+    # 已有持仓的线：**成交日**不得早于上次成交日
+    #
+    # 2026-10-26 修正：原来比较的是「信号日」，在 lag1 口径下会误伤 ——
+    # 信号日恒为上周五（10-23），而成交日每周都在变（10-26、11-02…）。
+    # 用信号日比较 → 第二周开始就会被判成「重复调仓」而永远跳过。
+    # 正确判据是**成交日**（last_trade）。
+    # 老数据没有 last_trade 时回退到 last_signal。
     existing_signals = []
     for s in args.strategies:
         h = load_holdings(s, args.capital)
-        if h.get("last_signal"):
-            existing_signals.append(pd.Timestamp(h["last_signal"]))
+        _lt = h.get("last_trade") or h.get("last_signal")
+        if _lt:
+            existing_signals.append(pd.Timestamp(_lt))
     if existing_signals:
         last_used = max(existing_signals)
         # 用 `<=` 而不是 `<`：同一天重复跑（手动重跑 / cron 补跑）时
         # 信号日会相等 —— 原来只挡「更早」，会**重复调仓**（同一周买两次）。
-        if rebalance_day <= last_used and not args.force:
+        _trade_for_check = trade_day if trade_day is not None else rebalance_day
+        if _trade_for_check <= last_used and not args.force:
             print(
-                f"跳过：信号日 {rebalance_day.date()} 不晚于已记录的 "
+                f"跳过：成交日 {_trade_for_check.date()} 不晚于已成交的 "
                 f"{last_used.date()}（已调仓过，重复执行会重复下单）。"
                 f"如需重跑请加 --force。",
                 flush=True,

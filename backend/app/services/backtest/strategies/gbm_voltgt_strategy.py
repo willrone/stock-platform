@@ -51,6 +51,23 @@ _ALPHAPANEL_FACTORS: Dict[str, float] = {
 }
 
 
+
+#: Alpha158 面板因子的默认目录（**绝对路径**）
+#: 2026-10-26 修正：原来写的是相对 CWD 的 "../data/qlib_data/features/day"。
+#: 从仓库根跑脚本时它解析到 ~/Projects/data/... → 不存在 → 17 个面板因子
+#: 全 NaN → 42 因子策略**静默退化成 25 因子版**（实测 0.8796 vs
+#: 真正的 42 因子 0.7992）。所有验证脚本都从仓库根跑 → 一直在跑错的东西。
+#: 现在按 __file__ 上溯到项目根，任何 CWD 下都指向同一个目录。
+# 路径：backend/app/services/backtest/strategies/xxx.py
+#   dirname 1 = strategies, 2 = backtest, 3 = services, 4 = app,
+#   5 = backend, 6 = 项目根
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+))))
+DEFAULT_PANEL_DIR = os.path.join(
+    _PROJECT_ROOT, "data", "qlib_data", "features", "day"
+)
+
 class GbmVoltgtStrategy(BaseStrategy):
     """LightGBM 元模型 + 波动率目标仓位（TopK/Dropout 执行模式）。"""
 
@@ -68,9 +85,7 @@ class GbmVoltgtStrategy(BaseStrategy):
         self.score_scale = float(config.get("score_scale", 10.0))
         self.top_n_factors = int(config.get("top_n_factors", 0))  # 0=默认42因子, >0=按IC选topN
         self.horizon = int(config.get("horizon", 1))  # 标签周期(天), 1=对齐日频换仓
-        self.panel_dir = config.get(
-            "panel_dir", "../data/qlib_data/features/day"
-        )
+        self.panel_dir = config.get("panel_dir", DEFAULT_PANEL_DIR)
 
         # LightGBM 超参 (默认 = 回测最优 n=100/depth=3/lr=0.05)
         self.n_estimators = int(config.get("n_estimators", 100))
