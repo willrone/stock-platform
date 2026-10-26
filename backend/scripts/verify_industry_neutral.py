@@ -23,6 +23,7 @@ import json
 import os
 import sys
 import time
+from datetime import datetime
 from typing import Any, Dict, List
 
 BACKEND = "/Users/rone/Projects/stock-platform/backend"
@@ -32,13 +33,31 @@ sys.path.insert(0, BACKEND)
 from app.services.backtest import BacktestExecutor  # noqa: E402
 from app.services.backtest.models import BacktestConfig  # noqa: E402
 
-DATA_ROOT = os.path.join(ROOT, "data", "parquet", "stock_data")
+# 注意：loader 内部还会拼 "parquet/stock_data"，所以这里要给**项目根的 data 目录**
+DATA_ROOT = os.path.join(ROOT, "data")
+# 引擎的股票代码来自 Qlib 预计算目录（文件名 <code>_<SH|SZ|BJ>.parquet）
+QLIB_DAY = os.path.join(ROOT, "data", "qlib_data", "features", "day")
 OUT = os.path.join(ROOT, "data", "backtest", "industry_neutral_verify.json")
 
 
 def universe() -> List[str]:
+    """引擎口径的股票池：Qlib 预计算目录下的 <code>_<SH|SZ|BJ>.parquet。"""
+    if os.path.isdir(QLIB_DAY):
+        codes = []
+        for f in sorted(os.listdir(QLIB_DAY)):
+            if not f.endswith(".parquet"):
+                continue
+            stem = f[: -len(".parquet")]
+            if "_" not in stem:
+                continue
+            code, _, market = stem.partition("_")
+            if market in ("SH", "SZ", "BJ") and code.isdigit():
+                codes.append(f"{code}.{market}")
+        if codes:
+            return sorted(codes)
+    # 兜底：从 stock_data 目录扫
     codes = []
-    for f in sorted(os.listdir(DATA_ROOT)):
+    for f in sorted(os.listdir(os.path.join(DATA_ROOT, "parquet", "stock_data"))):
         if not f.endswith(".parquet"):
             continue
         stem = f[: -len(".parquet")]
@@ -47,7 +66,7 @@ def universe() -> List[str]:
         code, _, market = stem.partition("_")
         if market in ("SH", "SZ", "BJ") and code.isdigit():
             codes.append(f"{code}.{market}")
-    return codes
+    return sorted(codes)
 
 
 def run_one(codes: List[str], neutral: bool) -> Dict[str, Any]:
@@ -70,8 +89,10 @@ def run_one(codes: List[str], neutral: bool) -> Dict[str, Any]:
         executor.run_backtest(
             strategy_name="honest_composite",
             stock_codes=codes,
-            start_date="2023-05-12",
-            end_date="2026-05-08",
+            # 必须是 datetime 对象 —— 传字符串会让引擎的日期覆盖校验失败
+            # （_is_data_valid 拿字符串和 Timestamp 比 → 全部判为无效数据）
+            start_date=datetime(2023, 5, 12),
+            end_date=datetime(2026, 5, 8),
             strategy_config=cfg,
             backtest_config=BacktestConfig(
                 initial_cash=1_000_000.0,

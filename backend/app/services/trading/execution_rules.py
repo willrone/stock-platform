@@ -299,9 +299,11 @@ def limit_up_mask_matrix(
 #
 # 所有操作都是**逐日横截面**（只用当日全市场数据），不含未来函数。
 
+# backend/app/services/trading/execution_rules.py → 上溯 5 层到项目根
+# （trading → services → app → backend → <项目根>）
 INDUSTRY_MAP_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.abspath(__file__))))),
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__)))))),
     "data", "industry", "industry_map.json",
 )
 
