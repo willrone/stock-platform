@@ -52,10 +52,10 @@ OUT = os.path.join(ROOT, "data", "backtest", "drawdown_brake_10y.json")
 VARIANTS: List[tuple] = [
     ("基线（无止损无择时）", {}, {}),
     ("个股止损5%", {}, {"stop_loss_pct": 0.05, "take_profit_pct": 0.0}),
+    ("个股止损8%", {}, {"stop_loss_pct": 0.08, "take_profit_pct": 0.0}),
     ("个股止损10%", {}, {"stop_loss_pct": 0.10, "take_profit_pct": 0.0}),
     ("个股止损5%+止盈15%", {}, {"stop_loss_pct": 0.05, "take_profit_pct": 0.15}),
-    ("个股止损10%+止盈15%", {}, {"stop_loss_pct": 0.10, "take_profit_pct": 0.15}),
-    ("个股止损8%", {}, {"stop_loss_pct": 0.08, "take_profit_pct": 0.0}),
+    ("个股止损10%+止盈20%", {}, {"stop_loss_pct": 0.10, "take_profit_pct": 0.20}),
 ]
 
 
@@ -127,7 +127,7 @@ def run_one(codes, cfg_extra, start, end, bt_extra=None) -> Dict[str, Any]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--years", type=int, default=10)
+    ap.add_argument("--years", type=int, default=3)
     ap.add_argument("--only", nargs="*", default=[])
     args = ap.parse_args()
 

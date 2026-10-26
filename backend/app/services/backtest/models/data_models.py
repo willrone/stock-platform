@@ -66,8 +66,12 @@ class BacktestConfig:
     max_position_size: float = 0.2  # 最大单股持仓比例
     cash_reserve_ratio: float = 0.05  # 预留现金比例
     board_lot_size: int = 100  # 最小买入手数（A股默认100股）
-    stop_loss_pct: float = 0.05  # 止损比例
-    take_profit_pct: float = 0.15  # 止盈比例
+    # 止损/止盈（2026-10-26 真正接线到引擎，之前是死参数）
+    # 默认 0 = 关闭：3 年 5238 只股票池实测，42f 加 5% 个股止损后
+    # 夏普 0.956 → 0.769、收益 +39.4% → +28.5%（只换来回撤 −12.8% → −10.6%）
+    # → 紧止损对周频横截面选股是净负面（砍掉反弹），需要时显式开启。
+    stop_loss_pct: float = 0.0  # 个股止损比例，0=关闭
+    take_profit_pct: float = 0.0  # 个股止盈比例，0=关闭
     rebalance_frequency: str = "daily"  # 调仓频率
 
     # 性能：大规模回测默认不需要每天的完整组合快照；
