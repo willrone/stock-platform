@@ -93,6 +93,39 @@ DEFAULT_PANEL_DIR = os.path.join(
     _PROJECT_ROOT, "data", "qlib_data", "features", "day"
 )
 
+
+def _load_factor_weights(path: str, power: float, cap: float) -> Dict[str, float]:
+    """从 ICIR 表 JSON 读因子权重。
+
+    文件格式（factor_ic_decompose.py 产出）：
+        {"factors": [{"factor": "CORR10", "icir": -0.691, ...}, ...]}
+    权重 = min(|ICIR| ** power, cap) / mean(|ICIR| ** power)
+    → 归一化到平均权重 1，等权时等价于不加权。
+    """
+    import json as _json
+
+    if not path or not os.path.exists(path):
+        return {}
+    try:
+        with open(path) as fh:
+            d = _json.load(fh)
+    except Exception:
+        return {}
+    rows = d.get("factors") or []
+    raw: Dict[str, float] = {}
+    for r in rows:
+        name = r.get("factor")
+        icir = r.get("icir")
+        if not name or icir is None:
+            continue
+        raw[str(name)] = min(abs(float(icir)) ** power, cap)
+    if not raw:
+        return {}
+    mean_w = sum(raw.values()) / len(raw)
+    if mean_w <= 0:
+        return {}
+    return {k: v / mean_w for k, v in raw.items()}
+
 class HonestCompositeStrategy(BaseStrategy):
     """25 因子等权复合横截面排名策略（TopK/Dropout 执行模式）。"""
 
@@ -126,6 +159,35 @@ class HonestCompositeStrategy(BaseStrategy):
         self.regime_threshold = float(config.get("regime_threshold", 0.35))
         self.regime_keep_ratio = float(config.get("regime_keep_ratio", 0.5))
         self.regime_ma_window = int(config.get("regime_ma_window", 20))
+        # 2026-10-27 新增：**趋势加分**（攻「逐笔胜率 67% → 75%」）
+        # 思路：把「close / MA_n - 1」作为一个**加分项**加进复合分。
+        # 为什么是加分而不是过滤？
+        #   - 过滤（把不合格的分数置 NaN）会让持仓一旦跌破均线就被
+        #     topk_dropout 引擎踢出 → 变成止损/追跌杀跌，之前实测有害
+        #     （5% 止损：夏普 0.956 → 0.769）
+        #   - 加分只是让趋势差的票**自然排在后面**、不进新建仓，
+        #     已有持仓的排名不受影响 → 不会引入额外换手
+        # trend_ma_window: 用多少日均线（0 = 关闭）
+        # trend_weight: 加分权重（相对其它因子的 z-score 单位）
+        self.trend_ma_window = int(config.get("trend_ma_window", 0))
+        self.trend_weight = float(config.get("trend_weight", 0.0))
+        # 2026-10-27 新增：**ICIR 加权**（攻夏普）
+        # 动机：因子级 RankIC 拆解显示 22 个公式因子的 IC 全部显著，
+        #   其中 CORR 族（价量相关性）ICIR 高达 −0.69，而**等权平均把
+        #   强因子的信号稀释了** —— 组合 ICIR 只有 0.43 < 单因子 CORR10 的 0.69。
+        #   42 因子版更糟：多出的 17 个面板因子把 CORR 族权重从 3/25 压到 3/42。
+        # factor_icir_file: ICIR 表 JSON（factor_ic_decompose.py 产出）
+        # factor_weight_power: 权重 = |ICIR|^power（0 = 等权，1 = 线性）
+        # factor_weight_cap: 单因子权重上限（避免过度集中）
+        self.factor_icir_file = config.get("factor_icir_file", "")
+        self.factor_weight_power = float(config.get("factor_weight_power", 0.0))
+        self.factor_weight_cap = float(config.get("factor_weight_cap", 3.0))
+        self._factor_weights: Dict[str, float] = {}
+        if self.factor_icir_file and self.factor_weight_power > 0:
+            self._factor_weights = _load_factor_weights(
+                self.factor_icir_file, self.factor_weight_power,
+                self.factor_weight_cap,
+            )
         self.score_scale = float(config.get("score_scale", 10.0))
         self.panel_dir = config.get("panel_dir", DEFAULT_PANEL_DIR)
 
@@ -250,20 +312,23 @@ class HonestCompositeStrategy(BaseStrategy):
                 f"只有行业分类, {_n_ind} 个行业"
             )
 
-        def zscore_add(mat: np.ndarray, sign: float, min_cross: int) -> None:
+        def zscore_add(mat: np.ndarray, sign: float, min_cross: int,
+                       weight: float = 1.0) -> None:
             z = zscore_with_industry(
                 mat, sign, min_cross, _ind_ids, _n_ind, self.industry_neutral
             )
             good = np.isfinite(z)
-            acc[good] += np.nan_to_num(z)[good]
-            wsum[good] += 1
+            acc[good] += np.nan_to_num(z)[good] * weight
+            wsum[good] += weight
 
-        # 23 个诚实公式
+        # 23 个诚实公式（ICIR 加权时按因子名取权重）
         for formula, sign in _HONEST_FORMULAS.items():
-            zscore_add(cands[formula].to_numpy(dtype=np.float64), sign, min_cross)
+            zscore_add(cands[formula].to_numpy(dtype=np.float64), sign, min_cross,
+                       self._factor_weights.get(formula, 1.0))
 
         # 18 个 Alpha158 面板因子 — 每个因子构建一次全截面矩阵
         for factor_name, sign in _ALPHAPANEL_FACTORS.items():
+            _pw = self._factor_weights.get(factor_name, 1.0)
             mat = np.full((n_dates, n_stocks), np.nan, dtype=np.float64)
             for j, code in enumerate(codes):
                 try:
@@ -278,12 +343,33 @@ class HonestCompositeStrategy(BaseStrategy):
                     mat[pos[ok], j] = pd.to_numeric(pf[factor_name], errors="coerce").to_numpy(dtype=np.float64, na_value=np.nan)[ok]
                 except Exception:
                     continue
-            zscore_add(mat, sign, min_cross)
+            zscore_add(mat, sign, min_cross, _pw)
 
         composite = np.where(
             wsum > 0, acc / np.where(wsum > 0, wsum, 1.0), np.nan
         )
         composite[limit_up_mask] = np.nan  # 涨停掩码: 当日不可买
+
+        # ── 趋势加分（2026-10-27）────────────────────────────────
+        # 逐日横截面 z-score(close / MA_n - 1)，乘权重加到复合分上。
+        # 全部是「当日及之前」的数据 → 无未来函数。
+        if self.trend_ma_window > 0 and self.trend_weight != 0:
+            ma = close.rolling(self.trend_ma_window, min_periods=1).mean()
+            trend_raw = (close / ma.where(ma > 0) - 1.0).to_numpy(dtype=np.float64)
+            # 逐日横截面 z-score（nan-aware），复用同一套 min_cross 门槛
+            _ok = np.isfinite(trend_raw)
+            _cnt = _ok.sum(axis=1, keepdims=True)
+            _mu = np.where(_cnt > 0,
+                           np.where(_ok, trend_raw, 0.0).sum(axis=1, keepdims=True)
+                           / np.maximum(_cnt, 1), 0.0)
+            _dv = trend_raw - _mu
+            _sd = np.sqrt(np.where(
+                _cnt > 1,
+                (np.where(_ok, _dv, 0.0) ** 2).sum(axis=1, keepdims=True)
+                / np.maximum(_cnt - 1, 1), 0.0))
+            _tz = np.where(_sd > 1e-12, _dv / np.where(_sd > 1e-12, _sd, 1.0), np.nan)
+            _tz = np.where(_cnt >= min_cross, _tz, np.nan)
+            composite = composite + self.trend_weight * _tz
 
         # 调仓日掩码: 非调仓日分数全部置 NaN → 执行器无分可依, 不换仓。
         if self.rebalance_days == "weekly":
