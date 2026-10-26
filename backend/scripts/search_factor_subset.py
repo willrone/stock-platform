@@ -435,6 +435,29 @@ def build_cache(window_key: str, force: bool = False) -> str:
     stock_data = loader.load_multiple_stocks(
         codes_all, load_start, end, required_columns=list(OHLCV)
     )
+    if lookback:
+        # 股票池必须与"回测窗口"口径完全一致（引擎按回测窗口过滤股票），
+        # 但因子计算需要 lookback 历史。两段分别加载再合并：
+        #   · 回测窗口通过的股票 → 股票池成员（与引擎一致）
+        #   · 其中有 lookback 历史的 → 用带历史的版本（因子在首日就是热的）
+        #   · 只有回测窗口历史的 → 直接用（60 日滚动因子开头为 NaN，符合事实）
+        sd_bt = loader.load_multiple_stocks(
+            codes_all, start, end, required_columns=list(OHLCV)
+        )
+        merged: Dict[str, pd.DataFrame] = {}
+        n_hist = 0
+        for c, df in sd_bt.items():
+            full = stock_data.get(c)
+            if full is not None:
+                merged[c] = full
+                n_hist += 1
+            else:
+                merged[c] = df
+        stock_data = merged
+        print(
+            f"[cache] lookback 模式：回测窗口股票池 {len(sd_bt)} 只，"
+            f"其中 {n_hist} 只有 lookback 历史（剩余为窗口内新上市）"
+        )
     stock_data = _ordered_stock_data(stock_data, codes_all)
     codes, master, close, high, low, vol = _build_matrices(stock_data)
     print(
@@ -620,15 +643,16 @@ def _register_variant_strategy() -> None:
             meta = self._meta_cache()
 
             # ── 对齐：缓存按"代码"和"日期"两个轴映射到本次回测 ──
-            # 缓存股票池可以与回测不同（冷启动 OOS 回测时更宽/更窄），
-            # 只要回测用到的每个代码在缓存里存在即可。
+            # 缓存股票池可以与回测不同（冷启动 OOS 回测时更宽/更窄）：
+            #   · 回测有、缓存没有的股票 → 该股全程无因子分数（不参与选股）
+            #   · 缓存有、回测没有的股票 → 直接丢掉
             cache_codes = list(meta["codes"])
             cache_dates = [pd.Timestamp(d) for d in meta["dates"]]
             code_pos = pd.Index(cache_codes).get_indexer(codes)
-            if (code_pos < 0).any():
-                missing = [c for c, p in zip(codes, code_pos) if p < 0]
-                raise RuntimeError(
-                    f"缓存缺少 {len(missing)} 个回测股票（如 {missing[:5]}）"
+            n_missing = int((code_pos < 0).sum())
+            if n_missing:
+                print(
+                    f"[honest_variant] 缓存缺少 {n_missing} 只回测股票 → 该股无因子分数"
                 )
             # 日期：缓存必须覆盖回测窗口（可以更长 → lookback 预热）
             want = [pd.Timestamp(d) for d in master]
@@ -651,14 +675,23 @@ def _register_variant_strategy() -> None:
                 acc += np.where(good, w * z, 0.0)
                 wsum += np.where(good, w, 0.0)
                 del z, good
-            # 只保留回测需要的行（日期）与列（股票）
-            acc = acc[np.ix_(row_pos, code_pos)]
-            wsum = wsum[np.ix_(row_pos, code_pos)]
+            # 取回测需要的行（日期）；列按 code_pos 映射，缺失的股票整列 NaN
+            acc = acc[row_pos]
+            wsum = wsum[row_pos]
+            acc = acc[:, np.where(code_pos >= 0, code_pos, 0)]
+            wsum = wsum[:, np.where(code_pos >= 0, code_pos, 0)]
+            if n_missing:
+                acc[:, code_pos < 0] = np.nan
+                wsum[:, code_pos < 0] = np.nan
 
             composite = np.where(
                 wsum > 0, acc / np.where(wsum > 0, wsum, 1.0), np.nan
             )
 
+            # ↓↓↓ 以下完全复刻官方 honest_composite 的口径 ↓↓↓
+            # 注意：官方构造 close 时**没有传 columns=**，
+            # 所以 close.columns 是 RangeIndex（0,1,2,...）而不是股票代码！
+            # 涨停幅度因此是按"列序号"判定的（官方既有行为，基线必须一致）。
             # 涨停掩码（与官方一致）
             day_ret = close.pct_change(fill_method=None).to_numpy()
             limit_up_mask = limit_up_mask_matrix(
@@ -830,6 +863,7 @@ def run_variant(
     label: str = "",
     subwindow: Optional[Tuple[str, str]] = None,
     cache_key: Optional[str] = None,
+    period: Optional[Tuple[str, str]] = None,
 ) -> Dict[str, Any]:
     """跑一次真实盘口径回测（lag=1 + 可成交性 + PIT 股票池 + 周频）。
 
@@ -839,11 +873,17 @@ def run_variant(
 
     cache_key 与 window_key 可以不同：例如 window=oos1y（冷启动回测）
     + cache=full3y（因子在 OOS 首日就是热的）。
+
+    period 非空时，在**缓存覆盖的任意子区间**上跑回测（walk-forward 用），
+    缓存不变 → 因子口径与整段完全一致，只有交易期被裁剪。
     """
     from app.services.backtest.models import BacktestConfig
 
     _register_variant_strategy()
     start, end = window_dates(window_key)
+    if period:
+        start = datetime.strptime(period[0], "%Y-%m-%d")
+        end = datetime.strptime(period[1], "%Y-%m-%d")
     codes = universe_from_instruments(QLIB_OFFICIAL)
     executor = _get_executor()
 
@@ -967,6 +1007,7 @@ def _worker_run(task: Dict[str, Any]) -> Dict[str, Any]:
             weight_window=task.get("weight_window", 60),
             label=task.get("label", ""),
             cache_key=task.get("cache_key"),
+            period=tuple(task["period"]) if task.get("period") else None,
         )
     except Exception as exc:  # noqa: BLE001
         import traceback
@@ -1841,7 +1882,7 @@ def stage_oosval(args) -> None:
                 "factors": sub,
                 "label": cname,
                 "window": "oos1y",
-                "cache_key": "full3y",  # 用 3 年缓存 → 因子在 OOS 首日就是热的
+                "cache_key": "oos1y",  # oos1y 缓存含 200 天 lookback → 因子在 OOS 首日就是热的
                 "weight_mode": "equal",
                 "_key": k,
             }
@@ -1877,6 +1918,208 @@ def stage_oosval(args) -> None:
             f"[oosval] {cname:<30}{n:>6}{sh:>10.4f}{r['total_return']:>9.4f}"
             f"{r['max_drawdown']:>9.4f}{r.get('win_rate', 0):>8.3f}{r['total_trades']:>7}"
         )
+
+
+def stage_walkforward(args) -> None:
+    """滚动 walk-forward 检验：**选择流程本身**能不能泛化。
+
+    做法：把 3 年切成 K 段。对每一段 k：
+      1. 只用第 0..k-1 段的数据跑贪心剔除（IS 选择）
+      2. 在第 k 段（从未参与选择）上评估该子集（OOS 评估）
+      3. 同时在第 k 段评估 42 因子基线 → 看"选出来的"是否真的比"不选的"好
+
+    这是对"因子子集搜索有没有价值"的决定性检验：
+    如果选出来的子集在 OOS 上打不过 42 因子基线，那这个方向就没有 alpha。
+    """
+    all_f, _, _ = _factor_sets()
+    path = os.path.join(OUT_DIR, f"factor_subset_walkforward_{args.window}.json")
+    store = _load_store(path)
+    results: Dict[str, Any] = store.get("results", {})
+    folds: Dict[str, Any] = store.get("folds", {})
+
+    # 3 年切成 6 段（与稳定性检验的窗口一致）
+    segs = [
+        ("2023-05-08", "2023-11-08"),
+        ("2023-11-08", "2024-05-08"),
+        ("2024-05-08", "2024-11-08"),
+        ("2024-11-08", "2025-05-08"),
+        ("2025-05-08", "2025-11-08"),
+        ("2025-11-08", "2026-05-08"),
+    ]
+
+    def run_on(factors, period, label):
+        k = f"{variant_key(factors)}|{period[0]}_{period[1]}"
+        if k in results:
+            return results[k]
+        return None
+
+    for k in range(2, len(segs) + 1):
+        fname = f"fold{k}"
+        if fname in folds:
+            print(f"[wf] {fname} 已存在，跳过")
+            continue
+        is_period = (segs[0][0], segs[k - 1][1])
+        oos_period = segs[k - 1]
+        print(
+            f"\n[wf] {fname}: IS={is_period} → OOS={oos_period}",
+            flush=True,
+        )
+
+        # ── 1. 在 IS 上贪心剔除（步数受限，否则 O(n²) 次回测太贵）──
+        max_steps = args.wf_steps
+        tasks = []
+        # 42 因子基线在 IS 段也要跑（贪心第一轮的比较基准）
+        bk = f"{variant_key(all_f)}|{is_period[0]}_{is_period[1]}"
+        if bk not in results:
+            tasks.append((None, list(all_f), bk))
+        for f in all_f:
+            sub = [x for x in all_f if x != f]
+            kk = f"{variant_key(sub)}|{is_period[0]}_{is_period[1]}"
+            if kk in results:
+                continue
+            tasks.append((f, sub, kk))
+        if tasks:
+            outs = run_tasks(
+                [
+                    {
+                        "factors": sub,
+                        "label": f"wf{k}|baseline" if f is None else f"wf{k}|try_drop_{f}",
+                        "window": args.window,
+                        "period": list(is_period),
+                    }
+                    for f, sub, kk in tasks
+                ],
+                args.workers,
+                args.window,
+            )
+            for (f, sub, kk), r in zip(tasks, outs):
+                results[kk] = r
+            _save_store(
+                path,
+                {"stage": "walkforward", "window": args.window, "results": results, "folds": folds},
+            )
+        # 贪心：逐轮剔除，IS 夏普最高者先被剔除（最多 max_steps 步）
+        current = list(all_f)
+        trace = []
+        for step in range(max_steps):
+            scored = []
+            for f in current:
+                sub = [x for x in current if x != f]
+                r = results.get(f"{variant_key(sub)}|{is_period[0]}_{is_period[1]}")
+                if r and "sharpe_ratio" in r:
+                    scored.append((f, r["sharpe_ratio"], r))
+            if not scored:
+                break
+            scored.sort(key=lambda x: -x[1])
+            best_f, best_sc, best_r = scored[0]
+            cur = results.get(f"{variant_key(current)}|{is_period[0]}_{is_period[1]}")
+            cur_sc = cur["sharpe_ratio"] if cur and "sharpe_ratio" in cur else -99
+            if best_sc <= cur_sc + args.min_gain:
+                break
+            current = [x for x in current if x != best_f]
+            trace.append({"dropped": best_f, "is_sharpe": best_sc, "n": len(current)})
+            print(f"[wf] {fname} 去掉 {best_f:<9} → {len(current)} 因子, IS {best_sc:.4f}", flush=True)
+            if step + 1 < max_steps and len(current) > args.min_factors:
+                # 为下一轮准备候选：当前集合去掉任一因子
+                nxt = []
+                for f in current:
+                    sub = [x for x in current if x != f]
+                    kk = f"{variant_key(sub)}|{is_period[0]}_{is_period[1]}"
+                    if kk not in results:
+                        nxt.append((f, sub, kk))
+                if nxt:
+                    outs = run_tasks(
+                        [
+                            {
+                                "factors": sub,
+                                "label": f"wf{k}|s{step+2}|try_drop_{f}",
+                                "window": args.window,
+                                "period": list(is_period),
+                            }
+                            for f, sub, kk in nxt
+                        ],
+                        args.workers,
+                        args.window,
+                    )
+                    for (f, sub, kk), r in zip(nxt, outs):
+                        results[kk] = r
+                    _save_store(
+                        path,
+                        {
+                            "stage": "walkforward",
+                            "window": args.window,
+                            "results": results,
+                            "folds": folds,
+                        },
+                    )
+
+        # ── 2. OOS 评估 ──
+        eval_tasks = []
+        for name, sub in (
+            ("selected", current),
+            ("baseline42", list(all_f)),
+        ):
+            kk = f"{variant_key(sub)}|{oos_period[0]}_{oos_period[1]}"
+            if kk in results:
+                continue
+            eval_tasks.append(
+                {
+                    "factors": sub,
+                    "label": f"wf{k}|{name}|OOS",
+                    "window": args.window,
+                    "period": list(oos_period),
+                    "_key": kk,
+                }
+            )
+        outs = run_tasks(
+            [{kk: vv for kk, vv in t.items() if kk != "_key"} for t in eval_tasks],
+            args.workers,
+            args.window,
+        )
+        for t, r in zip(eval_tasks, outs):
+            results[t["_key"]] = r
+        sel = results.get(f"{variant_key(current)}|{oos_period[0]}_{oos_period[1]}")
+        bas = results.get(f"{variant_key(all_f)}|{oos_period[0]}_{oos_period[1]}")
+        folds[fname] = {
+            "is_period": list(is_period),
+            "oos_period": list(oos_period),
+            "selected_factors": current,
+            "n_factors": len(current),
+            "trace": trace,
+            "selected_oos_sharpe": (sel or {}).get("sharpe_ratio"),
+            "selected_oos_return": (sel or {}).get("total_return"),
+            "selected_oos_mdd": (sel or {}).get("max_drawdown"),
+            "baseline_oos_sharpe": (bas or {}).get("sharpe_ratio"),
+            "baseline_oos_return": (bas or {}).get("total_return"),
+            "baseline_oos_mdd": (bas or {}).get("max_drawdown"),
+            "delta_oos_sharpe": (
+                (sel or {}).get("sharpe_ratio", 0) - (bas or {}).get("sharpe_ratio", 0)
+            ),
+        }
+        _save_store(
+            path,
+            {"stage": "walkforward", "window": args.window, "results": results, "folds": folds},
+        )
+        print(
+            f"[wf] {fname} OOS: 选中子集({len(current)}f)={folds[fname]['selected_oos_sharpe']:.4f}"
+            f"  vs 42f基线={folds[fname]['baseline_oos_sharpe']:.4f}"
+            f"  Δ={folds[fname]['delta_oos_sharpe']:+.4f}",
+            flush=True,
+        )
+
+    print("\n[wf] 汇总：")
+    print(f"  {'fold':<8}{'IS段':<26}{'OOS段':<26}{'选中':>7}{'基线':>8}{'Δ':>8}")
+    wins = 0
+    for fname, fd in folds.items():
+        d = fd["delta_oos_sharpe"]
+        wins += 1 if d > 0 else 0
+        print(
+            f"  {fname:<8}{str(fd['is_period']):<26}{str(fd['oos_period']):<26}"
+            f"{fd['selected_oos_sharpe']:>7.4f}{fd['baseline_oos_sharpe']:>8.4f}{d:>+8.4f}"
+        )
+    if folds:
+        avg_d = float(np.mean([f["delta_oos_sharpe"] for f in folds.values()]))
+        print(f"  平均 ΔOOS 夏普 = {avg_d:+.4f}，跑赢基线的 fold 数 = {wins}/{len(folds)}")
 
 
 def stage_report(args) -> None:
@@ -1935,7 +2178,16 @@ def stage_summarize(args) -> None:
         "factor_catalogue": [FACTOR_META[f] for f in all_f],
     }
     trials = 0
-    for stage in ("ablation", "greedy", "weights"):
+    for stage in (
+        "ablation",
+        "family",
+        "greedy",
+        "greedy2",
+        "weights",
+        "stability",
+        "oosval",
+        "walkforward",
+    ):
         p = os.path.join(OUT_DIR, f"factor_subset_{stage}_{args.window}.json")
         st = _load_store(p) if os.path.exists(p) else {}
         out[stage] = st
@@ -2035,9 +2287,86 @@ def stage_summarize(args) -> None:
     else:
         A("  （无权重结果）")
 
-    # ── 5. DSR ──
+    # ── 5. 族级消融 ──
+    fam = out.get("family", {})
+    fam_res = fam.get("results", {})
+    if fam_res:
+        A("")
+        A("【5】族级消融（去掉整族因子）")
+        A(f"  {'子集':<28}{'因子数':>6}{'全窗口':>9}{'IS':>9}{'OOS':>9}{'回撤':>9}")
+        for sname, sub in sorted(
+            (fam.get("subsets") or {}).items(),
+            key=lambda x: -(fam_res.get(variant_key(x[1])) or {}).get(
+                "sharpe_ratio", -9
+            ),
+        ):
+            r = fam_res.get(variant_key(sub))
+            if not r or "sharpe_ratio" not in r:
+                continue
+            A(
+                f"  {sname:<28}{len(sub):>6}{r['sharpe_ratio']:>9.4f}"
+                f"{r['is']['sharpe_ratio']:>9.4f}{r['oos']['sharpe_ratio']:>9.4f}"
+                f"{r['max_drawdown']:>9.4f}"
+            )
+
+    # ── 6. 稳定性 + OOS 冷启动 + walk-forward ──
+    stab = out.get("stability", {})
+    stab_tab = _load_store(
+        os.path.join(OUT_DIR, f"factor_subset_stability_table_{args.window}.json")
+    )
+    if stab_tab.get("table"):
+        A("")
+        A("【6】滚动窗口稳定性（3 年切成 6 段，每段单独算夏普）")
+        A(f"  {'子集':<28}" + "".join(f"{w[0]:>11}" for w in stab["subwindows"]) + f"{'均值':>9}{'最差':>9}")
+        for row in sorted(stab_tab["table"], key=lambda x: -x["mean"]):
+            cells = "".join(
+                f"{v:>11.3f}" if v is not None else f"{'n/a':>11}"
+                for v in row["per_window_sharpe"].values()
+            )
+            A(
+                f"  {row['subset'][:27]:<28}{cells}{row['mean']:>9.3f}{row['worst']:>9.3f}"
+            )
+
+    ov = out.get("oosval", {})
+    ov_res = ov.get("results", {})
+    if ov_res:
+        A("")
+        A("【7】OOS 冷启动独立回测（2025-05 → 2026-05，100 万现金从零起跑）")
+        A(f"  {'子集':<30}{'因子数':>6}{'OOS夏普':>10}{'收益':>9}{'回撤':>9}{'胜率':>8}")
+        rows = []
+        for cname, sub in (ov.get("candidates") or {}).items():
+            r = ov_res.get(variant_key(sub))
+            if r and "sharpe_ratio" in r:
+                rows.append((r["sharpe_ratio"], cname, len(sub), r))
+        for sh, cname, n, r in sorted(rows, key=lambda x: -x[0]):
+            A(
+                f"  {cname[:29]:<30}{n:>6}{sh:>10.4f}{r['total_return']:>9.4f}"
+                f"{r['max_drawdown']:>9.4f}{r.get('win_rate', 0):>8.3f}"
+            )
+
+    wf = out.get("walkforward", {})
+    folds = wf.get("folds", {})
+    if folds:
+        A("")
+        A("【8】滚动 walk-forward（选择流程本身的泛化能力）")
+        A(f"  {'fold':<8}{'IS段':<24}{'OOS段':<24}{'选中':>8}{'基线':>8}{'Δ':>8}")
+        wins = 0
+        for fname, fd in folds.items():
+            d = fd["delta_oos_sharpe"]
+            wins += 1 if d > 0 else 0
+            A(
+                f"  {fname:<8}{'→'.join(fd['is_period']):<24}"
+                f"{'→'.join(fd['oos_period']):<24}"
+                f"{fd['selected_oos_sharpe']:>8.4f}{fd['baseline_oos_sharpe']:>8.4f}{d:>+8.4f}"
+            )
+        avg_d = float(np.mean([f["delta_oos_sharpe"] for f in folds.values()]))
+        A(
+            f"  平均 ΔOOS 夏普 = {avg_d:+.4f}；跑赢 42 因子基线的 fold = {wins}/{len(folds)}"
+        )
+
+    # ── 9. DSR ──
     A("")
-    A("【5】过拟合校正（Deflated Sharpe Ratio, Bailey & López de Prado 2014）")
+    A("【9】过拟合校正（Deflated Sharpe Ratio, Bailey & López de Prado 2014）")
     A(f"  本次搜索共尝试 {trials} 个变体。")
     cands = []
     for label, r in [("42f 基线", base)] + [
@@ -2091,6 +2420,7 @@ def main() -> None:
             "weights",
             "stability",
             "oosval",
+            "walkforward",
             "report",
             "summarize",
         ],
@@ -2100,6 +2430,9 @@ def main() -> None:
     ap.add_argument("--min-factors", type=int, default=10)
     ap.add_argument("--min-gain", type=float, default=0.0)
     ap.add_argument("--seeds", default="", help="greedy2: 只跑指定种子（逗号分隔）")
+    ap.add_argument(
+        "--wf-steps", type=int, default=2, help="walkforward: 每 fold 贪心剔除步数"
+    )
     ap.add_argument("--max-variants", type=int, default=0, help=">0 则只跑前 N 个（冒烟测试）")
     ap.add_argument("--force", action="store_true")
     args = ap.parse_args()
@@ -2115,6 +2448,7 @@ def main() -> None:
         "weights": stage_weights,
         "stability": stage_stability,
         "oosval": stage_oosval,
+        "walkforward": stage_walkforward,
         "report": stage_report,
         "summarize": stage_summarize,
     }[args.stage](args)

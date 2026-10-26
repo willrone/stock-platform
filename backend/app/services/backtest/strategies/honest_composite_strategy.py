@@ -196,6 +196,18 @@ class HonestCompositeStrategy(BaseStrategy):
         # 默认 False：25 公式因子版（实测夏普 0.880 / 回撤 −13.37%）优于
         # 42 因子版（0.799 / −16.46%）。要用面板因子要显式 use_panel=True。
         self.use_panel = bool(config.get("use_panel", False))
+        # 2026-10-27：**暴露中性化**（Barra APT 风格逐日截面 OLS 残差化）
+        # 这是本轮**唯一跨段稳定有效**的改进（`verify_neut_segments.py`）：
+        #   段1 Δ夏普 +0.222 / 段2 +0.241 / 段3 +0.307，且每段回撤改善 2~3pp
+        # 暴露：size = 20 日 log 成交额均值（平台无市值数据，是流动性/规模混合代理）
+        #       illiq = Amihud(2002) ILLIQ 20 日均值取 log1p
+        # 中性化：逐日截面 OLS（y=复合分, X=[size, illiq, 1]）取残差
+        # ⚠️ 5 年窗口上失效（0.635→0.548），说明它是 **regime 依赖**的
+        #    （2023-05 之后有效，更早的 2021-2023 无效）
+        self.exposure_neutral = bool(config.get("exposure_neutral", False))
+        self.neutral_exposures = list(config.get(
+            "neutral_exposures", ("size", "illiq")))
+        self.neutral_window = int(config.get("neutral_window", 20))
         self.factor_allowlist = config.get("factor_allowlist", None)
         if self.factor_allowlist is not None:
             self.factor_allowlist = set(self.factor_allowlist)
@@ -375,6 +387,49 @@ class HonestCompositeStrategy(BaseStrategy):
             wsum > 0, acc / np.where(wsum > 0, wsum, 1.0), np.nan
         )
         composite[limit_up_mask] = np.nan  # 涨停掩码: 当日不可买
+
+        # ── 暴露中性化（2026-10-27）──────────────────────────────
+        # 逐日截面 OLS：y = 复合分, X = [暴露..., 1] → 取残差。
+        # 暴露全部只用「当日及之前」的数据 → 无未来函数。
+        if self.exposure_neutral and self.neutral_exposures:
+            _exps = {}
+            # ⚠️ 单位：qlib 的 `$volume` 单位是**手**（1 手 = 100 股），
+            # 实测 qlib/baostock 的 volume 比恒为 0.0100。
+            # 成交额 = close × volume × 100，否则 illiq 会差 100 倍
+            # （实测：漏乘 100 时原生引擎夏普 0.855 vs 实验室 1.012）
+            _amount = close * vol * 100.0
+            if "size" in self.neutral_exposures:
+                with np.errstate(divide="ignore", invalid="ignore"):
+                    _log_amt = np.log(np.where(_amount.to_numpy() > 0,
+                                              _amount.to_numpy(), np.nan))
+                _exps["size"] = pd.DataFrame(_log_amt).rolling(
+                    self.neutral_window, min_periods=5).mean().to_numpy()
+            if "illiq" in self.neutral_exposures:
+                with np.errstate(divide="ignore", invalid="ignore"):
+                    _r = close / close.shift(1) - 1.0
+                    _daily = (_r.abs() / _amount.where(_amount > 0)).to_numpy()
+                _ill = pd.DataFrame(_daily).rolling(
+                    self.neutral_window, min_periods=max(5, self.neutral_window // 2)
+                ).mean()
+                with np.errstate(divide="ignore", invalid="ignore"):
+                    _exps["illiq"] = np.log1p(_ill.to_numpy())
+            if _exps:
+                _names = list(_exps)
+                _resid = np.full_like(composite, np.nan)
+                for _t in range(n_dates):
+                    _y = composite[_t]
+                    _X = np.column_stack([_exps[k][_t] for k in _names])
+                    _m = np.isfinite(_y) & np.isfinite(_X).all(axis=1)
+                    if int(_m.sum()) < 50:
+                        continue
+                    _A = np.column_stack([_X[_m], np.ones(int(_m.sum()))])
+                    _beta, *_ = np.linalg.lstsq(_A, _y[_m], rcond=None)
+                    _resid[_t, _m] = _y[_m] - _A @ _beta
+                composite = _resid
+                logger.info(
+                    f"honest_composite 暴露中性化: {','.join(_names)} "
+                    f"（窗口 {self.neutral_window}）"
+                )
 
         # ── 趋势加分（2026-10-27）────────────────────────────────
         # 逐日横截面 z-score(close / MA_n - 1)，乘权重加到复合分上。

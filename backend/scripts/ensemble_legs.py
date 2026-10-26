@@ -46,11 +46,25 @@ os.makedirs(LEG_DIR, exist_ok=True)
 # prepare 配置一律 lag=0 + rebalance_days='daily' → 掩码与滞后交给模拟器，
 # 与 ensemble_lab.simulate 的语义一致（策略内 lag / 模拟器 lag 等价）。
 LEG_DEFS: Dict[str, Dict[str, Any]] = {
+    # ⚠️ 42f 有两个因子集，必须**显式钉死**，否则主线改默认会让历史实验不可比：
+    #   use_panel=False → 25 个公式因子（2026-10-27 02:13 之后的主线默认）
+    #   use_panel=True  → 25 公式 + 17 个 Alpha158 面板因子 = 42 因子
+    # 2026-10-27 实测：主线从 42 因子切到 25 因子后，同一合成配置的引擎夏普
+    # 从 1.2817 掉到 1.1081（同一配置、同一数据、只差因子集）→ 必须钉死。
     "42f": {
         "cls": ("app.services.backtest.strategies.honest_composite_strategy",
                 "HonestCompositeStrategy"),
         "attr": "_honest_composite_scores",
-        "cfg": {"topk": 60, "n_drop": 5, "rebalance_days": "daily", "lag": 0},
+        # 默认 = 当前主线（25 公式因子），显式写出 use_panel 避免默认值漂移
+        "cfg": {"topk": 60, "n_drop": 5, "rebalance_days": "daily", "lag": 0,
+                "use_panel": False},
+    },
+    "42f42": {
+        "cls": ("app.services.backtest.strategies.honest_composite_strategy",
+                "HonestCompositeStrategy"),
+        "attr": "_honest_composite_scores",
+        "cfg": {"topk": 60, "n_drop": 5, "rebalance_days": "daily", "lag": 0,
+                "use_panel": True},
     },
     "rsi": {
         "cls": ("app.services.backtest.strategies.rsi_71421_strategy",

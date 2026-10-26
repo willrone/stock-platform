@@ -24,6 +24,12 @@ from typing import Dict, Optional
 import numpy as np
 import pandas as pd
 
+# 2026-10-26/27：与回测引擎共用的可成交性规则（动态涨跌停阈值 + ST 5%）
+from app.services.trading.execution_rules import (  # noqa: E402
+    limit_up_mask_matrix,
+    load_st_flags,
+)
+
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 STOCK_DATA_DIR = os.path.join(ROOT, "data", "parquet", "stock_data")
 PANEL_DIR = os.path.join(ROOT, "data", "qlib_data", "features", "day")
@@ -267,6 +273,7 @@ def compute_composite(frames: dict, panel: dict, master: pd.DatetimeIndex,
                       use_panel: bool = False,
                       explain_date: Optional[pd.Timestamp] = None,
                       industry_neutral: bool = False,
+                      exposure_neutral: bool = False,
                       ) -> pd.DataFrame:
     """返回 composite DataFrame (index=date, columns=code), 已应用涨停掩码。
 
@@ -335,16 +342,57 @@ def compute_composite(frames: dict, panel: dict, master: pd.DatetimeIndex,
         for fname, sign in _HONEST_FORMULAS.items():
             zscore_add(acc, wsum, cands[fname].to_numpy(), sign, MIN_CROSS,
                        collect=collect, collect_row=collect_row, factor_name=fname)
-        for fname, sign in _ALPHAPANEL_FACTORS.items():
-            zscore_add(acc, wsum, to_panel_mat(panel, master, fname), sign, MIN_CROSS,
-                       collect=collect, collect_row=collect_row, factor_name=fname)
+        if use_panel:
+            # 2026-10-27：默认**不启用** Alpha158 面板因子
+            # （42 因子版夏普 0.799 < 25 公式因子版 0.880）
+            for fname, sign in _ALPHAPANEL_FACTORS.items():
+                zscore_add(acc, wsum, to_panel_mat(panel, master, fname), sign,
+                           MIN_CROSS, collect=collect, collect_row=collect_row,
+                           factor_name=fname)
 
     composite = np.where(wsum > 0, acc / np.where(wsum > 0, wsum, 1.0), np.nan)
+
     if collect is not None:
         _LAST_FACTOR_Z.clear()
         _LAST_FACTOR_Z.update(collect)
-    limit_up = close.pct_change(fill_method=None).to_numpy() >= LIMIT_UP
-    composite[limit_up] = np.nan  # 涨停掩码: 当日不可买
+    # 涨停掩码：按板块动态阈值 + ST 5%（2026-10-26 P0-2）
+    # 原来硬编码 0.095：20% 板涨 9.5%~20% 被误剔，ST 股 5% 涨停拦不住
+    _codes = list(frames)
+    _lu = limit_up_mask_matrix(
+        close.pct_change(fill_method=None).to_numpy(), _codes,
+        is_st=load_st_flags(_codes),
+    )
+    composite[_lu] = np.nan  # 涨停掩码: 当日不可买
+
+    # ── 暴露中性化（2026-10-27）────────────────────────────────
+    # Barra APT 风格：逐日截面 OLS（y=复合分, X=[size, illiq, 1]）取残差。
+    # 原生引擎分段验证：Δ夏普 +0.222 / +0.241 / +0.307，回撤每段改善 2~3pp。
+    if exposure_neutral:
+        _amount = (close * vol * 100.0)  # qlib volume 单位是「手」
+        with np.errstate(divide="ignore", invalid="ignore"):
+            _log_amt = np.log(np.where(_amount.to_numpy() > 0,
+                                      _amount.to_numpy(), np.nan))
+        _size = pd.DataFrame(_log_amt).rolling(20, min_periods=5).mean().to_numpy()
+        with np.errstate(divide="ignore", invalid="ignore"):
+            _r = close / close.shift(1) - 1.0
+            _daily = (_r.abs() / _amount.where(_amount > 0)).to_numpy()
+        _ill = pd.DataFrame(_daily).rolling(
+            20, min_periods=10).mean()
+        with np.errstate(divide="ignore", invalid="ignore"):
+            _illiq = np.log1p(_ill.to_numpy())
+        _resid = np.full_like(composite, np.nan)
+        for _t in range(len(master)):
+            _y = composite[_t]
+            _X = np.column_stack([_size[_t], _illiq[_t]])
+            _m = np.isfinite(_y) & np.isfinite(_X).all(axis=1)
+            if int(_m.sum()) < 50:
+                continue
+            _A = np.column_stack([_X[_m], np.ones(int(_m.sum()))])
+            _beta, *_ = np.linalg.lstsq(_A, _y[_m], rcond=None)
+            _resid[_t, _m] = _y[_m] - _A @ _beta
+        composite = _resid
+
+
     return pd.DataFrame(composite, index=master, columns=list(frames))
 
 

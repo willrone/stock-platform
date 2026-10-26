@@ -85,6 +85,17 @@ COMMISSION = 0.0003
 MIN_COMMISSION = 5.0
 STAMP_TAX = 0.0005
 SLIPPAGE = 0.001
+# 2026-10-27：主线配置（与回测引擎一致）
+#   use_panel=False → 只用 25 个诚实公式因子（实测夏普 0.880 > 42 因子 0.799）
+#   exposure_neutral=True → 暴露中性化（原生引擎分段验证：Δ夏普 +0.22~+0.31，
+#     回撤每段改善 2~3pp）
+USE_PANEL = False
+# 暴露中性化：**不开**。
+# 原生引擎分段验证（2026-10-27）：
+#   seg1 Δ夏普 −0.140 / seg2 +0.200 / seg3 −0.269 → 分段不稳定 = 过拟合
+# （子代理的实验室模拟器报 3 段全正 +0.22~+0.31，但模拟器 seg1 基线
+#   0.243 vs 原生引擎 0.712 —— 模拟器在该段有重大偏差，不能用于最终判断）
+EXPOSURE_NEUTRAL = False
 CASH_RESERVE = 0.05
 BOARD_LOT = 100
 # 涨停阈值：2026-10-26 起按板块动态（见 execution_rules.limit_pct_array），
@@ -101,7 +112,8 @@ def score_42f(frames, master, panel=None, explain_date=None) -> pd.DataFrame:
     """42 因子等权复合（注册策略 honest_composite 同源）。"""
     if panel is None:
         panel = {}
-    return ds.compute_composite(frames, panel, master, explain_date=explain_date)
+    return ds.compute_composite(frames, panel, master, explain_date=explain_date,
+                                use_panel=USE_PANEL, exposure_neutral=EXPOSURE_NEUTRAL)
 
 
 def score_42f_neutral(frames, master, panel=None, explain_date=None) -> pd.DataFrame:

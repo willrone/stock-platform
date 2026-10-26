@@ -62,11 +62,26 @@ _SCORES_ATTR = "_ensemble_scores"
 
 # 腿名 → (策略模块路径, 类名, 分数 attr, 打分用 config)
 _LEG_DEFS: Dict[str, Dict[str, Any]] = {
+    # ⚠️ use_panel 必须**显式钉死**。
+    # honest_composite 的因子集由 `use_panel` 决定：
+    #   False → 25 个公式因子（2026-10-27 02:13 之后的主线默认）
+    #   True  → 25 公式 + 17 个 Alpha158 面板因子 = 42 因子
+    # 2026-10-27 实测：主线默认值从 42 因子切到 25 因子的那一次，
+    # 同一个合成配置（42f+mf, winsor3, k30, d5）的引擎夏普从 1.2817 掉到 1.1081。
+    # 不写死 → 主线改默认就会让本策略的行为静默漂移，历史回测不可复现。
     "42f": {
         "module": "app.services.backtest.strategies.honest_composite_strategy",
         "cls": "HonestCompositeStrategy",
         "attr": "_honest_composite_scores",
-        "cfg": {"topk": 60, "n_drop": 5, "rebalance_days": "daily", "lag": 0},
+        "cfg": {"topk": 60, "n_drop": 5, "rebalance_days": "daily", "lag": 0,
+                "use_panel": False},
+    },
+    "42f42": {
+        "module": "app.services.backtest.strategies.honest_composite_strategy",
+        "cls": "HonestCompositeStrategy",
+        "attr": "_honest_composite_scores",
+        "cfg": {"topk": 60, "n_drop": 5, "rebalance_days": "daily", "lag": 0,
+                "use_panel": True},
     },
     "rsi": {
         "module": "app.services.backtest.strategies.rsi_71421_strategy",

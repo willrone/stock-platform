@@ -121,6 +121,7 @@ def run_one(
     lag: Optional[int] = None,
     enable_tradability: bool = True,
     no_panel: bool = False,
+    neutral_exposure: bool = False,
 ) -> Dict[str, Any]:
     executor = BacktestExecutor(
         data_dir=data_root,
@@ -140,7 +141,8 @@ def run_one(
                 strategy_config=(
                     {**dict(cfg), "lag": lag} if lag is not None else dict(cfg)
                 ) | ({"panel_dir": "/nonexistent/panel_off"}
-                      if no_panel else {}),
+                      if no_panel else {})
+                | ({"exposure_neutral": True} if neutral_exposure else {}),
                 backtest_config=BacktestConfig(
                     enable_tradability=enable_tradability,
                     initial_cash=1_000_000.0,
@@ -221,14 +223,20 @@ def main() -> None:
                          "1=收盘出信号、下一交易日收盘成交（可实现）")
     ap.add_argument("--no-tradability", action="store_true",
                     help="关闭回测可成交性检查（回到『能买涨停能卖跌停』的旧口径）")
+    ap.add_argument("--start", default="", help="窗口起点 YYYY-MM-DD")
+    ap.add_argument("--end", default="", help="窗口终点 YYYY-MM-DD")
+    ap.add_argument("--neutral-exposure", action="store_true",
+                    help="启用暴露中性化（Barra APT OLS 残差，size+illiq）")
     ap.add_argument("--no-panel", action="store_true",
                     help="禁用 Alpha158 面板因子（退化成 25 公式因子版）—— "
                          "扫参数时用它加速：每次 80s vs 536s")
     args = ap.parse_args()
 
     # 10 年：结束对齐 2026-05-08（官方数据的最后一天）
-    end = datetime(2026, 5, 8)
-    start = datetime(end.year - args.years, end.month, end.day)
+    end = (datetime.strptime(args.end, "%Y-%m-%d") if args.end
+           else datetime(2026, 5, 8))
+    start = (datetime.strptime(args.start, "%Y-%m-%d") if args.start
+             else datetime(end.year - args.years, end.month, end.day))
 
     # 数据目录：特征仍用 data/qlib_data（features/day/*.parquet 实际覆盖 1991 起），
     # 股票池用 data/qlib_official_data/instruments/all.txt（带上市日/退市日 → PIT 语义）
@@ -253,7 +261,8 @@ def main() -> None:
         print(f"\n[verify] === {name} ({spec['label']}) ===", flush=True)
         r = run_one(data_root, codes, name, spec["cfg"], spec["mps"], start, end,
                     lag=args.lag, enable_tradability=not args.no_tradability,
-                    no_panel=args.no_panel)
+                    no_panel=args.no_panel,
+                    neutral_exposure=args.neutral_exposure)
         results[name] = r
         print(f"  基线: sharpe={r.get('sharpe_ratio')} ret={r.get('total_return')} "
               f"mdd={r.get('max_drawdown')} trades={r.get('total_trades')} "
@@ -264,7 +273,8 @@ def main() -> None:
             cfg_neu["industry_neutral"] = True
             r2 = run_one(data_root, codes, name, cfg_neu, spec["mps"], start, end,
                          lag=args.lag, enable_tradability=not args.no_tradability,
-                         no_panel=args.no_panel)
+                         no_panel=args.no_panel,
+                    neutral_exposure=args.neutral_exposure)
             results["honest_composite_neutral"] = r2
             print(f"  行业中性: sharpe={r2.get('sharpe_ratio')} "
                   f"ret={r2.get('total_return')} mdd={r2.get('max_drawdown')} "
