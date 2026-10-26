@@ -75,8 +75,12 @@ class BillingRecord(Base):
     )
 
     # 关联的用量事件
+    # ⚠️ 2026-10-27 改为**可空**：本表兼作资金流水，充值到账记录
+    # （charge_status='credited'）没有对应的用量事件。
+    # 之前是 NOT NULL → 管理员确认到账必然 IntegrityError 500
+    # （迁移：commerce_004_billing_usage_event_nullable）
     usage_event_id = Column(
-        String(36), ForeignKey("usage_events.id", ondelete="CASCADE"), nullable=False
+        String(36), ForeignKey("usage_events.id", ondelete="CASCADE"), nullable=True
     )
 
     # 扣费信息

@@ -32,18 +32,31 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
 OUT = os.path.join(ROOT, "data", "backtest", "fundamental_ic.json")
+FWD = 5
 FUND_FILE = os.path.join(ROOT, "data", "fundamentals", "fundamentals_pit.json")
 
 FWD = 5
 
 
 def main() -> int:
-    if not os.path.exists(FUND_FILE):
-        print(f"[fic] 缺少 {FUND_FILE}，先跑 fetch_fundamentals.py")
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--fund", default=os.path.join(
+        ROOT, "data", "fundamentals", "financial_ak_full.json"))
+    ap.add_argument("--forward", type=int, default=5)
+    ap.add_argument("--min-stocks", type=int, default=30)
+    ap.add_argument("--out", default=OUT)
+    args = ap.parse_args()
+    global FWD
+    FWD = args.forward
+
+    if not os.path.exists(args.fund):
+        print(f"[fic] 缺少 {args.fund}，先跑 fetch_financial_ak.py")
         return 1
-    with open(FUND_FILE) as fh:
+    with open(args.fund) as fh:
         raw = json.load(fh)
-    print(f"[fic] 财务数据：{len(raw)} 只股票", flush=True)
+    print(f"[fic] 财务数据：{len(raw)} 只股票（{os.path.basename(args.fund)}）",
+          flush=True)
     if not raw:
         return 1
 
@@ -69,6 +82,11 @@ def main() -> int:
         return 1
     idx = pd.DatetimeIndex(sorted(set().union(*[set(v.index) for v in close.values()])))
     close_df = pd.DataFrame(close).reindex(idx)
+    # 代码格式对齐：财务侧是 6 位（600000），价格侧是 600000.SH
+    code_alias = {}
+    for c in close_df.columns:
+        base = str(c).split(".")[0]
+        code_alias.setdefault(base, c)
     fwd = (close_df.shift(-FWD) / close_df - 1.0)
     print(f"[fic] 价格矩阵 {close_df.shape}  交易日 {len(idx)}", flush=True)
 
@@ -79,9 +97,17 @@ def main() -> int:
               for f in factor_names}
 
     for code, recs in raw.items():
+        code = code_alias.get(str(code).split(".")[0], code)
         if code not in close_df.columns:
             continue
-        for pub, _stat, vals in recs:
+        for rec in recs:
+            # 兼容两种格式：
+            #   akshare: [avail_date, {factor: value}]
+            #   baostock: [pub_date, stat_date, {factor: value}]
+            if len(rec) == 3:
+                pub, _stat, vals = rec
+            else:
+                pub, vals = rec[0], rec[1]
             ts = pd.Timestamp(pub)
             # 归到该日期所在（或之前）的交易日；从这一天起生效
             pos = idx.searchsorted(ts, side="left")
@@ -99,7 +125,7 @@ def main() -> int:
             x = panel.iloc[i]
             y = fwd.iloc[i]
             ok = x.notna() & y.notna()
-            if ok.sum() < 20:
+            if ok.sum() < args.min_stocks:
                 continue
             xv, yv = x[ok], y[ok]
             if xv.nunique() < 3 or yv.nunique() < 3:
@@ -128,8 +154,8 @@ def main() -> int:
         print(f"{r['factor']:<22}{r['mean_ic']:>9.4f}{r['icir']:>8.3f}"
               f"{r['t_stat']:>7.2f}{r['ic_positive_ratio']*100:>7.0f}%")
 
-    os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    with open(OUT, "w") as fh:
+    os.makedirs(os.path.dirname(args.out), exist_ok=True)
+    with open(args.out, "w") as fh:
         json.dump({
             "window": f"{idx[0].date()}→{idx[-1].date()}",
             "n_stocks": int(close_df.shape[1]),
@@ -139,7 +165,7 @@ def main() -> int:
             },
             "factors": rows,
         }, fh, ensure_ascii=False, indent=1)
-    print(f"\n[fic] 已写入 {OUT}")
+    print(f"\n[fic] 已写入 {args.out}")
     return 0
 
 
