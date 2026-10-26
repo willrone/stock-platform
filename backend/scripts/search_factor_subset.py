@@ -420,13 +420,20 @@ def build_cache(window_key: str, force: bool = False) -> str:
 
     all_f, honest_f, panel_f = _factor_sets()
     start, end = window_dates(window_key)
+    # lookback：额外的历史天数，只用于让 60 日滚动因子在窗口首日就是"热"的。
+    # 缓存的 master 覆盖 [start-lookback, end]，但回测只跑 [start, end]。
+    lookback = int(os.environ.get("FS_LOOKBACK_DAYS", "0"))
+    load_start = start - pd.Timedelta(days=lookback) if lookback else start
     codes_all = universe_from_instruments(QLIB_OFFICIAL)
-    print(f"[cache] 窗口 {start.date()} → {end.date()}，PIT 股票池 {len(codes_all)}")
+    print(
+        f"[cache] 窗口 {start.date()} → {end.date()}，PIT 股票池 {len(codes_all)}"
+        f"，lookback={lookback} 天（载入起点 {load_start.date()}）"
+    )
 
     t0 = time.perf_counter()
     loader = DataLoader(os.path.join(ROOT, "data"), max_workers=8)
     stock_data = loader.load_multiple_stocks(
-        codes_all, start, end, required_columns=list(OHLCV)
+        codes_all, load_start, end, required_columns=list(OHLCV)
     )
     stock_data = _ordered_stock_data(stock_data, codes_all)
     codes, master, close, high, low, vol = _build_matrices(stock_data)
@@ -614,12 +621,24 @@ def _register_variant_strategy() -> None:
                     "缓存股票池与回测不一致："
                     f"cache={len(meta['codes'])} run={len(codes)}"
                 )
-            if list(meta["dates"]) != [pd.Timestamp(d).strftime("%Y-%m-%d") for d in master]:
-                raise RuntimeError("缓存交易日与回测不一致")
+            # 缓存日期可以比回测窗口更长（lookback 预热），
+            # 但必须完整覆盖回测窗口 → 按日期取子集
+            cache_dates = [pd.Timestamp(d) for d in meta["dates"]]
+            want = [pd.Timestamp(d) for d in master]
+            if cache_dates == want:
+                row_idx = None
+            else:
+                pos = pd.Index(cache_dates).get_indexer(want)
+                if (pos < 0).any():
+                    raise RuntimeError(
+                        f"缓存日期未覆盖回测窗口（缺 {int((pos < 0).sum())} 天）"
+                    )
+                row_idx = pos
+            n_cache = len(cache_dates)
 
-            wvecs = self._weight_vectors(n_dates)
-            acc = np.zeros((n_dates, n_stocks), dtype=np.float64)
-            wsum = np.zeros((n_dates, n_stocks), dtype=np.float64)
+            wvecs = self._weight_vectors(n_cache)
+            acc = np.zeros((n_cache, n_stocks), dtype=np.float64)
+            wsum = np.zeros((n_cache, n_stocks), dtype=np.float64)
             for name in self.factors:
                 z = np.load(os.path.join(cdir, f"z_{name}.npy"), mmap_mode="r")
                 w = wvecs[name][:, None]
@@ -629,6 +648,10 @@ def _register_variant_strategy() -> None:
                 acc += np.where(good, w * z, 0.0)
                 wsum += np.where(good, w, 0.0)
                 del z, good
+            if row_idx is not None:
+                acc = acc[row_idx]
+                wsum = wsum[row_idx]
+                n_cache = len(row_idx)
 
             composite = np.where(
                 wsum > 0, acc / np.where(wsum > 0, wsum, 1.0), np.nan
