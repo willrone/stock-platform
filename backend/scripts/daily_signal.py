@@ -264,6 +264,7 @@ def zscore_add(acc: np.ndarray, wsum: np.ndarray, mat: np.ndarray,
 
 
 def compute_composite(frames: dict, panel: dict, master: pd.DatetimeIndex,
+                      use_panel: bool = False,
                       explain_date: Optional[pd.Timestamp] = None,
                       industry_neutral: bool = False,
                       ) -> pd.DataFrame:
@@ -313,9 +314,13 @@ def compute_composite(frames: dict, panel: dict, master: pd.DatetimeIndex,
         for fname, sign in _HONEST_FORMULAS.items():
             z = _zscore_of(cands[fname].to_numpy(), sign, MIN_CROSS)
             factor_z.append((fname, sign, z))
-        for fname, sign in _ALPHAPANEL_FACTORS.items():
-            z = _zscore_of(to_panel_mat(panel, master, fname), sign, MIN_CROSS)
-            factor_z.append((fname, sign, z))
+        if use_panel:
+            # 2026-10-27：默认**不启用** Alpha158 面板因子 ——
+            # 实测 42 因子版夏普 0.799 / 回撤 −16.46%，
+            # 25 公式因子版 0.880 / −13.37% → 面板因子净负面。
+            for fname, sign in _ALPHAPANEL_FACTORS.items():
+                z = _zscore_of(to_panel_mat(panel, master, fname), sign, MIN_CROSS)
+                factor_z.append((fname, sign, z))
         # 逐因子：行业去均值 → 行业内重归一 → 带符号累加
         for fname, sign, z in factor_z:
             zn = industry_demean(z, ind_ids, n_ind)

@@ -25,6 +25,7 @@ import asyncio
 import os
 import sys
 import time
+from datetime import timedelta
 from typing import Any, Dict, List, Tuple
 
 import numpy as np
@@ -135,10 +136,40 @@ def cache_trad(mats: Dict[str, Any], stock_data: Dict[str, Any]) -> Dict[str, np
         out = {k: z[k] for k in z.files}
         print("[cache] trad 命中", flush=True)
         return out
+    # 窗口前一日收盘价：引擎的 BacktestExecutor._load_prev_close_map 会加载
+    # 窗口前 10 个日历日 → 保证窗口首日的涨跌停也能判定。
+    # 不传 prev_close → 首日涨停股漏拦 → 与引擎不一致（实测 5 只 BJ 股分歧）。
+    prev_close: Dict[str, float] = {}
+    try:
+        from app.services.backtest.execution.data_loader import DataLoader
+        dl2 = DataLoader(ROOT + "/data", max_workers=8)
+        pre_s = L.START - timedelta(days=10)
+        pre_e = L.START - timedelta(days=1)
+        for code in list(mats["codes"]):
+            try:
+                df = dl2.load_stock_data(code, pre_s, pre_e)
+            except Exception:
+                continue
+            if df is None or df.empty:
+                continue
+            col = None
+            for cand in ("$close", "close"):
+                if cand in df.columns:
+                    col = cand
+                    break
+            if col is None:
+                continue
+            ser = pd.to_numeric(df[col], errors="coerce").dropna()
+            if len(ser):
+                prev_close[str(code)] = float(ser.iloc[-1])
+    except Exception as e:  # noqa: BLE001
+        print(f"[cache] prev_close 加载失败: {e}", flush=True)
+
     tm = __import__("app.services.backtest.execution.tradability",
                     fromlist=["build_tradability"]).build_tradability(
         stock_data, list(mats["master"]), list(mats["codes"]),
-        participation_rate=L.PARTICIPATION, min_turnover=L.MIN_TURNOVER)
+        participation_rate=L.PARTICIPATION, min_turnover=L.MIN_TURNOVER,
+        prev_close=prev_close)
     out = {"can_buy": tm.can_buy, "can_sell": tm.can_sell,
            "max_buy_amount": tm.max_buy_amount}
     np.savez_compressed(tpath, **out)

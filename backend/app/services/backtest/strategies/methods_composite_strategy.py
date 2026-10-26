@@ -301,6 +301,10 @@ class MethodsCompositeStrategy(BaseStrategy):
             wsum > 0, acc / np.where(wsum > 0, wsum, 1.0), np.nan)
 
         # ── 新增：低换手率因子（负的 20 日 log 成交额均值 z）─────────
+        # ⚠️ 顺序很重要：这个因子与下面的 `size` 暴露**完全共线**
+        #    （z_to 是 size 的精确仿射变换，截面回归 R²=0.0）。
+        #    若先混合再做 OLS 中性化，这一步会被中性化**完全消掉**（白做）。
+        #    → 所以必须**先中性化、后混合**。
         if self.turnover_blend != 0.0:
             amount = close.to_numpy() * vol.to_numpy()
             with np.errstate(divide="ignore", invalid="ignore"):
@@ -308,14 +312,8 @@ class MethodsCompositeStrategy(BaseStrategy):
             to_mean = pd.DataFrame(log_amt).rolling(
                 20, min_periods=5).mean().to_numpy()
             z_to = _cs_zscore(-to_mean, 30)
-            # 等权混合：base 与 z_to 各自截面 z 后按权重平均
-            zb = _cs_zscore(composite, 30)
-            w = float(self.turnover_blend)
-            good = np.isfinite(zb) & np.isfinite(z_to)
-            mixed = np.where(
-                good, (zb + w * z_to) / (1.0 + w), np.nan)
-            # 混合分尺度变了 → 重新标准化回原尺度附近（仅影响数值，不影响排序）
-            composite = np.where(np.isfinite(mixed), mixed, composite)
+        else:
+            z_to = None
 
         # ── 新增：暴露中性化（Barra APT 风格）──────────────────────
         if self.neutral_exposures:
@@ -339,6 +337,14 @@ class MethodsCompositeStrategy(BaseStrategy):
             composite = _neutralize(composite, exposures, min_cross=50)
             logger.info(
                 f"methods_composite 暴露中性化: {self.neutral_exposures}")
+
+        # ── 低换手率因子混合（必须在中性化**之后**）────────────────
+        if z_to is not None:
+            zb = _cs_zscore(composite, 30)
+            w = float(self.turnover_blend)
+            good = np.isfinite(zb) & np.isfinite(z_to)
+            mixed = np.where(good, (zb + w * z_to) / (1.0 + w), np.nan)
+            composite = np.where(np.isfinite(mixed), mixed, composite)
 
         composite[limit_up_mask] = np.nan
 

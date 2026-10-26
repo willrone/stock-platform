@@ -622,12 +622,13 @@ def _register_variant_strategy() -> None:
             wsum = np.zeros((n_dates, n_stocks), dtype=np.float64)
             for name in self.factors:
                 z = np.load(os.path.join(cdir, f"z_{name}.npy"), mmap_mode="r")
-                z = np.asarray(z, dtype=np.float64)
                 w = wvecs[name][:, None]
                 good = np.isfinite(z)
-                acc[good] += (w * z)[good]
-                wsum[good] += np.broadcast_to(w, z.shape)[good]
-                del z
+                # 与官方 acc[good] += w*z[good] 逐位等价，但避免布尔花式索引的
+                # 临时拷贝（42 个因子 × 727×5238 的布尔索引是主要的 CPU 开销）
+                acc += np.where(good, w * z, 0.0)
+                wsum += np.where(good, w, 0.0)
+                del z, good
 
             composite = np.where(
                 wsum > 0, acc / np.where(wsum > 0, wsum, 1.0), np.nan
@@ -717,6 +718,56 @@ def _make_executor():
     )
 
 
+# 每个 worker 进程一个 executor（行情加载缓存跨变体复用）
+_EXECUTOR: Dict[str, Any] = {}
+
+
+def _get_executor():
+    key = f"{os.getpid()}"
+    ex = _EXECUTOR.get(key)
+    if ex is None:
+        ex = _make_executor()
+        _EXECUTOR[key] = ex
+    return ex
+
+
+def _bootstrap_sharpe_se(
+    hist: List[Dict[str, Any]], n_boot: int = 2000, block: int = 10, seed: int = 7
+) -> Dict[str, Any]:
+    """块自举（block bootstrap）估计夏普标准误 + 置信区间。
+
+    日频收益有自相关，普通 iid 自举会低估 SE → 用 block=10 日的移动块自举。
+    """
+    df = pd.DataFrame(hist)
+    if df.empty:
+        return {}
+    df["date"] = pd.to_datetime(df["date"])
+    df = df.sort_values("date").drop_duplicates("date", keep="last")
+    vals = df["portfolio_value"].astype(float).to_numpy()
+    rets = np.diff(vals) / vals[:-1]
+    n = len(rets)
+    if n < block * 3:
+        return {}
+    rng = np.random.default_rng(seed)
+    n_blocks = int(np.ceil(n / block))
+    starts = np.arange(n - block + 1)
+    sharpes = np.empty(n_boot)
+    for b in range(n_boot):
+        pick = rng.integers(0, len(starts), size=n_blocks)
+        series = np.concatenate([rets[s : s + block] for s in starts[pick]])[:n]
+        sd = series.std()
+        sharpes[b] = series.mean() / sd * math.sqrt(252) if sd > 0 else 0.0
+    point = rets.mean() / rets.std() * math.sqrt(252) if rets.std() > 0 else 0.0
+    return {
+        "sharpe_point": float(point),
+        "sharpe_se": float(sharpes.std()),
+        "sharpe_ci95_lo": float(np.percentile(sharpes, 2.5)),
+        "sharpe_ci95_hi": float(np.percentile(sharpes, 97.5)),
+        "n_boot": int(n_boot),
+        "block": int(block),
+    }
+
+
 def _slice_metrics(
     hist: List[Dict[str, Any]], start: str, end: str
 ) -> Dict[str, Any]:
@@ -752,14 +803,20 @@ def run_variant(
     weight_mode: str = "equal",
     weight_window: int = 60,
     label: str = "",
+    subwindow: Optional[Tuple[str, str]] = None,
 ) -> Dict[str, Any]:
-    """跑一次真实盘口径回测（lag=1 + 可成交性 + PIT 股票池 + 周频）。"""
+    """跑一次真实盘口径回测（lag=1 + 可成交性 + PIT 股票池 + 周频）。
+
+    subwindow 非空时，在 3 年缓存内只回测 [start, end] 这一段
+    （用于滚动窗口稳定性检验）；打分仍用 3 年缓存的 z 矩阵，
+    因此因子计算口径与整段回测完全一致。
+    """
     from app.services.backtest.models import BacktestConfig
 
     _register_variant_strategy()
     start, end = window_dates(window_key)
     codes = universe_from_instruments(QLIB_OFFICIAL)
-    executor = _make_executor()
+    executor = _get_executor()
 
     cfg = dict(HC_CFG)
     cfg.update(
@@ -825,6 +882,13 @@ def run_variant(
     if hist:
         out["is"] = _slice_metrics(hist, WINDOW_IS[0], WINDOW_IS[1])
         out["oos"] = _slice_metrics(hist, WINDOW_OOS[0], WINDOW_OOS[1])
+        out["bootstrap"] = _bootstrap_sharpe_se(hist)
+        out["bootstrap_is"] = _bootstrap_sharpe_se(
+            [h for h in hist if WINDOW_IS[0] <= str(h["date"])[:10] <= WINDOW_IS[1]]
+        )
+        out["bootstrap_oos"] = _bootstrap_sharpe_se(
+            [h for h in hist if WINDOW_OOS[0] <= str(h["date"])[:10] <= WINDOW_OOS[1]]
+        )
         df = pd.DataFrame(hist)
         df["date"] = pd.to_datetime(df["date"])
         df = df.sort_values("date").drop_duplicates("date", keep="last")
@@ -847,6 +911,15 @@ def run_variant(
     md = res.get("monthly_returns_detail")
     if isinstance(md, list) and md:
         out["monthly"] = {str(x["month"]): round(float(x["return"]), 6) for x in md}
+    # 保留日频净值序列（供滚动窗口稳定性检验切片；体积可控）
+    if hist:
+        out["_history"] = [
+            {
+                "date": str(h["date"])[:10],
+                "portfolio_value": float(h["portfolio_value"]),
+            }
+            for h in hist
+        ]
     return out
 
 
@@ -901,15 +974,18 @@ def run_tasks(
         initializer=_worker_init,
         initargs=(window_key,),
     ) as ex:
-        futs = {ex.submit(_worker_run, t): t for t in tasks}
+        futs = {ex.submit(_worker_run, t): i for i, t in enumerate(tasks)}
+        collected: Dict[int, Dict[str, Any]] = {}
         for i, fut in enumerate(as_completed(futs), 1):
             r = fut.result()
-            out.append(r)
+            collected[futs[fut]] = r
             print(
                 f"  [{i}/{len(tasks)}] {r.get('label')} "
                 f"sharpe={r.get('sharpe_ratio')} ({r.get('wall_s')}s)",
                 flush=True,
             )
+    # 关键：必须按提交顺序返回，否则调用方的 zip(tasks, outs) 会错位
+    out = [collected[i] for i in range(len(tasks))]
     return out
 
 
@@ -1008,6 +1084,9 @@ def stage_ablate(args) -> None:
             }
         )
     print(f"[ablate] 待跑 {len(tasks)} 个变体")
+    if args.max_variants > 0:
+        tasks = tasks[: args.max_variants]
+        print(f"[ablate] --max-variants 截断为 {len(tasks)} 个（冒烟测试）")
     outs = run_tasks(
         [{k: v for k, v in t.items() if k != "_key"} for t in tasks],
         args.workers,
@@ -1086,6 +1165,17 @@ def stage_greedy(args) -> None:
     store = _load_store(path)
     results: Dict[str, Any] = store.get("results", {})
     trace: List[Dict[str, Any]] = store.get("trace", [])
+
+    # 第 1 轮（从全集去掉一个）与消融实验完全重合 → 直接复用消融结果
+    ab_path = os.path.join(OUT_DIR, f"factor_subset_ablation_{args.window}.json")
+    ab = _load_store(ab_path)
+    seeded = 0
+    for k, v in (ab.get("results") or {}).items():
+        if k not in results:
+            results[k] = v
+            seeded += 1
+    if seeded:
+        print(f"[greedy] 复用消融实验结果 {seeded} 个")
 
     current: List[str] = list(all_f)
 
@@ -1204,6 +1294,19 @@ def stage_weights(args) -> None:
     }
     if gtrace:
         subsets["greedy_best"] = list(gtrace[-1]["factors"])
+    # 族级消融里 IS 夏普最好的几个子集也一起试权重方案
+    fam_path = os.path.join(OUT_DIR, f"factor_subset_family_{args.window}.json")
+    fam = _load_store(fam_path)
+    fam_subsets = fam.get("subsets", {})
+    fam_res = fam.get("results", {})
+    ranked = sorted(
+        fam_subsets.items(),
+        key=lambda x: -(
+            (fam_res.get(variant_key(x[1])) or {}).get("is") or {}
+        ).get("sharpe_ratio", -9),
+    )
+    for sname, sub in ranked[:4]:
+        subsets[f"fam_{sname}"] = list(sub)
 
     tasks = []
     for sname, sub in subsets.items():
@@ -1285,6 +1388,376 @@ def _dsr(sr: float, n_trials: int, years: float, skew: float, kurt: float) -> Di
     }
 
 
+def stage_family(args) -> None:
+    """族级消融：一次性去掉整个因子族（同族因子高度相关，单因子消融噪声大）。
+
+    族：MIN / MAX / STD / CORR / CORD（诚实公式，5 个窗口）
+        VSUMP / VSUMN / VSUMD / QTLD / IMAX / IMIN / WVMA / VMA / VSTD（Alpha158）
+    另外跑几个"手挑子集"（基于单因子消融 + IC 排序的先验）。
+    """
+    all_f, honest_f, panel_f = _factor_sets()
+    path = os.path.join(OUT_DIR, f"factor_subset_family_{args.window}.json")
+    store = _load_store(path)
+    results: Dict[str, Any] = store.get("results", {})
+
+    fams: Dict[str, List[str]] = {}
+    for f in all_f:
+        fams.setdefault(FACTOR_META[f]["family"], []).append(f)
+
+    subsets: Dict[str, List[str]] = {}
+    for fam, members in fams.items():
+        subsets[f"minus_{fam}"] = [f for f in all_f if f not in members]
+    subsets["minus_honest_all"] = list(panel_f)
+    subsets["minus_panel_all"] = list(honest_f)
+    # 手挑：MAX 族 IC≈0/负 + IMIN5 IC 为负 → 一起去掉
+    bad = [f for f in all_f if FACTOR_META[f]["family"] == "MAX"] + ["IMIN5"]
+    subsets["minus_MAX_IMIN5"] = [f for f in all_f if f not in bad]
+    # 只保留 ICIR 最高的因子族
+    keep_fams = {"CORR", "CORD", "MIN", "VSUMD", "VSUMP", "VMA", "VSUMN", "QTLD"}
+    subsets["only_high_ic_fams"] = [
+        f for f in all_f if FACTOR_META[f]["family"] in keep_fams
+    ]
+    subsets["only_honest_high_ic"] = [
+        f
+        for f in all_f
+        if FACTOR_META[f]["group"] == "honest_formula"
+        and FACTOR_META[f]["family"] in {"CORR", "CORD", "MIN", "STD"}
+    ]
+
+    tasks = []
+    for sname, sub in subsets.items():
+        k = variant_key(sub)
+        if k in results:
+            continue
+        tasks.append(
+            {
+                "factors": sub,
+                "label": f"{sname}(n={len(sub)})",
+                "window": args.window,
+                "_key": k,
+            }
+        )
+    print(f"[family] 待跑 {len(tasks)} 个变体")
+    if args.max_variants > 0:
+        tasks = tasks[: args.max_variants]
+    outs = run_tasks(
+        [{k: v for k, v in t.items() if k != "_key"} for t in tasks],
+        args.workers,
+        args.window,
+    )
+    for t, r in zip(tasks, outs):
+        results[t["_key"]] = r
+    _save_store(
+        path,
+        {
+            "stage": "family",
+            "window": args.window,
+            "subsets": {k: v for k, v in subsets.items()},
+            "results": results,
+            "n_variants": len(results),
+        },
+    )
+    base = results.get(variant_key(all_f))
+    print(f"\n[family] {'子集':<32}{'因子数':>5}{'全窗口':>9}{'IS':>9}{'OOS':>9}{'收益':>9}{'回撤':>9}")
+    if base and "sharpe_ratio" in base:
+        print(
+            f"[family] {'[基线 42f]':<32}{42:>5}{base['sharpe_ratio']:>9.4f}"
+            f"{base['is']['sharpe_ratio']:>9.4f}{base['oos']['sharpe_ratio']:>9.4f}"
+            f"{base['total_return']:>9.4f}{base['max_drawdown']:>9.4f}"
+        )
+    for sname, sub in sorted(
+        subsets.items(), key=lambda x: -(results.get(variant_key(x[1])) or {}).get(
+            "sharpe_ratio", -9
+        )
+    ):
+        r = results.get(variant_key(sub))
+        if not r or "sharpe_ratio" not in r:
+            print(f"[family] {sname:<32}{len(sub):>5}  FAILED {r.get('error','')[:50] if r else ''}")
+            continue
+        print(
+            f"[family] {sname:<32}{len(sub):>5}{r['sharpe_ratio']:>9.4f}"
+            f"{r['is']['sharpe_ratio']:>9.4f}{r['oos']['sharpe_ratio']:>9.4f}"
+            f"{r['total_return']:>9.4f}{r['max_drawdown']:>9.4f}"
+        )
+
+
+def stage_greedy2(args) -> None:
+    """多起点贪心后向剔除。
+
+    单起点贪心会陷局部最优（第一次实验：从 42 因子出发停在 39 因子、IS 0.8058，
+    而族级消融的 minus_VSUMN 直接就 IS 0.8274）。这里从若干"种子子集"分别
+    继续往后剔，取 IS 夏普最高的那条路径。
+
+    选择目标仍然是 **IS 段夏普**，OOS 段不参与任何选择。
+    """
+    all_f, _, _ = _factor_sets()
+    path = os.path.join(OUT_DIR, f"factor_subset_greedy2_{args.window}.json")
+    store = _load_store(path)
+    results: Dict[str, Any] = store.get("results", {})
+    traces: Dict[str, Any] = store.get("traces", {})
+
+    def is_sharpe(r: Dict[str, Any]) -> float:
+        v = (r.get("is") or {}).get("sharpe_ratio")
+        if v is None:
+            v = r.get("sharpe_ratio", -99.0)
+        return float(v)
+
+    # ── 种子子集 ──
+    seeds: Dict[str, List[str]] = {"all42": list(all_f)}
+    fam_path = os.path.join(OUT_DIR, f"factor_subset_family_{args.window}.json")
+    fam = _load_store(fam_path)
+    for sname, sub in (fam.get("subsets") or {}).items():
+        seeds[f"fam_{sname}"] = list(sub)
+    g_path = os.path.join(OUT_DIR, f"factor_subset_greedy_{args.window}.json")
+    g = _load_store(g_path)
+    for t in g.get("trace", []):
+        seeds[f"greedy{t['step']}"] = list(t["factors"])
+
+    # 先把已知结果灌进 results（省掉重复回测）
+    for src in (fam.get("results") or {}, g.get("results") or {}):
+        for k, v in src.items():
+            results.setdefault(k, v)
+
+    seed_names = list(seeds)
+    if args.seeds:
+        seed_names = [s for s in seed_names if s in args.seeds.split(",")]
+    print(f"[greedy2] 种子: {seed_names}")
+
+    for sname in seed_names:
+        current = list(seeds[sname])
+        trace: List[Dict[str, Any]] = []
+        while len(current) > args.min_factors:
+            cands = list(current)
+            tasks = []
+            for f in cands:
+                sub = [x for x in current if x != f]
+                k = variant_key(sub)
+                if k in results:
+                    continue
+                tasks.append((f, k, sub))
+            if tasks:
+                print(
+                    f"[greedy2] seed={sname} 第 {len(trace)+1} 轮："
+                    f"{len(tasks)} 候选（当前 {len(current)} 因子）",
+                    flush=True,
+                )
+                outs = run_tasks(
+                    [
+                        {"factors": sub, "label": f"{sname}|try_drop_{f}", "window": args.window}
+                        for f, k, sub in tasks
+                    ],
+                    args.workers,
+                    args.window,
+                )
+                for (f, k, sub), r in zip(tasks, outs):
+                    results[k] = r
+                _save_store(
+                    path,
+                    {"stage": "greedy2", "window": args.window, "results": results, "traces": traces},
+                )
+            scored = []
+            for f in cands:
+                sub = [x for x in current if x != f]
+                r = results.get(variant_key(sub))
+                if not r or "sharpe_ratio" not in r:
+                    continue
+                scored.append((f, is_sharpe(r), r))
+            if not scored:
+                break
+            scored.sort(key=lambda x: -x[1])
+            best_f, best_sc, best_r = scored[0]
+            cur_sc = is_sharpe(results[variant_key(current)])
+            if best_sc <= cur_sc + args.min_gain:
+                print(f"[greedy2] seed={sname} 无改进，停止")
+                break
+            current = [x for x in current if x != best_f]
+            trace.append(
+                {
+                    "step": len(trace) + 1,
+                    "dropped": best_f,
+                    "is_sharpe": best_sc,
+                    "prev_is_sharpe": cur_sc,
+                    "n_factors": len(current),
+                    "full_sharpe": best_r.get("sharpe_ratio"),
+                    "full_return": best_r.get("total_return"),
+                    "full_mdd": best_r.get("max_drawdown"),
+                    "oos_sharpe": (best_r.get("oos") or {}).get("sharpe_ratio"),
+                    "factors": list(current),
+                }
+            )
+            print(
+                f"[greedy2] seed={sname} 去掉 {best_f:<9} → {len(current)} 因子, "
+                f"IS {cur_sc:.4f} → {best_sc:.4f} "
+                f"(全窗口 {best_r.get('sharpe_ratio'):.4f}, "
+                f"OOS {(best_r.get('oos') or {}).get('sharpe_ratio')})",
+                flush=True,
+            )
+        traces[sname] = trace
+        _save_store(
+            path, {"stage": "greedy2", "window": args.window, "results": results, "traces": traces}
+        )
+
+    # 汇总：每条路径的终点 + 全局最优
+    print("\n[greedy2] 各路径终点（按 IS 夏普排序）:")
+    finals = []
+    for sname, trace in traces.items():
+        if not trace:
+            continue
+        t = trace[-1]
+        finals.append((t["is_sharpe"], sname, t))
+    finals.sort(key=lambda x: -x[0])
+    for sc, sname, t in finals:
+        print(
+            f"  {sname:<34} n={t['n_factors']:>3} IS={sc:.4f} "
+            f"全窗口={t.get('full_sharpe'):.4f} OOS={t.get('oos_sharpe'):.4f} "
+            f"回撤={t.get('full_mdd'):.4f}"
+        )
+    if finals:
+        best = finals[0]
+        out = {
+            "seed": best[1],
+            "is_sharpe": best[0],
+            "factors": best[2]["factors"],
+            "n_factors": best[2]["n_factors"],
+            "full_sharpe": best[2].get("full_sharpe"),
+            "oos_sharpe": best[2].get("oos_sharpe"),
+        }
+        fr = results.get(variant_key(best[2]["factors"]))
+        if fr:
+            out["detail"] = fr
+        _save_store(
+            os.path.join(OUT_DIR, f"factor_subset_best_{args.window}.json"),
+            out,
+        )
+        print(f"\n[greedy2] 最优路径 seed={best[1]} → {out['factors']}")
+
+
+def stage_stability(args) -> None:
+    """滚动窗口稳定性检验。
+
+    动机：族级消融发现 `only_high_ic_fams` 的 OOS 夏普 1.82 但 IS 只有 0.11，
+    说明 IS/OOS 两段是**不同市场状态**（regime），单一 IS 段选出来的子集
+    未必稳。本阶段把 3 年切成多个不重叠子窗口，每个子窗口单独回测，
+    看候选子集在每个窗口的表现是否一致（而不是只在某一段好）。
+    """
+    all_f, honest_f, _ = _factor_sets()
+    path = os.path.join(OUT_DIR, f"factor_subset_stability_{args.window}.json")
+    store = _load_store(path)
+    results: Dict[str, Any] = store.get("results", {})
+
+    # 候选子集：基线 + 各阶段最优
+    cands: Dict[str, List[str]] = {
+        "42f_all": list(all_f),
+        "25f_honest_only": list(honest_f),
+    }
+    for src_file, key in (
+        (f"factor_subset_family_{args.window}.json", "subsets"),
+        (f"factor_subset_best_{args.window}.json", None),
+    ):
+        p = os.path.join(OUT_DIR, src_file)
+        if not os.path.exists(p):
+            continue
+        st = _load_store(p)
+        if key:
+            for sname, sub in (st.get(key) or {}).items():
+                cands[f"{sname}"] = list(sub)
+        elif st.get("factors"):
+            cands["greedy2_best"] = list(st["factors"])
+    g2 = _load_store(os.path.join(OUT_DIR, f"factor_subset_greedy2_{args.window}.json"))
+    for sname, trace in (g2.get("traces") or {}).items():
+        if trace:
+            cands[f"g2_{sname}"] = list(trace[-1]["factors"])
+
+    # 子窗口定义（3 年窗口内的不重叠切片）
+    subs = [
+        ("w1_2023H2", "2023-05-08", "2023-11-08"),
+        ("w2_2023Q4", "2023-11-08", "2024-05-08"),
+        ("w3_2024H1", "2024-05-08", "2024-11-08"),
+        ("w4_2024Q4", "2024-11-08", "2025-05-08"),
+        ("w5_2025H1", "2025-05-08", "2025-11-08"),
+        ("w6_2025Q4", "2025-11-08", "2026-05-08"),
+    ]
+
+    tasks = []
+    for cname, sub in cands.items():
+        k = variant_key(sub)
+        if k in results:
+            continue
+        tasks.append(
+            {
+                "factors": sub,
+                "label": cname,
+                "window": args.window,
+                "_key": k,
+            }
+        )
+    print(
+        f"[stability] 待跑 {len(tasks)} 个子集"
+        f"（每个跑 1 次整段回测，再切成 {len(subs)} 个子窗口看分窗表现）"
+    )
+    outs = run_tasks(
+        [{k: v for k, v in t.items() if k != "_key"} for t in tasks],
+        args.workers,
+        args.window,
+    )
+    for t, r in zip(tasks, outs):
+        results[t["_key"]] = r
+    _save_store(
+        path,
+        {
+            "stage": "stability",
+            "window": args.window,
+            "candidates": {k: v for k, v in cands.items()},
+            "subwindows": subs,
+            "results": results,
+            "n_variants": len(results),
+        },
+    )
+    # 打印
+    print(
+        f"\n[stability] {'子集':<28}"
+        + "".join(f"{w[0]:>11}" for w in subs)
+        + f"{'均值':>9}{'最差':>9}{'整段':>9}"
+    )
+    table = []
+    for cname, sub in cands.items():
+        r = results.get(variant_key(sub))
+        if not r or "sharpe_ratio" not in r:
+            print(f"[stability] {cname:<28}  FAILED {r.get('error', '')[:60] if r else ''}")
+            continue
+        hist = r.get("_history")
+        cells, vals = [], []
+        for wname, s, e in subs:
+            m = _slice_metrics(hist, s, e) if hist else {}
+            v = m.get("sharpe_ratio")
+            vals.append(v)
+            cells.append(f"{v:>11.3f}" if v is not None else f"{'n/a':>11}")
+        ok = [v for v in vals if v is not None]
+        avg = float(np.mean(ok)) if ok else float("nan")
+        worst = float(np.min(ok)) if ok else float("nan")
+        print(
+            f"[stability] {cname:<28}"
+            + "".join(cells)
+            + f"{avg:>9.3f}{worst:>9.3f}{r['sharpe_ratio']:>9.3f}"
+        )
+        table.append(
+            {
+                "subset": cname,
+                "n_factors": len(sub),
+                "per_window_sharpe": {w[0]: v for w, v in zip(subs, vals)},
+                "mean": avg,
+                "worst": worst,
+                "full_sharpe": r["sharpe_ratio"],
+                "full_return": r.get("total_return"),
+                "full_mdd": r.get("max_drawdown"),
+            }
+        )
+    _save_store(
+        os.path.join(OUT_DIR, f"factor_subset_stability_table_{args.window}.json"),
+        {"table": table},
+    )
+
+
 def stage_report(args) -> None:
     """汇总：因子清单 + 各阶段结果 + 尝试次数 + DSR。"""
     summary: Dict[str, Any] = {
@@ -1297,8 +1770,9 @@ def stage_report(args) -> None:
         for stage in ("ablation", "greedy", "weights"):
             p = os.path.join(OUT_DIR, f"factor_subset_{stage}_{win}.json")
             if os.path.exists(p):
-                blocks[stage] = _load_store(p)
-                total_trials += len(_load_store(p).get("results", {}))
+                st = _load_store(p)
+                blocks[stage] = st
+                total_trials += len(st.get("results", {}))
         summary["windows"][win] = blocks
     all_f, honest_f, panel_f = _factor_sets()
     summary["factors"] = [FACTOR_META[f] for f in all_f]
@@ -1312,18 +1786,199 @@ def stage_report(args) -> None:
     print(f"[report] 写入 {out}（累计 {total_trials} 个变体结果）")
 
 
+def _fmt(r: Dict[str, Any]) -> str:
+    if not r or "sharpe_ratio" not in r:
+        return "FAILED"
+    is_ = (r.get("is") or {}).get("sharpe_ratio")
+    oos_ = (r.get("oos") or {}).get("sharpe_ratio")
+    s = f"sharpe={r['sharpe_ratio']:.4f}"
+    if is_ is not None:
+        s += f" IS={is_:.4f}"
+    if oos_ is not None:
+        s += f" OOS={oos_:.4f}"
+    s += (
+        f" ret={r.get('total_return', 0):.4f} mdd={r.get('max_drawdown', 0):.4f}"
+        f" win={r.get('win_rate', 0):.3f} trades={r.get('total_trades', 0)}"
+    )
+    return s
+
+
+def stage_summarize(args) -> None:
+    """把三个阶段的结果汇总成一份可直接阅读的报告（含 DSR 与尝试次数）。"""
+    all_f, honest_f, panel_f = _factor_sets()
+    out: Dict[str, Any] = {
+        "generated_at": datetime.now().isoformat(),
+        "n_factors_total": len(all_f),
+        "n_honest": len(honest_f),
+        "n_panel": len(panel_f),
+        "factor_catalogue": [FACTOR_META[f] for f in all_f],
+    }
+    trials = 0
+    for stage in ("ablation", "greedy", "weights"):
+        p = os.path.join(OUT_DIR, f"factor_subset_{stage}_{args.window}.json")
+        st = _load_store(p) if os.path.exists(p) else {}
+        out[stage] = st
+        trials += len(st.get("results", {}))
+    out["total_variants_tried"] = trials
+
+    lines: List[str] = []
+    A = lines.append
+    A("=" * 78)
+    A("因子子集搜索 · 汇总报告")
+    A(f"窗口 {args.window}　　累计尝试变体数 = {trials}")
+    A("=" * 78)
+
+    # ── 1. 因子清单 ──
+    A("")
+    A("【1】42 因子清单与分类")
+    A(f"{'#':>3} {'因子':<10}{'类别':<15}{'族':<7}{'窗口':>4}{'符号':>5}  含义")
+    for i, f in enumerate(all_f, 1):
+        m = FACTOR_META[f]
+        A(
+            f"{i:>3} {f:<10}{m['group']:<15}{m['family']:<7}{m['window']:>4}"
+            f"{m['sign']:>+5.0f}  {m['desc']}"
+        )
+
+    # ── 2. 消融排名 ──
+    A("")
+    A("【2】单因子消融（基线 = 42 因子全窗口夏普 0.7992）")
+    ab = out.get("ablation", {})
+    ab_res = ab.get("results", {})
+    base = ab_res.get(variant_key(all_f))
+    rows = []
+    for f in all_f:
+        r = ab_res.get(variant_key([x for x in all_f if x != f]))
+        if not r or "sharpe_ratio" not in r:
+            continue
+        rows.append((f, r))
+    if base and "sharpe_ratio" in base:
+        A(
+            f"基线: 夏普={base['sharpe_ratio']:.4f} 收益={base.get('total_return', 0):.4f} "
+            f"回撤={base.get('max_drawdown', 0):.4f} 笔数={base.get('total_trades')}"
+        )
+    rows.sort(key=lambda x: -x[1]["sharpe_ratio"])
+    A("")
+    A("  去掉后夏普提升 Top10（Δ>0 = 该因子是净负面，去掉更好）:")
+    for f, r in rows[:10]:
+        d = r["sharpe_ratio"] - base["sharpe_ratio"] if base else float("nan")
+        A(f"    {f:<10} Δ={d:+.4f}  {_fmt(r)}")
+    A("")
+    A("  去掉后夏普下降 Top10（Δ<0 = 该因子有正贡献）:")
+    for f, r in rows[-10:][::-1]:
+        d = r["sharpe_ratio"] - base["sharpe_ratio"] if base else float("nan")
+        A(f"    {f:<10} Δ={d:+.4f}  {_fmt(r)}")
+
+    # ── 3. 贪心路径 ──
+    A("")
+    A("【3】贪心后向剔除路径（选择目标 = IS 段夏普，OOS 段从未参与选择）")
+    g = out.get("greedy", {})
+    trace = g.get("trace", [])
+    if trace:
+        A(f"{'步':>3} {'去掉':<10}{'因子数':>6}{'IS夏普':>9}{'全窗口夏普':>11}{'OOS夏普':>9}")
+        for t in trace:
+            A(
+                f"{t['step']:>3} {t['dropped']:<10}{t['n_factors']:>6}"
+                f"{t['is_sharpe']:>9.4f}{t.get('full_sharpe', float('nan')):>11.4f}"
+                f"{(t.get('oos_sharpe') if t.get('oos_sharpe') is not None else float('nan')):>9.4f}"
+            )
+        best = trace[-1]
+        A("")
+        A(f"  最终子集 ({len(best['factors'])} 因子): {best['factors']}")
+        fr = g.get("results", {}).get(variant_key(best["factors"]))
+        if fr:
+            A(f"  {_fmt(fr)}")
+            A(f"  分年收益: {fr.get('yearly')}  （首年残段 {fr.get('yearly_first_partial')}）")
+    else:
+        A("  （无贪心结果）")
+
+    # ── 4. 权重方案 ──
+    A("")
+    A("【4】因子权重方案对比")
+    w = out.get("weights", {})
+    wres = w.get("results", {})
+    if wres:
+        A(f"  {'方案':<34}{'全窗口':>9}{'IS':>9}{'OOS':>9}{'收益':>9}{'回撤':>9}{'胜率':>8}")
+        for k, r in sorted(wres.items(), key=lambda x: -x[1].get("sharpe_ratio", -9)):
+            if "sharpe_ratio" not in r:
+                A(f"  {str(r.get('label'))[:33]:<34}  FAILED {r.get('error', '')[:40]}")
+                continue
+            is_ = (r.get("is") or {}).get("sharpe_ratio")
+            oos_ = (r.get("oos") or {}).get("sharpe_ratio")
+            A(
+                f"  {str(r.get('label'))[:33]:<34}{r['sharpe_ratio']:>9.4f}"
+                f"{(is_ if is_ is not None else float('nan')):>9.4f}"
+                f"{(oos_ if oos_ is not None else float('nan')):>9.4f}"
+                f"{r.get('total_return', 0):>9.4f}{r.get('max_drawdown', 0):>9.4f}"
+                f"{r.get('win_rate', 0):>8.3f}"
+            )
+    else:
+        A("  （无权重结果）")
+
+    # ── 5. DSR ──
+    A("")
+    A("【5】过拟合校正（Deflated Sharpe Ratio, Bailey & López de Prado 2014）")
+    A(f"  本次搜索共尝试 {trials} 个变体。")
+    cands = []
+    for label, r in [("42f 基线", base)] + [
+        (f"drop {f}", r) for f, r in rows[:10]
+    ]:
+        if r and "sharpe_ratio" in r:
+            cands.append((label, r))
+    if trace:
+        fr = g.get("results", {}).get(variant_key(trace[-1]["factors"]))
+        if fr:
+            cands.append(("贪心最终子集", fr))
+    for label, r in cands:
+        rs = r.get("ret_stats") or {}
+        d = _dsr(
+            r["sharpe_ratio"],
+            max(trials, 2),
+            3.0,
+            float(rs.get("skew", 0.0)),
+            float(rs.get("kurtosis", 0.0)),
+        )
+        if d:
+            A(
+                f"  {label:<20} 夏普={r['sharpe_ratio']:.4f}  "
+                f"零假设期望最大夏普={d['sr_expected_max_under_null']:.4f}  "
+                f"DSR={d['dsr']:.4f}"
+            )
+
+    out["report_text"] = "\n".join(lines)
+    p = os.path.join(OUT_DIR, f"factor_subset_report_{args.window}.json")
+    _save_store(p, out)
+    txt = os.path.join(OUT_DIR, f"factor_subset_report_{args.window}.txt")
+    with open(txt, "w") as fh:
+        fh.write("\n".join(lines) + "\n")
+    print("\n".join(lines))
+    print(f"\n[report] 写入 {p} / {txt}")
+
+
 # ─────────────────────────── CLI ───────────────────────────
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument(
         "--stage",
         required=True,
-        choices=["cache", "verify", "ablate", "greedy", "weights", "report"],
+        choices=[
+            "cache",
+            "verify",
+            "ablate",
+            "family",
+            "greedy",
+            "greedy2",
+            "weights",
+            "stability",
+            "report",
+            "summarize",
+        ],
     )
     ap.add_argument("--window", default="full3y", choices=list(WINDOW_KEYS))
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--min-factors", type=int, default=10)
     ap.add_argument("--min-gain", type=float, default=0.0)
+    ap.add_argument("--seeds", default="", help="greedy2: 只跑指定种子（逗号分隔）")
+    ap.add_argument("--max-variants", type=int, default=0, help=">0 则只跑前 N 个（冒烟测试）")
     ap.add_argument("--force", action="store_true")
     args = ap.parse_args()
 
@@ -1332,9 +1987,13 @@ def main() -> None:
         "cache": stage_cache,
         "verify": stage_verify,
         "ablate": stage_ablate,
+        "family": stage_family,
         "greedy": stage_greedy,
+        "greedy2": stage_greedy2,
         "weights": stage_weights,
+        "stability": stage_stability,
         "report": stage_report,
+        "summarize": stage_summarize,
     }[args.stage](args)
 
 

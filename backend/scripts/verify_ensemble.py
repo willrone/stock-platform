@@ -54,21 +54,23 @@ OOS_SPLIT = pd.Timestamp("2025-05-08")
 
 # 引擎实测基线（2026-10-27 用 verify_10y_pit.py --lag 1 重跑，仓库根目录）
 ENGINE_LEGS = {
+    # 2026-10-27 用 verify_10y_pit.py --years 3 --lag 1 从仓库根**重跑**实测
+    # （不是沿用旧表 —— 旧表里 rsi 1.0147 / mf 0.950 与当前代码不符）
     "42f": {"sharpe_ratio": 0.7991795250472001,
             "total_return": 0.34779248262737783,
             "max_drawdown": -0.16460289642093642, "total_trades": 1080},
     "rsi": {"sharpe_ratio": 0.771559886815966,
             "total_return": 0.35295059711506194,
             "max_drawdown": -0.19887429856304242, "total_trades": 726},
-    "fr": {"sharpe_ratio": 0.7269197037154874,
-           "total_return": 0.3065268411849565,
-           "max_drawdown": -0.1355705126634873, "total_trades": 1170},
-    "gbm": {"sharpe_ratio": 0.49570467646690825,
-            "total_return": 0.28418470353380754,
-            "max_drawdown": -0.2976551851189215, "total_trades": 610},
-    "mf": {"sharpe_ratio": 0.9500139504937557,
-           "total_return": 1.0347074684645836,
-           "max_drawdown": -0.4653110633502326, "total_trades": 3520},
+    "fr": {"sharpe_ratio": 0.6201707703609705,
+           "total_return": 0.251172632980105,
+           "max_drawdown": -0.16225955358231306, "total_trades": 816},
+    "gbm": {"sharpe_ratio": 0.6047078622436564,
+            "total_return": 0.3693672298421755,
+            "max_drawdown": -0.33367037659499155, "total_trades": 410},
+    "mf": {"sharpe_ratio": -0.4523391124517872,
+           "total_return": -0.3600687175588425,
+           "max_drawdown": -0.6024189532939825, "total_trades": 2357},
 }
 
 TRIALS: List[Dict[str, Any]] = []
@@ -349,7 +351,7 @@ def main() -> None:
     gA = []
     for name, sc in legs.items():
         cfg = LEG_CFG[name]
-        res = S.simulate(sc, mats, trad, cfg)
+        res = S.simulate(S.prepare_score(sc, mats, cfg), mats, trad, cfg)
         e = record(f"A_{name}", "A", res, cfg, note="单腿基线")
         e["engine_sharpe"] = ENGINE_LEGS.get(name, {}).get("sharpe_ratio")
         e["engine_trades"] = ENGINE_LEGS.get(name, {}).get("total_trades")
@@ -422,9 +424,10 @@ def main() -> None:
             sc = blend(legs, {x: 1.0 for x in sl}, prep)
             key = f"{sname}|{prep}"
             eq_scores[key] = sc
-            res = S.simulate(sc, mats, trad, base_cfg)
+            res = S.simulate(S.prepare_score(sc, mats, base_cfg), mats, trad, base_cfg)
             e = record(f"C1_eq_{sname}_{prep}", "C", res, base_cfg,
                        note=f"等权 {prep}")
+            e["_score_key"] = key
             gC.append(e)
             print_row(e)
 
@@ -436,9 +439,10 @@ def main() -> None:
             sc = icir_blend(legs, icir, sl, "z", power=1.0)
             key = f"{sname}|icir{win}"
             icir_scores[key] = sc
-            res = S.simulate(sc, mats, trad, base_cfg)
+            res = S.simulate(S.prepare_score(sc, mats, base_cfg), mats, trad, base_cfg)
             e = record(f"C2_icir_w{win}_{sname}", "C", res, base_cfg,
                        note=f"滚动{win}日RankICIR加权")
+            e["_score_key"] = key
             gC.append(e)
             print_row(e)
 
@@ -453,10 +457,11 @@ def main() -> None:
                        ("invcov", inv_cov_weights(sub_corr, sub_ir))):
             sc = blend(legs, dict(zip(sl, w)), "z")
             corrpen_scores[f"{sname}|{tag}"] = sc
-            res = S.simulate(sc, mats, trad, base_cfg)
+            res = S.simulate(S.prepare_score(sc, mats, base_cfg), mats, trad, base_cfg)
             e = record(f"C3_{tag}_{sname}", "C", res, base_cfg,
                        note=f"{tag} " +
                             str({k: round(float(v), 3) for k, v in zip(sl, w)}))
+            e["_score_key"] = f"{sname}|{tag}"
             gC.append(e)
             print_row(e)
 
@@ -474,8 +479,9 @@ def main() -> None:
         sc = blend({base: legs[base], **resid},
                    {base: 1.0, **{k: 1.0 for k in resid}}, "z")
         ortho_scores[f"{sname}|ortho"] = sc
-        res = S.simulate(sc, mats, trad, base_cfg)
+        res = S.simulate(S.prepare_score(sc, mats, base_cfg), mats, trad, base_cfg)
         e = record(f"C4_ortho_{sname}", "C", res, base_cfg, note="残差正交后等权")
+        e["_score_key"] = f"{sname}|ortho"
         gC.append(e)
         print_row(e)
     results["groups"]["C_ensemble"] = gC
@@ -485,13 +491,10 @@ def main() -> None:
     print("D. 合成后 TopK 参数扫描")
     print("=" * 78)
     gD: List[Dict[str, Any]] = []
-    # 候选 = C 组全窗 SR 最高的 10 个合成分数（按分数矩阵统一复算，避免索引错位）
     all_scores = {**eq_scores, **icir_scores, **corrpen_scores, **ortho_scores}
-    cands: List[Tuple[float, str]] = []
-    for key, sc in all_scores.items():
-        res = S.simulate(sc, mats, trad, base_cfg)
-        cands.append((res["sharpe_ratio"], key))
-    cands = [k for _, k in sorted(cands, key=lambda x: -x[0])[:10]]
+    # 候选 = C 组全窗 SR 最高的 10 个合成分数（复用 C 组已算好的结果，不重复模拟）
+    cands = [e["_score_key"] for e in sorted(gC, key=lambda x: -x["sharpe_ratio"])[:10]
+             if e.get("_score_key")]
     print(f"  候选合成分数: {cands}", flush=True)
 
     for key in cands:
@@ -504,7 +507,7 @@ def main() -> None:
                 cfg = S.SimConfig(topk=topk, n_drop=n_drop, lag=1,
                                   rebalance_days="weekly",
                                   max_position_size=(1 - 0.05) / topk)
-                res = S.simulate(sc, mats, trad, cfg)
+                res = S.simulate(S.prepare_score(sc, mats, cfg), mats, trad, cfg)
                 e = record(f"D_{key}_k{topk}_d{n_drop}", "D", res, cfg)
                 gD.append(e)
                 if best is None or e["sharpe_ratio"] > best["sharpe_ratio"]:
@@ -519,8 +522,21 @@ def main() -> None:
     print("E. OOS 切分（IS=2023-05→2025-05 选参, OOS=2025-05→2026-05 验证）")
     print("=" * 78)
     gE: List[Dict[str, Any]] = []
+    # 先在 IS 上粗筛（每个合成分数用 base_cfg 跑一次 IS），只保留
+    # IS SR 最高的 40 个合成分数进入完整网格 → 网格规模 40×5×4 = 800
+    coarse: List[Tuple[float, str]] = []
+    for key, sc in all_scores.items():
+        pr = S.prepare_score(sc, mats, base_cfg)
+        isr0 = S.simulate(pr, mats, trad, base_cfg, rows=is_rows)
+        coarse.append((float(isr0["sharpe_ratio"]), key))
+    coarse.sort(key=lambda x: -x[0])
+    keep_keys = [k for _, k in coarse[:40]]
+    print(f"  IS 粗筛 {len(all_scores)} → 保留 {len(keep_keys)} 个合成分数", flush=True)
+
     grid: List[Tuple[str, np.ndarray, Any]] = []
     for key, sc in all_scores.items():
+        if key not in keep_keys:
+            continue
         for topk in (20, 30, 40, 60, 80):
             for n_drop in (2, 3, 5, 10):
                 if n_drop >= topk:
@@ -531,9 +547,10 @@ def main() -> None:
                 grid.append((key, sc, cfg))
     print(f"  IS 网格 {len(grid)} 个组合（{len(all_scores)} 合成分数 × "
           f"5 topk × 4 n_drop）", flush=True)
+    # 说明：IS 网格是**防过拟合统计的一部分**，全部计入尝试次数。
     is_res_list = []
     for key, sc, cfg in grid:
-        isr = S.simulate_subset(sc, mats, trad, cfg, is_rows)
+        isr = S.simulate(S.prepare_score(sc, mats, cfg), mats, trad, cfg, rows=is_rows)
         is_res_list.append((key, sc, cfg, float(isr["sharpe_ratio"]),
                             float(isr["total_return"]), isr))
     is_res_list.sort(key=lambda r: -r[3])
@@ -543,8 +560,8 @@ def main() -> None:
               f"IS SR={sr:.3f} ret={rt:+.2%}")
 
     best_key, best_sc, best_cfg, best_is_sr, best_is_rt, _ = is_res_list[0]
-    oos = S.simulate_subset(best_sc, mats, trad, best_cfg, oos_rows)
-    full = S.simulate(best_sc, mats, trad, best_cfg)
+    oos = S.simulate(S.prepare_score(best_sc, mats, best_cfg), mats, trad, best_cfg, rows=oos_rows)
+    full = S.simulate(S.prepare_score(best_sc, mats, best_cfg), mats, trad, best_cfg)
     e = record(f"E_ISbest_{best_key}_k{best_cfg.topk}_d{best_cfg.n_drop}",
                "E", full, best_cfg, note="IS 选出的配置")
     e["IS_sharpe"] = round(best_is_sr, 4)
@@ -565,7 +582,7 @@ def main() -> None:
     print("\n  -- IS Top15 的 OOS 表现（OOS 只作验证，不用于选参）--")
     oos_table = []
     for key, sc, cfg, sr, rt, isr in is_res_list[:15]:
-        o = S.simulate_subset(sc, mats, trad, cfg, oos_rows)
+        o = S.simulate(S.prepare_score(sc, mats, cfg), mats, trad, cfg, rows=oos_rows)
         t = {"key": key, "topk": cfg.topk, "n_drop": cfg.n_drop,
              "IS_sharpe": round(sr, 4),
              "OOS_sharpe": round(float(o["sharpe_ratio"]), 4),
@@ -594,7 +611,7 @@ def main() -> None:
                                   max_position_size=(1 - 0.05) / topk)
                 sel = LayeredBlendSelector(cfg, legs, sl, per_leg=per_leg)
                 sc = blend(legs, {x: 1.0 for x in sl}, "z")
-                res = S.simulate(sc, mats, trad, cfg, selector=sel)
+                res = S.simulate(S.prepare_score(sc, mats, cfg), mats, trad, cfg, selector=sel)
                 e = record(f"F_layer_{sname}_p{per_leg}_k{topk}", "F", res, cfg,
                            note=f"分层 每腿{per_leg}只")
                 gF.append(e)

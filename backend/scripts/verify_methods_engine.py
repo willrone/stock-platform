@@ -90,12 +90,46 @@ VARIANTS: List[Dict[str, Any]] = [
         "label": "同上 topk=40",
     },
     {
+        "name": "methods_composite_neutral_si_d1",
+        "strategy": "methods_composite",
+        "cfg": {"topk": 60, "n_drop": 1, "rebalance_days": "weekly",
+                "rebalance_weekday": 4, "exposure_neutral": "size+illiq",
+                "turnover_blend": 0.0},
+        "mps": 0.015833,
+        "label": "42 因子 + 中性化 + n_drop=1（低换手→高胜率）",
+    },
+    {
         "name": "honest_composite_baseline",
         "strategy": "honest_composite",
         "cfg": {"topk": 60, "n_drop": 5, "rebalance_days": "weekly",
                 "rebalance_weekday": 4},
         "mps": 0.015833,
         "label": "引擎原生基线（42 因子）",
+    },
+]
+
+# IS/OOS 分窗引擎复核（用真实引擎跑两段窗口，而不是模拟器切片）
+OOS_SPLIT = datetime(2025, 5, 8)
+
+# 修正「先中性化、后混合」顺序后的换手因子变体（v1 里因为顺序错误被消掉了）
+VARIANTS_V2: List[Dict[str, Any]] = [
+    {
+        "name": "v2_neutral_then_to1.0",
+        "strategy": "methods_composite",
+        "cfg": {"topk": 60, "n_drop": 5, "rebalance_days": "weekly",
+                "rebalance_weekday": 4, "exposure_neutral": "size+illiq",
+                "turnover_blend": 1.0},
+        "mps": 0.015833,
+        "label": "中性化 → 再混换手因子(w=1)（修正顺序）",
+    },
+    {
+        "name": "v2_neutral_then_to0.5",
+        "strategy": "methods_composite",
+        "cfg": {"topk": 60, "n_drop": 5, "rebalance_days": "weekly",
+                "rebalance_weekday": 4, "exposure_neutral": "size+illiq",
+                "turnover_blend": 0.5},
+        "mps": 0.015833,
+        "label": "中性化 → 再混换手因子(w=0.5)（修正顺序）",
     },
 ]
 
@@ -189,6 +223,10 @@ def main() -> None:
     ap.add_argument("--lag", type=int, default=1)
     ap.add_argument("--out", default="methods_engine.json")
     ap.add_argument("--only", nargs="*", default=[])
+    ap.add_argument("--oos-window", action="store_true",
+                    help="额外跑 IS/OOS 分窗（真实引擎各跑一段）")
+    ap.add_argument("--v2", action="store_true",
+                    help="跑 v2 变体集（修正「先中性化后混合」顺序）")
     args = ap.parse_args()
 
     end = datetime(2026, 5, 8)
@@ -199,8 +237,12 @@ def main() -> None:
           f"股票池 {len(codes)} 只  lag={args.lag}", flush=True)
 
     todo = args.only or [v["name"] for v in VARIANTS]
+    variants = list(VARIANTS)
+    if args.v2:
+        variants = VARIANTS_V2
+        todo = args.only or [v["name"] for v in VARIANTS_V2]
     results: Dict[str, Any] = {}
-    for v in VARIANTS:
+    for v in variants:
         if v["name"] not in todo:
             continue
         print(f"\n[engine] === {v['name']} ({v['label']}) ===", flush=True)
@@ -223,6 +265,43 @@ def main() -> None:
              "n_codes": len(codes), "results": results},
             fh, ensure_ascii=False, indent=1, default=str)
     print(f"\n[engine] 已写入 {path}")
+
+    # ── IS/OOS 分窗（真实引擎各跑一段，不是模拟器切片）────────────
+    if args.oos_window:
+        print("\n" + "=" * 76)
+        print(f"[engine] IS/OOS 分窗：IS {start.date()}→{OOS_SPLIT.date()} | "
+              f"OOS {OOS_SPLIT.date()}→{end.date()}")
+        print("=" * 76)
+        windows = {
+            "IS": (start, OOS_SPLIT),
+            "OOS": (OOS_SPLIT, end),
+        }
+        oos_results: Dict[str, Any] = {}
+        for wname, (s, e) in windows.items():
+            for v in variants:
+                if v["name"] not in todo:
+                    continue
+                print(f"\n[engine] === {wname} / {v['name']} ===", flush=True)
+                r = run_one(data_root, codes, v["strategy"], v["cfg"], v["mps"],
+                            s, e, args.lag)
+                r["label"] = v["label"]
+                r["window"] = f"{s.date()}→{e.date()}"
+                oos_results.setdefault(v["name"], {})[wname] = r
+                print(f"  SR={r.get('sharpe_ratio')} ret={r.get('total_return')} "
+                      f"mdd={r.get('max_drawdown')} "
+                      f"trades={r.get('total_trades')} "
+                      f"win={r.get('win_rate')} ({r.get('wall_s')}s)", flush=True)
+                if r.get("yearly"):
+                    print(f"  分年: {r['yearly']}", flush=True)
+        path2 = os.path.join(OUT_DIR, args.out.replace(".json", "_split.json"))
+        with open(path2, "w") as fh:
+            json.dump(
+                {"IS_window": f"{start.date()}→{OOS_SPLIT.date()}",
+                 "OOS_window": f"{OOS_SPLIT.date()}→{end.date()}",
+                 "lag": args.lag, "n_codes": len(codes),
+                 "results": oos_results},
+                fh, ensure_ascii=False, indent=1, default=str)
+        print(f"\n[engine] 已写入 {path2}")
 
 
 if __name__ == "__main__":

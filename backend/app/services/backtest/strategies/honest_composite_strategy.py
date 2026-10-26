@@ -188,6 +188,14 @@ class HonestCompositeStrategy(BaseStrategy):
         #   而 ICIR 加权已被证伪（因子高度相关时加权反而更差）→ 正确做法是
         #   **把弱因子直接去掉**，让强因子在等权下占更大比重。
         # factor_allowlist: 只保留这些因子（None = 全部）
+        # 2026-10-27：**use_panel 开关**
+        # 实测：42 因子版（面板因子真生效）夏普 0.799 / 回撤 −16.46%，
+        #       25 公式因子版 夏普 0.880 / 回撤 −13.37%。
+        # → 17 个 Alpha158 面板因子是净负面，主线应只用 25 个公式因子。
+        # 这里做成显式开关（而不是靠「panel_dir 路径失效」的副产品）。
+        # 默认 False：25 公式因子版（实测夏普 0.880 / 回撤 −13.37%）优于
+        # 42 因子版（0.799 / −16.46%）。要用面板因子要显式 use_panel=True。
+        self.use_panel = bool(config.get("use_panel", False))
         self.factor_allowlist = config.get("factor_allowlist", None)
         if self.factor_allowlist is not None:
             self.factor_allowlist = set(self.factor_allowlist)
@@ -341,7 +349,8 @@ class HonestCompositeStrategy(BaseStrategy):
             _n_used += 1
 
         # 18 个 Alpha158 面板因子 — 每个因子构建一次全截面矩阵
-        for factor_name, sign in _ALPHAPANEL_FACTORS.items():
+        for factor_name, sign in (_ALPHAPANEL_FACTORS.items()
+                                  if self.use_panel else ()):
             if (self.factor_allowlist is not None
                     and factor_name not in self.factor_allowlist):
                 continue

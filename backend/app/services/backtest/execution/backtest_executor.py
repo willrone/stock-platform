@@ -550,6 +550,18 @@ class BacktestExecutor:
                 perf_breakdown=perf_breakdown,
             )
             perf_breakdown["main_loop_s"] = time.perf_counter() - _t0
+            # 2026-10-27：把日度净值曲线暴露到结果里
+            # 用途：多策略「资金分配」合成 —— 各策略单独跑拿日度收益率序列，
+            #       再按资金权重组合（数学上等价于真实资金分配）。
+            try:
+                _eq = getattr(portfolio_manager, "equity_curve", None)
+                if _eq:
+                    backtest_results["equity_curve"] = [
+                        [str(d.date()) if hasattr(d, "date") else str(d), float(v)]
+                        for d, v in _eq
+                    ]
+            except Exception as e:  # noqa: BLE001
+                logger.debug(f"导出 equity_curve 失败: {e}")
 
             if self.enable_performance_profiling:
                 self._profiler().end_stage(
@@ -717,6 +729,17 @@ class BacktestExecutor:
                 perf_breakdown,
             )
 
+            # 2026-10-27：把日度净值曲线放进**返回值**（run_backtest 返回的是
+            # backtest_report，不是 backtest_results —— 之前加错对象了）
+            try:
+                _eq = getattr(portfolio_manager, "equity_curve", None)
+                if _eq:
+                    backtest_report["equity_curve"] = [
+                        [str(d.date()) if hasattr(d, "date") else str(d), float(v)]
+                        for d, v in _eq
+                    ]
+            except Exception as e:  # noqa: BLE001
+                logger.debug(f"导出 equity_curve 失败: {e}")
             return backtest_report
 
         except Exception as e:
