@@ -93,6 +93,14 @@ SIGNAL_STRATEGIES: Dict[str, SignalStrategy] = {
         ndrop=5,
         factor_note="纯量价因子，不依赖基本面，回撤最小",
     ),
+    "honest_42f_neu": SignalStrategy(
+        key="honest_42f_neu",
+        display_name="42 因子 + 行业中性",
+        desc="42 因子 z-score 先按申万一级行业去均值、再行业内重新标准化 —— 消除行业暴露，选行业内相对最强的",
+        topk=60,
+        ndrop=5,
+        factor_note="行业内选相对最强；3 年全市场回测夏普 0.925 → 1.243",
+    ),
     "22f": SignalStrategy(
         key="22f",
         display_name="22 因子等权（对照线）",

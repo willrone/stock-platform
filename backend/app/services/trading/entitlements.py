@@ -39,6 +39,7 @@ class SignalEntitlement:
 # 公开可见的策略集合（与 signal_service.SIGNAL_STRATEGIES 对齐）
 ALL_STRATEGIES: Set[str] = {
     "honest_42f",
+    "honest_42f_neu",
     "gbm_voltgt",
     "rsi_71421",
     "factor_ranking",
