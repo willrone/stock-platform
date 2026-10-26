@@ -42,6 +42,7 @@ import pandas as pd
 from loguru import logger
 
 from ..core.base_strategy import BaseStrategy
+from ._fundamental_panel import _load_fundamental_panel
 from ..models import SignalType, TradingSignal
 from app.services.trading.execution_rules import (
     industry_ids,
@@ -208,6 +209,26 @@ class HonestCompositeStrategy(BaseStrategy):
         self.neutral_exposures = list(config.get(
             "neutral_exposures", ("size", "illiq")))
         self.neutral_window = int(config.get("neutral_window", 20))
+        # 2026-10-27：**财务因子**（唯一还没试过的「新信息」路径）
+        # IC 验证（5513 只，3 年，PIT 按报告期+120 天）：
+        #   gross_margin −0.0103(t−4.45) / roe_yoy −0.0097(t−3.90) /
+        #   asset_yoy −0.0079(t−3.40) / cfps +0.0070(t+3.19) /
+        #   inventory_turnover +0.0050(t+2.63) / asset_turnover +0.0048(t+2.58)
+        # ⚠️ 经典质量因子（roe / net_margin / debt_ratio / eps_adj）**全部无效**
+        #    （|t| < 0.5）→ A 股 fwd5 上基本面不是 alpha 因子
+        # ⚠️ 显著的 3 个负 IC 因子本质是「低估值/低关注度」反向代理，不是质量
+        # 面板：npz（date × stock 的 float32 矩阵），由 build_fundamental_panel.py 生成
+        self.fundamental_panel = config.get("fundamental_panel") or None
+        # fundamental_factors: {因子名: 符号}，符号 +1 = 值越高越好，−1 = 值越低越好
+        # （与 zscore_with_industry 的符号语义一致：z = (x-mu)/sd * sign）
+        _ff = config.get("fundamental_factors") or {}
+        if isinstance(_ff, dict):
+            self.fundamental_factors = {str(k): float(v) for k, v in _ff.items()}
+        else:
+            self.fundamental_factors = {
+                str(t[0]): float(t[1]) for t in _ff
+            }
+        self.fundamental_weight = float(config.get("fundamental_weight", 1.0))
         self.factor_allowlist = config.get("factor_allowlist", None)
         if self.factor_allowlist is not None:
             self.factor_allowlist = set(self.factor_allowlist)
@@ -386,6 +407,48 @@ class HonestCompositeStrategy(BaseStrategy):
         composite = np.where(
             wsum > 0, acc / np.where(wsum > 0, wsum, 1.0), np.nan
         )
+
+        # ── 财务因子并入（2026-10-27）────────────────────────────
+        # 方式：与价量复合分**等权平均**（两路各自 z-score 后各占 50% 权重）。
+        # ⚠️ 不做 ICIR 加权/减法 —— 那些操作在本项目已全部证伪
+        #    （提高集中度 = 降夏普 + 升回撤）。
+        if self.fundamental_panel and self.fundamental_factors:
+            _facc = np.zeros((n_dates, n_stocks), dtype=np.float64)
+            _fwsum = np.zeros((n_dates, n_stocks), dtype=np.float64)
+            _fz = _load_fundamental_panel(
+                self.fundamental_panel, master, codes, self.fundamental_factors
+            )
+            for _fname, _sign in self.fundamental_factors.items():
+                _m = _fz.get(_fname)
+                if _m is None:
+                    continue
+                _z = zscore_with_industry(
+                    _m, _sign, min_cross, _ind_ids, _n_ind, self.industry_neutral
+                )
+                _good = np.isfinite(_z)
+                _facc[_good] += _z[_good]
+                _fwsum[_good] += 1.0
+            _fcomp = np.where(_fwsum > 0, _facc / np.where(_fwsum > 0, _fwsum, 1.0), np.nan)
+            # 与价量分等权合成（两路都有效时）
+            _both = np.isfinite(composite) & np.isfinite(_fcomp)
+            _merged = np.where(
+                _both, 0.5 * composite + 0.5 * _fcomp, np.where(
+                    np.isfinite(composite), composite, _fcomp)
+            )
+            _n_fund = int(np.isfinite(_fcomp).sum())
+            logger.info(
+                f"honest_composite 财务因子并入: "
+                f"{len(self.fundamental_factors)} 个因子，有效格 {_n_fund}"
+            )
+            # 静默失效防护：面板加载失败会表现为「变体与基线逐位相同」，
+            # 极易被误读成「财务因子没用」。这里直接抛错。
+            if _n_fund < n_dates * n_stocks * 0.10:
+                raise ValueError(
+                    f"财务因子面板有效格只有 {_n_fund} / {n_dates * n_stocks}"
+                    f"（<10%）→ 面板未正确加载，拒绝静默退回基线"
+                )
+            composite = _merged
+
         composite[limit_up_mask] = np.nan  # 涨停掩码: 当日不可买
 
         # ── 暴露中性化（2026-10-27）──────────────────────────────

@@ -63,7 +63,17 @@ def main() -> int:
     # ── 加载价格（同一股票池，用于前瞻收益）────────────────────────
     from app.services.backtest.execution.data_loader import DataLoader
     dl = DataLoader(data_dir=os.path.join(ROOT, "data"))
-    codes = sorted(raw.keys())
+    # 价格加载器要「600000.SH」完整代码；财务侧是 6 位 → 这里统一用完整代码
+    full_codes = []
+    inst = os.path.join(ROOT, "data", "qlib_official_data", "instruments", "all.txt")
+    with open(inst) as fh:
+        for line in fh:
+            parts = line.strip().split("\t")
+            if parts and "_" in parts[0]:
+                c, _, m = parts[0].partition("_")
+                if m.upper() in ("SH", "SZ", "BJ") and c.isdigit():
+                    full_codes.append(f"{c}.{m.upper()}")
+    codes = sorted(full_codes)
     s, e = datetime(2019, 1, 1), datetime(2026, 5, 8)
     close = {}
     for i, c in enumerate(codes):
@@ -91,7 +101,12 @@ def main() -> int:
     print(f"[fic] 价格矩阵 {close_df.shape}  交易日 {len(idx)}", flush=True)
 
     # ── 构建 PIT 因子面板（阶梯函数：公布日才生效）──────────────────
-    factor_names = sorted({f for recs in raw.values() for _, _, v in recs for f in v})
+    def _vals(rec):
+        """兼容 [avail, {f: v}]（akshare）与 [pub, stat, {f: v}]（baostock）"""
+        return rec[1] if len(rec) == 2 else rec[2]
+
+    factor_names = sorted({f for recs in raw.values() for rec in recs
+                           for f in _vals(rec)})
     print(f"[fic] 因子：{factor_names}", flush=True)
     panels = {f: pd.DataFrame(np.nan, index=idx, columns=list(close_df.columns))
               for f in factor_names}

@@ -2218,6 +2218,51 @@ def S_FAMILY(f: str) -> str:
     return FACTOR_META.get(f, {}).get("family", "")
 
 
+def _paired_diff_sharpe(
+    hist_a: List[Dict[str, Any]],
+    hist_b: List[Dict[str, Any]],
+    block: int = 10,
+    n_boot: int = 2000,
+    seed: int = 11,
+) -> Dict[str, Any]:
+    """配对差夏普（b 相对 a）+ 块自举。
+
+    比"两个夏普相减"更有统计意义：两条曲线的收益高度相关，
+    配对后抵消掉共同的市场 beta，剩下的才是"选因子"带来的增量。
+    """
+    def _rets(h):
+        df = {x["date"]: x["portfolio_value"] for x in h}
+        ds = sorted(df)
+        v = np.array([df[d] for d in ds])
+        return dict(zip(ds, np.diff(v) / v[:-1]))
+
+    ra, rb = _rets(hist_a), _rets(hist_b)
+    ds = sorted(set(ra) & set(rb))
+    if len(ds) < block * 3:
+        return {}
+    x = np.array([ra[d] for d in ds])
+    y = np.array([rb[d] for d in ds])
+    d = y - x
+    if d.std() == 0:
+        return {}
+    obs = float(d.mean() / d.std() * math.sqrt(252))
+    rng = np.random.default_rng(seed)
+    L = len(d)
+    nb = int(np.ceil(L / block))
+    starts = np.arange(L - block + 1)
+    stats = np.empty(n_boot)
+    for i in range(n_boot):
+        pick = rng.integers(0, len(starts), size=nb)
+        s = np.concatenate([d[q : q + block] for q in starts[pick]])[:L]
+        stats[i] = s.mean() / s.std() * math.sqrt(252) if s.std() > 0 else 0.0
+    return {
+        "paired_delta_sharpe": obs,
+        "se": float(stats.std()),
+        "p_delta_le_zero": float((stats <= 0).mean()),
+        "n_pairs": int(L),
+    }
+
+
 def stage_report(args) -> None:
     """汇总：因子清单 + 各阶段结果 + 尝试次数 + DSR。"""
     summary: Dict[str, Any] = {
@@ -2283,6 +2328,7 @@ def stage_summarize(args) -> None:
         "stability",
         "oosval",
         "walkforward",
+        "consensus",
     ):
         p = os.path.join(OUT_DIR, f"factor_subset_{stage}_{args.window}.json")
         st = _load_store(p) if os.path.exists(p) else {}
@@ -2326,6 +2372,7 @@ def stage_summarize(args) -> None:
             f"回撤={base.get('max_drawdown', 0):.4f} 笔数={base.get('total_trades')}"
         )
     rows.sort(key=lambda x: -x[1]["sharpe_ratio"])
+    abl_rows = list(rows)  # 单独保存：下面第 7 节的 rows 会被覆盖
     A("")
     A("  去掉后夏普提升 Top10（Δ>0 = 该因子是净负面，去掉更好）:")
     for f, r in rows[:10]:
@@ -2461,20 +2508,40 @@ def stage_summarize(args) -> None:
         )
 
     # ── 9. DSR ──
+    cons = out.get("consensus", {})
+    cons_res = cons.get("results", {})
+    if cons_res:
+        A("")
+        A("【9】walk-forward 一致性子集（被 ≥k 个 fold 剔除的因子）")
+        A(f"  {'子集':<44}{'n':>4}{'3年夏普':>9}{'IS':>8}{'OOS冷启':>9}{'回撤':>8}{'胜率':>7}")
+        for cname, sub in (cons.get("candidates") or {}).items():
+            r3 = cons_res.get(f"{variant_key(sub)}|equal|full3y")
+            ro = cons_res.get(f"{variant_key(sub)}|equal|oos1y")
+            if not r3 or "sharpe_ratio" not in r3:
+                continue
+            oos_sh = (ro or {}).get("sharpe_ratio")
+            A(
+                f"  {cname[:43]:<44}{len(sub):>4}{r3['sharpe_ratio']:>9.4f}"
+                f"{r3['is']['sharpe_ratio']:>8.4f}"
+                f"{(oos_sh if oos_sh is not None else float('nan')):>9.4f}"
+                f"{r3['max_drawdown']:>8.4f}{r3.get('win_rate', 0):>7.3f}"
+            )
+
     A("")
-    A("【9】过拟合校正（Deflated Sharpe Ratio, Bailey & López de Prado 2014）")
+    A("【10】过拟合校正（Deflated Sharpe Ratio, Bailey & López de Prado 2014）")
     A(f"  本次搜索共尝试 {trials} 个变体。")
-    cands = []
+    A("  DSR = P(真实夏普 > 零假设下尝试 N 次的期望最大夏普)，<0.5 即不显著。")
+    dsr_cands = []
     for label, r in [("42f 基线", base)] + [
-        (f"drop {f}", r) for f, r in rows[:10]
+        (f"drop {f}", r) for f, r in abl_rows[:10]
     ]:
         if r and "sharpe_ratio" in r:
-            cands.append((label, r))
+            dsr_cands.append((label, r))
     if trace:
         fr = g.get("results", {}).get(variant_key(trace[-1]["factors"]))
         if fr:
-            cands.append(("贪心最终子集", fr))
-    for label, r in cands:
+            dsr_cands.append(("贪心最终子集", fr))
+    for label, r in dsr_cands:
         rs = r.get("ret_stats") or {}
         d = _dsr(
             r["sharpe_ratio"],
@@ -2489,6 +2556,29 @@ def stage_summarize(args) -> None:
                 f"零假设期望最大夏普={d['sr_expected_max_under_null']:.4f}  "
                 f"DSR={d['dsr']:.4f}"
             )
+
+    # ── 11. 配对差夏普 ──
+    base_hist = (base or {}).get("_history")
+    if base_hist:
+        A("")
+        A("【11】配对差夏普（相对 42f 基线，块自举 block=10）")
+        A("  两条曲线收益高度相关 → 配对差抵消共同市场 beta，才是'选因子'的净增量。")
+        A(f"  {'变体':<18}{'ΔSharpe(配对)':>14}{'SE':>8}{'P(Δ≤0)':>10}")
+        paired_rows = []
+        for f, r in abl_rows[:12]:
+            h = r.get("_history")
+            if not h:
+                continue
+            pd_ = _paired_diff_sharpe(base_hist, h)
+            if not pd_:
+                continue
+            paired_rows.append((f, pd_))
+        for f, pd_ in paired_rows:
+            A(
+                f"  drop {f:<12}{pd_['paired_delta_sharpe']:>14.4f}"
+                f"{pd_['se']:>8.4f}{pd_['p_delta_le_zero']:>10.3f}"
+            )
+        A("  注：ΔSharpe 是配对日收益差的年化夏普（量纲与整体夏普不同，仅用于横向比较）。")
 
     out["report_text"] = "\n".join(lines)
     p = os.path.join(OUT_DIR, f"factor_subset_report_{args.window}.json")

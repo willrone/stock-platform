@@ -467,6 +467,23 @@ def build_variants(stage: str) -> List[Tuple[str, Dict[str, Any]]]:
         for b in (0.0, 0.3, 0.5, 0.7, 1.0):
             add(f"bl{int(b * 100)}", blend=b)
 
+    # ── Stage 9: validate（管道校验 + qlib 默认超参）─────────────
+    # validate 组的目的是验证 gbm_lab 的"等权分支"能不能复现 honest_composite。
+    #   v_val_f25_eq   : f25 + blend=0 + 不做波动率裁剪
+    #                    → 应 ≈ honest_composite 25f (IS 0.724 / OOS 1.388)
+    #   v_val_f42_eq   : f42 + blend=0 + 不裁剪 → 隔离"17 个面板因子"的影响
+    if stage in ("all", "validate"):
+        add("val_f25_eq", feature_set="f25", blend=0.0, target_vol=0.0)
+        add("val_f42_eq", feature_set="f42", blend=0.0, target_vol=0.0)
+        add("val_f25_eq_vt20", feature_set="f25", blend=0.0, target_vol=0.20)
+        add("val_f42_eq_vt20", feature_set="f42", blend=0.0, target_vol=0.20)
+        # qlib LGBModel 默认超参（qlib.contrib.model.gbdt）
+        add("qlib_lgb_default", n_estimators=200, num_leaves=31, max_depth=-1,
+            min_child_samples=20, learning_rate=0.05, subsample=0.8,
+            colsample_bytree=0.8, reg_alpha=0.1, reg_lambda=1.0)
+        # qlib 默认标签：1 日前瞻收益（Ref(-2)/Ref(-1)）
+        add("qlib_h1_raw", horizon=1, target="raw")
+
     return vs
 
 

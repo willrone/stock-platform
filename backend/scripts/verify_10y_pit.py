@@ -42,6 +42,16 @@ QLIB_OFFICIAL = os.path.join(ROOT, "data", "qlib_official_data")
 QLIB_LIVE = os.path.join(ROOT, "data", "qlib_data")
 OUT_DIR = os.path.join(ROOT, "data", "backtest")
 
+#: 财务因子与其方向（IC 检验结果，见 data/backtest/fundamental_ic.json）
+_FUND_FACTORS = {
+    "gross_margin": -1.0,        # IC −0.0103, t −4.45（低者涨）
+    "roe_yoy": -1.0,             # IC −0.0097, t −3.90（低者涨）
+    "asset_yoy": -1.0,           # IC −0.0079, t −3.40（低者涨）
+    "cfps": 1.0,                 # IC +0.0070, t +3.19
+    "inventory_turnover": 1.0,   # IC +0.0050, t +2.63
+    "asset_turnover": 1.0,       # IC +0.0048, t +2.58
+}
+
 # 各策略线的回测口径（与审计报告 FULL_STRATEGY_AUDIT_2026-10-25.md 一致）
 STRATEGIES: Dict[str, Dict[str, Any]] = {
     "honest_composite": {
@@ -122,6 +132,7 @@ def run_one(
     enable_tradability: bool = True,
     no_panel: bool = False,
     neutral_exposure: bool = False,
+    fundamental: bool = False,
 ) -> Dict[str, Any]:
     executor = BacktestExecutor(
         data_dir=data_root,
@@ -142,7 +153,12 @@ def run_one(
                     {**dict(cfg), "lag": lag} if lag is not None else dict(cfg)
                 ) | ({"panel_dir": "/nonexistent/panel_off"}
                       if no_panel else {})
-                | ({"exposure_neutral": True} if neutral_exposure else {}),
+                | ({"exposure_neutral": True} if neutral_exposure else {})
+                | ({
+                    "fundamental_panel": os.path.join(
+                        ROOT, "data", "backtest", "fundamental_panel.npz"),
+                    "fundamental_factors": _FUND_FACTORS,
+                } if fundamental else {}),
                 backtest_config=BacktestConfig(
                     enable_tradability=enable_tradability,
                     initial_cash=1_000_000.0,
@@ -225,6 +241,9 @@ def main() -> None:
                     help="关闭回测可成交性检查（回到『能买涨停能卖跌停』的旧口径）")
     ap.add_argument("--start", default="", help="窗口起点 YYYY-MM-DD")
     ap.add_argument("--end", default="", help="窗口终点 YYYY-MM-DD")
+    ap.add_argument("--fundamental", action="store_true",
+                    help="并入财务因子（gross_margin/roe_yoy/asset_yoy 反向 + "
+                         "cfps/inventory_turnover/asset_turnover 正向）")
     ap.add_argument("--neutral-exposure", action="store_true",
                     help="启用暴露中性化（Barra APT OLS 残差，size+illiq）")
     ap.add_argument("--no-panel", action="store_true",
@@ -262,7 +281,8 @@ def main() -> None:
         r = run_one(data_root, codes, name, spec["cfg"], spec["mps"], start, end,
                     lag=args.lag, enable_tradability=not args.no_tradability,
                     no_panel=args.no_panel,
-                    neutral_exposure=args.neutral_exposure)
+                    neutral_exposure=args.neutral_exposure,
+                    fundamental=args.fundamental)
         results[name] = r
         print(f"  基线: sharpe={r.get('sharpe_ratio')} ret={r.get('total_return')} "
               f"mdd={r.get('max_drawdown')} trades={r.get('total_trades')} "

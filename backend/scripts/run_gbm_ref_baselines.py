@@ -33,16 +33,19 @@ from search_gbm_params import (  # noqa: E402
 
 BASE = {
     "honest_composite_25f": {
+        "strategy": "honest_composite",
         "cfg": {"topk": 60, "n_drop": 5, "rebalance_days": "weekly",
                 "rebalance_weekday": 4},
         "mps": MPS,
     },
     "honest_composite_42f": {
+        "strategy": "honest_composite",
         "cfg": {"topk": 60, "n_drop": 5, "rebalance_days": "weekly",
                 "rebalance_weekday": 4, "use_panel": True},
         "mps": MPS,
     },
     "gbm_voltgt": {
+        "strategy": "gbm_voltgt",
         "cfg": {"topk": 60, "n_drop": 5, "rebalance_days": "weekly",
                 "rebalance_weekday": 4, "n_estimators": 100, "max_depth": 3,
                 "learning_rate": 0.05, "warmup_months": 2,
@@ -59,7 +62,7 @@ def run(name: str, spec: dict, codes, start, end):
     )
     t0 = time.perf_counter()
     res = asyncio.run(executor.run_backtest(
-        strategy_name=name, stock_codes=codes,
+        strategy_name=spec["strategy"], stock_codes=codes,
         start_date=start, end_date=end,
         strategy_config={**spec["cfg"], "lag": 1},
         backtest_config=BacktestConfig(
