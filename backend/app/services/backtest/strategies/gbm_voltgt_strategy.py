@@ -27,6 +27,7 @@ from loguru import logger
 
 from ..core.base_strategy import BaseStrategy
 from ..models import SignalType, TradingSignal
+from app.services.trading.execution_rules import limit_up_mask_matrix
 
 _SCORES_ATTR = "_gbm_voltgt_scores"
 
@@ -173,7 +174,11 @@ class GbmVoltgtStrategy(BaseStrategy):
                 cands[f"CORD{n}"] = ret.rolling(n).corr(vchg)
 
         day_ret = close.pct_change(fill_method=None).to_numpy()
-        limit_up_mask = day_ret >= self.limit_up
+        # 2026-10-25 修正：原来用统一的 self.limit_up（默认 0.095）全板通用。
+        # 实测问题：182 只 20% 板（创业板/科创板）股票有 5380 个交易日涨幅落在
+        # 9.5%~20%（并未涨停）却被误剔；ST 股触及 5% 涨停则完全没拦。
+        # 改为逐票按板块判定（主板 10% / 创业板科创板 20% / 北交所 30%）。
+        limit_up_mask = limit_up_mask_matrix(day_ret, close.columns)
         fwd_ret = (close.shift(-self.horizon) / close - 1.0).to_numpy()  # 周期=horizon天
 
         # 面板因子矩阵

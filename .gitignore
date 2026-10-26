@@ -294,6 +294,10 @@ frontend/logs/
 
 # 数据文件
 /data/
+# 行业分类映射是运行时必需数据（申万一级，1579 只）——必须入库，
+# 否则部署后「行业中性化」策略线会因找不到映射而静默退化成普通 42f。
+!/data/industry/
+!/data/industry/industry_map.json
 backend/data/*
 !backend/data/.gitkeep
 !backend/data/stocks/

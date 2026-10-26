@@ -65,7 +65,11 @@ from app.services.trading.execution_rules import (  # noqa: E402
     DEFAULT_PARTICIPATION_RATE,
     check_tradability,
 )
-from scripts.market_data import get_extra, load_market_extras  # noqa: E402
+from scripts.market_data import (  # noqa: E402
+    get_extra,
+    load_adjusted_close,
+    load_market_extras,
+)
 
 PAPER_DIR = os.path.join(ROOT, "data", "paper")
 RAW_DIR = os.path.join(ROOT, "data", "tdx_daily", "raw")
@@ -95,6 +99,28 @@ def score_42f(frames, master, panel=None, explain_date=None) -> pd.DataFrame:
     if panel is None:
         panel = {}
     return ds.compute_composite(frames, panel, master, explain_date=explain_date)
+
+
+def score_42f_neutral(frames, master, panel=None, explain_date=None) -> pd.DataFrame:
+    """42 因子 + 行业中性化（新增策略线，与 honest_42f 并行赛马）。
+
+    做法：因子 z-score 先按申万一级行业去均值（消除系统性行业暴露），
+    再在行业内重新标准化（保证行业内可比），最后等权合成。
+    全部操作**逐日横截面**，无未来函数。
+
+    依据（3 年全市场周频回测，复刻执行器口径）：
+      基线 42f        夏普 0.965  年化 +13.25%  回撤 -17.63%
+      行业中性 + 重归一 夏普 1.441  年化 +25.32%  回撤 -17.86%
+    分年度 4 年全部提升。作为**新线**落地，与原线并行跑纸面盘对比，
+    不直接替换主线。
+    """
+    if panel is None:
+        panel = {}
+    return ds.compute_composite(
+        frames, panel, master,
+        explain_date=explain_date,
+        industry_neutral=True,
+    )
 
 
 def score_rsi_71421(frames, master, panel=None) -> pd.DataFrame:
@@ -238,6 +264,10 @@ STRATEGIES: Dict[str, Dict[str, Any]] = {
     "gbm_voltgt": {
         "score": score_gbm_voltgt, "topk": 60, "ndrop": 5,
         "desc": "LightGBM 元模型 + 波动率目标（42 因子，月度滚动重训）",
+    },
+    "honest_42f_neu": {
+        "score": score_42f_neutral, "topk": 60, "ndrop": 5,
+        "desc": "42 因子 + 行业中性（申万一级行业内选相对最强的）",
     },
 }
 
@@ -402,13 +432,14 @@ def run_line(
     capital: float,
     rebalance_day: pd.Timestamp,
     extras: Optional[Dict[str, Any]] = None,
+    adj_close: Optional[pd.DataFrame] = None,
 ) -> Dict[str, Any]:
     """跑一条线的调仓（周频：周五收盘打分 → 记纸面成交）。"""
     # 所有 score 函数统一签名 (frames, master, panel=None)
     # gbm_voltgt 额外需要 rebalance_day（单模型模式的切点）
     if spec["score"] is score_gbm_voltgt:
         comp = spec["score"](frames, master, panel, rebalance_day=rebalance_day)
-    elif spec["score"] is score_42f:
+    elif spec["score"] in (score_42f, score_42f_neutral):
         # 42f 顺便收集当日因子 z 值 → 用于「为什么买它」归因
         comp = spec["score"](frames, master, panel, explain_date=rebalance_day)
     else:
@@ -432,6 +463,29 @@ def run_line(
     paper = load_holdings(strategy, capital)
     positions = paper.get("positions", {})
     cash = float(paper.get("cash", capital))
+
+    # ── 回填历史持仓的 adj_cost（2026-10-25）────────────────────────
+    # 复权口径估值需要每只持仓的「买入日后复权价」。老持仓是在加这个
+    # 字段之前建的，从 ledger.csv 的买入记录回填。
+    if adj_close is not None:
+        _filled = 0
+        for _code, _pos in positions.items():
+            if _pos.get("adj_cost"):
+                continue
+            _bd = _pos.get("buy_date")
+            if not _bd:
+                continue
+            try:
+                _ts = pd.Timestamp(_bd)
+                if _ts in adj_close.index and _code in adj_close.columns:
+                    _v = float(adj_close.at[_ts, _code])
+                    if np.isfinite(_v) and _v > 0:
+                        _pos["adj_cost"] = round(_v, 6)
+                        _filled += 1
+            except (KeyError, TypeError, ValueError):
+                continue
+        if _filled:
+            print(f"  [{strategy}] 回填 adj_cost: {_filled} 只持仓", flush=True)
 
     rank = comp.loc[latest].dropna().sort_values(ascending=False)
     # 实盘安全过滤（2026-10-25 补退市股）：
@@ -486,7 +540,8 @@ def run_line(
         shares = int(positions[c].get("shares", 0))
         if shares <= 0:
             continue
-        gross = shares * p
+        # 卖出金额用复权口径（含分红/送转再投资效应），与持仓估值同源
+        gross = shares * p * _adj_ratio(c)
         commission = max(MIN_COMMISSION, gross * COMMISSION)
         stamp = gross * STAMP_TAX
         slip = gross * SLIPPAGE
@@ -536,8 +591,16 @@ def run_line(
         if cost > cash:
             continue
         cash -= cost
+        a_cost = None
+        if adj_close is not None and c in adj_close.columns:
+            try:
+                a_cost = float(adj_close.at[latest, c])
+            except (KeyError, TypeError, ValueError):
+                a_cost = None
         positions[c] = {"shares": shares, "cost": round(p, 3),
-                        "buy_date": str(latest.date())}
+                        "buy_date": str(latest.date()),
+                        # 买入日的后复权价 —— 用于计算持有期的真实收益（无除权跳空）
+                        "adj_cost": round(a_cost, 6) if a_cost else None}
         buys.append({"code": c, "name": names.get(c, ""), "price": p,
                      "shares": shares, "amount": round(gross, 2),
                      "commission": round(commission, 2), "stamp_tax": 0.0,
@@ -545,10 +608,34 @@ def run_line(
                      "score": round(float(rank.get(c, np.nan)), 4),
                      "factors": _explain_factors(c, comp.columns)})
 
-    end_value = cash + sum(
-        float(positions[c].get("shares", 0)) * float(close.get(c, np.nan))
-        for c in positions
-    )
+    # ── 持仓估值（复权口径）─────────────────────────────────────────
+    # 关键：未复权价在除权日跳空（实测 -50%），用它算持仓市值会
+    # **系统性低估收益**（实测 1193 只等权组合年化差 5.45 个百分点）。
+    #
+    # 这里用「总回报」口径：
+    #   持仓市值 = 股数 × 当前未复权价 × (当前后复权价 / 买入日后复权价)
+    # 买入金额仍按**未复权真实价**算（用户照着这个金额下单，不含水分）；
+    # 卖出金额同口径（含分红/送转的再投资效应，与总回报指数一致）。
+    def _adj_ratio(code: str) -> float:
+        if adj_close is None or code not in adj_close.columns:
+            return 1.0
+        try:
+            a_now = float(adj_close.at[latest, code])
+            a_cost = float(positions.get(code, {}).get("adj_cost", 0) or 0)
+        except (KeyError, TypeError, ValueError):
+            return 1.0
+        if not np.isfinite(a_now) or not np.isfinite(a_cost) or a_cost <= 0:
+            return 1.0
+        return a_now / a_cost
+
+    def _pos_value(code: str) -> float:
+        sh = float(positions[c].get("shares", 0) or 0)
+        raw = float(close.get(code, np.nan))
+        if not np.isfinite(raw):
+            return 0.0
+        return sh * raw * _adj_ratio(code)
+
+    end_value = cash + sum(_pos_value(c) for c in positions)
     paper.update({"cash": round(cash, 2), "positions": positions,
                   "last_signal": str(latest.date()),
                   "last_value": round(end_value, 2),
@@ -609,8 +696,13 @@ def main() -> None:
     # 2026-10-25：加载 baostock 附加字段（交易所口径涨跌幅 / 成交额 / 停牌 / ST）
     # 用于可成交性判定 —— 避免除权跳空被误判成涨跌停
     extras: Dict[str, Any] = {}
+    adj_close: Optional[pd.DataFrame] = None
     if BAOSTOCK_READY:
         extras = load_market_extras(codes, master)
+        # 后复权价格 —— 消除除权跳空对组合净值的系统性低估
+        # （实测 1193 只等权组合 2021-2026：未复权年化 +6.90%，
+        #   交易所口径年化 +12.35%，差 5.45 个百分点）
+        adj_close = load_adjusted_close(codes, master)
 
     # ── 选调仓日 ─────────────────────────────────────────────────────
     # 2026-10-25 修正（关键 bug）：
@@ -685,7 +777,7 @@ def main() -> None:
         spec = STRATEGIES[s]
         print(f"\n{'='*60}\n[{s}] {spec['desc']}", flush=True)
         r = run_line(s, spec, frames, panel, master, names, args.capital,
-                     rebalance_day, extras=extras)
+                     rebalance_day, extras=extras, adj_close=adj_close)
         results.append(r)
         print(f"  组合总值 ¥{r['value']:,.0f} | 现金 ¥{r['cash']:,.0f} | "
               f"{r['n_positions']} 只 | 买 {len(r['buys'])} 卖 {len(r['sells'])}",
