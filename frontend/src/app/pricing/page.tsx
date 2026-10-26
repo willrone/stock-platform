@@ -91,7 +91,7 @@ const plans: Plan[] = [
     cta: '开通信号版',
     features: [
       '全部 4 条信号线（42 因子 / LightGBM / RSI 超跌 / 量价动量）',
-      '微信推送，每个交易日 17:45 送达',
+      '站内信号中心 + 邮件通知，每个交易日 17:45 送达',
       '完整执行清单：代码、名称、价格、股数、金额、费用',
       '每周五收盘后调仓，实时持仓与成本',
       '全部纸面账本与历史交易记录',
@@ -122,7 +122,7 @@ const plans: Plan[] = [
 
 const comparison = [
   { feature: '信号线数量', free: '1 条', pro: '4 条', ent: '4 条 + 自定义' },
-  { feature: '推送渠道', free: '仅网页', pro: '微信 + 网页', ent: '微信 + 邮件 + 网页' },
+  { feature: '通知渠道', free: '仅网页', pro: '网页 + 邮件', ent: '网页 + 邮件 + 短信' },
   { feature: '推送延迟', free: '1 个交易日', pro: '当日 17:45', ent: '当日收盘即出' },
   { feature: '股数 / 金额明细', free: false, pro: true, ent: true },
   { feature: '按你的资金规模换算', free: false, pro: false, ent: true },
@@ -432,6 +432,10 @@ export default function PricingPage() {
             目前支持人工对账：你在「钱包 → 充值」下单后按提示转账，把订单号发给我们，
             确认到账后即刻开通。Stripe 通道已预留，配置完成后会自动切换为自动支付。
             体验版不需要任何付款。
+            <br />
+            <br />
+            充值到账后系统会**自动开通对应套餐**（free / pro / enterprise），
+            不需要另外发邮件申请。
           </Typography>
         </Alert>
 
