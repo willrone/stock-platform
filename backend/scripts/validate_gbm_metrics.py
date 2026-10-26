@@ -74,6 +74,19 @@ def main():
     rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024 / 1024
     print(f"\n[validate] wall={wall:.1f}s  peak_rss={rss:.2f} GB", flush=True)
 
+    # 缓存净值曲线 + 交易明细，供离线复算指标（省一次 5 分钟回测）
+    cache_path = os.path.join(
+        ROOT, "data", "backtest", "gbm_search_runs", "_validate_curve.json"
+    )
+    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+    with open(cache_path, "w") as fh:
+        json.dump({"curve": res.get("equity_curve"),
+                   "trades": res.get("trade_history"),
+                   "engine": {k: res.get(k) for k in (
+                       "sharpe_ratio", "total_return", "max_drawdown",
+                       "total_trades", "win_rate")}}, fh, default=str)
+    print(f"[validate] 曲线已缓存 {cache_path}")
+
     curve = res.get("equity_curve") or []
     trades = res.get("trade_history") or []
     mine = _metrics_from_equity(curve)
@@ -87,18 +100,19 @@ def main():
     print(f"  引擎 max_drawdown= {res.get('max_drawdown'):.10f}")
     print(f"  我的 mdd         = {mine['mdd']:.10f}   "
           f"差={abs(mine['mdd'] - res.get('max_drawdown')):.2e}")
-    print(f"  引擎 total_trades= {res.get('total_trades')}  我的={mine['days']}")
+    print(f"  引擎 total_trades= {res.get('total_trades')}  "
+          f"我的={len(trades)}")
+    print(f"  引擎 win_rate    = {res.get('win_rate'):.6f}")
 
     seg = _split_metrics(curve, trades)
     print(f"\n[validate] IS/OOS 切分:")
     for k in ("is", "oos", "full"):
         m = seg[k]
         print(f"  {k:5s} sharpe={m['sharpe']:.4f} ret={m['return']:.3%} "
-              f"mdd={m['mdd']:.3%} trades={m['trades']} win={m['win_rate']:.2%} "
-              f"days={m['days']}")
+              f"mdd={m['mdd']:.3%} trades={m['n_trades']} "
+              f"win={m['win_rate']:.2%} days={m['days']}")
     print(f"\n[validate] 分年收益: {_yearly_from_equity(curve)}")
-    print(f"[validate] 引擎 yearly: "
-          f"{[x for x in (res.get('yearly_returns_detail') or [])]}")
+    print(f"[validate] 引擎 yearly: {res.get('yearly_returns_detail')}")
 
 
 if __name__ == "__main__":

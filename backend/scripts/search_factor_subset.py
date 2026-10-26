@@ -2122,6 +2122,102 @@ def stage_walkforward(args) -> None:
         print(f"  平均 ΔOOS 夏普 = {avg_d:+.4f}，跑赢基线的 fold 数 = {wins}/{len(folds)}")
 
 
+def stage_consensus(args) -> None:
+    """walk-forward 一致性子集检验。
+
+    walk-forward 5 个 fold 里被剔除频次最高的因子（MAX20 3/5、VSUMP10 2/5）
+    构成一个"流程一致"的候选子集。这里把它跑完整 3 年 + OOS 冷启动，
+    看它是不是真的比 42 因子基线好（而不是碰巧）。
+
+    同时测几个"频次 ≥2"的组合变体。
+    """
+    all_f, _, _ = _factor_sets()
+    path = os.path.join(OUT_DIR, f"factor_subset_consensus_{args.window}.json")
+    store = _load_store(path)
+    results: Dict[str, Any] = store.get("results", {})
+
+    wf = _load_store(os.path.join(OUT_DIR, f"factor_subset_walkforward_{args.window}.json"))
+    folds = wf.get("folds", {})
+    from collections import Counter
+
+    freq = Counter(t["dropped"] for fd in folds.values() for t in fd.get("trace", []))
+    print(f"[consensus] walk-forward 剔除频次: {dict(freq)}")
+
+    cands: Dict[str, List[str]] = {"42f_all": list(all_f)}
+    for thr in (1, 2, 3):
+        drop = [f for f, n in freq.items() if n >= thr]
+        if drop:
+            cands[f"drop_freq>={thr} ({','.join(sorted(drop))})"] = [
+                f for f in all_f if f not in drop
+            ]
+    # 单看 MAX 族（IC≈0/负，且 walk-forward 剔除最频繁）
+    maxfam = [f for f in all_f if S_FAMILY(f) == "MAX"]
+    cands["drop_MAX_family"] = [f for f in all_f if f not in maxfam]
+    cands["drop_MAX20_only"] = [f for f in all_f if f != "MAX20"]
+
+    tasks = []
+    for cname, sub in cands.items():
+        for mode, wkey in (("equal", "full3y"), ("equal", "oos1y")):
+            k = f"{variant_key(sub)}|{mode}|{wkey}"
+            if k in results:
+                continue
+            tasks.append(
+                {
+                    "factors": sub,
+                    "label": f"{cname}",
+                    "window": wkey,
+                    "cache_key": wkey,
+                    "weight_mode": mode,
+                    "_key": k,
+                    "_w": wkey,
+                }
+            )
+    print(f"[consensus] 待跑 {len(tasks)} 个变体")
+    outs = run_tasks(
+        [
+            {
+                k: v
+                for k, v in t.items()
+                if k not in ("_key", "_w")
+            }
+            | ({"window": t["_w"], "cache_key": t["_w"]})
+            for t in tasks
+        ],
+        args.workers,
+        "full3y",
+    )
+    for t, r in zip(tasks, outs):
+        results[t["_key"]] = r
+    _save_store(
+        path,
+        {
+            "stage": "consensus",
+            "window": args.window,
+            "candidates": {k: v for k, v in cands.items()},
+            "results": results,
+            "n_variants": len(results),
+        },
+    )
+    print(f"\n[consensus] {'子集':<44}{'n':>4}{'3年夏普':>9}{'IS':>8}{'OOS冷启':>9}{'回撤':>8}{'胜率':>7}")
+    for cname, sub in cands.items():
+        r3 = results.get(f"{variant_key(sub)}|equal|full3y")
+        ro = results.get(f"{variant_key(sub)}|equal|oos1y")
+        if not r3 or "sharpe_ratio" not in r3:
+            print(f"[consensus] {cname:<44} FAILED")
+            continue
+        oos_sh = (ro or {}).get("sharpe_ratio")
+        print(
+            f"[consensus] {cname[:43]:<44}{len(sub):>4}{r3['sharpe_ratio']:>9.4f}"
+            f"{r3['is']['sharpe_ratio']:>8.4f}"
+            f"{(oos_sh if oos_sh is not None else float('nan')):>9.4f}"
+            f"{r3['max_drawdown']:>8.4f}{r3.get('win_rate', 0):>7.3f}"
+        )
+
+
+def S_FAMILY(f: str) -> str:
+    return FACTOR_META.get(f, {}).get("family", "")
+
+
 def stage_report(args) -> None:
     """汇总：因子清单 + 各阶段结果 + 尝试次数 + DSR。"""
     summary: Dict[str, Any] = {
@@ -2421,6 +2517,7 @@ def main() -> None:
             "stability",
             "oosval",
             "walkforward",
+            "consensus",
             "report",
             "summarize",
         ],
@@ -2449,6 +2546,7 @@ def main() -> None:
         "stability": stage_stability,
         "oosval": stage_oosval,
         "walkforward": stage_walkforward,
+        "consensus": stage_consensus,
         "report": stage_report,
         "summarize": stage_summarize,
     }[args.stage](args)

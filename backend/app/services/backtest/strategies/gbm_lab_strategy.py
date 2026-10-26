@@ -525,9 +525,16 @@ class GbmLabStrategy(BaseStrategy):
         n_fac = len(raw)
 
         # ── 横截面 z 分数 ────────────────────────────────────────────
+        # pres_all 只在 use_presence=True 时才需要（省 640MB 内存/worker）
         z_all = np.zeros((n_dates, n_stocks, n_fac), dtype=np.float32)
-        pres_all = np.zeros((n_dates, n_stocks, n_fac), dtype=np.float32)
+        if self.use_presence:
+            pres_all = np.zeros((n_dates, n_stocks, n_fac), dtype=np.float32)
+        else:
+            pres_all = None
         min_cross = max(2, min(30, n_stocks // 10))
+        # 等权复合分的累加器（边算 z 边累加，省掉整个 pres_all）
+        acc = np.zeros((n_dates, n_stocks), dtype=np.float64)
+        wsum = np.zeros((n_dates, n_stocks), dtype=np.float64)
         for k in range(n_fac):
             mat = raw[k]
             ok = np.isfinite(mat)
@@ -539,17 +546,14 @@ class GbmLabStrategy(BaseStrategy):
             z = np.where(cnt >= min_cross, z, 0.0)
             z = np.where(np.isfinite(z), z, 0.0)
             z_all[:, :, k] = z
-            pres_all[:, :, k] = ok
-
-        # ── 等权因子复合分（blend 用 + warmup 回退）─────────────────
-        acc = np.zeros((n_dates, n_stocks), dtype=np.float64)
-        wsum = np.zeros((n_dates, n_stocks), dtype=np.float64)
-        for k, fname in enumerate(names):
-            s = signs[k]
-            ok = pres_all[:, :, k] > 0
-            acc[ok] += z_all[:, :, k][ok] * s
+            if pres_all is not None:
+                pres_all[:, :, k] = ok
+            # 等权复合分（nan-aware，sign 由因子方向决定）
+            sgn = signs[k]
+            acc[ok] += z[ok] * sgn
             wsum[ok] += 1
         comp_eq = np.where(wsum > 0, acc / np.where(wsum > 0, wsum, 1), np.nan)
+        del acc, wsum, raw
 
         # ── 涨停掩码（D5：真实代码 + ST 标记）──────────────────────
         day_ret = close.pct_change(fill_method=None).to_numpy(dtype=np.float64)
@@ -691,7 +695,7 @@ class GbmLabStrategy(BaseStrategy):
     def _train_and_score(
         self,
         z_all: np.ndarray,
-        pres_all: np.ndarray,
+        pres_all: Optional[np.ndarray],
         target: np.ndarray,
         k0: int,
         k1: int,
@@ -722,7 +726,7 @@ class GbmLabStrategy(BaseStrategy):
 
         z_blk = z_all[lo:train_end]
         t_blk = target[lo:train_end]
-        if self.use_presence:
+        if self.use_presence and pres_all is not None:
             p_blk = pres_all[lo:train_end]
             X = np.concatenate(
                 [z_blk.reshape(-1, z_blk.shape[2]),
@@ -750,7 +754,7 @@ class GbmLabStrategy(BaseStrategy):
 
         # 用训练好的模型给**预测窗口** [k0, k1) 打分
         z_pred = z_all[k0:k1]
-        if self.use_presence:
+        if self.use_presence and pres_all is not None:
             p_pred = pres_all[k0:k1]
             Xp = np.concatenate(
                 [z_pred.reshape(-1, z_pred.shape[2]),

@@ -70,7 +70,6 @@ LAG = 1
 TOPK = 60
 N_DROP = 5
 MPS = 0.015833
-RF = 0.03
 IS_END = pd.Timestamp("2025-05-08")
 WIN_START = pd.Timestamp("2023-05-08")
 WIN_END = pd.Timestamp("2026-05-08")
@@ -79,28 +78,40 @@ WIN_END = pd.Timestamp("2026-05-08")
 StrategyFactory.register_strategy("gbm_lab", GbmLabStrategy)
 
 
-# ── 指标工具（口径对齐 EnhancedMetricsCalculator）────────────────────
-def _metrics_from_equity(curve: List[List[Any]]) -> Dict[str, float]:
+# ── 指标工具（口径完全对齐 portfolio_manager_array.get_performance_metrics）──
+INITIAL_CASH = 1_000_000.0
+
+
+def _metrics_from_equity(
+    curve: List[List[Any]], base_value: Optional[float] = None
+) -> Dict[str, float]:
     """从日度净值曲线算 sharpe / return / mdd。
 
-    与 EnhancedMetricsCalculator 同口径：
-      rf_daily = 0.03/252
-      sharpe = (mean(r) - rf_daily) * sqrt(252) / std(r)
-      mdd    = min((cum/cummax) - 1)，cum 以段内首值为基数
+    **与引擎逐位一致**（app/services/backtest/core/portfolio_manager_array.py
+    → get_performance_metrics）：
+      values  = equity_curve 的 portfolio_value 序列
+      returns = values.pct_change().dropna()
+      sharpe  = returns.mean() / returns.std() * sqrt(252)   ← **不减无风险利率**
+      total_return = (values[-1] - initial_cash) / initial_cash
+      max_drawdown = min((cumprod(1+r) / expanding_max) - 1)
+    注意：引擎的夏普**没有扣无风险利率**（EnhancedMetricsCalculator 里有扣 rf，
+    但回测主路径走的是 portfolio_manager_array 的版本）。为与基线可比，
+    这里严格复刻引擎口径。
+
+    base_value: 段起始净值（IS 段=initial_cash；OOS 段=IS 段末净值）。
+                None → 用 INITIAL_CASH。
     """
     if not curve or len(curve) < 3:
         return {"sharpe": 0.0, "return": 0.0, "mdd": 0.0, "days": 0}
     vals = np.array([float(v) for _, v in curve], dtype=np.float64)
-    if not np.isfinite(vals).all() or vals[0] <= 0:
+    if not np.isfinite(vals).all():
         return {"sharpe": 0.0, "return": 0.0, "mdd": 0.0, "days": len(vals)}
     rets = np.diff(vals) / vals[:-1]
-    rf_daily = RF / 252.0
     sd = rets.std()
-    sharpe = (
-        float((rets.mean() - rf_daily) * np.sqrt(252) / sd) if sd > 0 else 0.0
-    )
-    total_return = float(vals[-1] / vals[0] - 1.0)
-    cum = vals / vals[0]
+    sharpe = float(rets.mean() / sd * np.sqrt(252)) if sd > 0 else 0.0
+    base = INITIAL_CASH if base_value is None else float(base_value)
+    total_return = float(vals[-1] / base - 1.0) if base else 0.0
+    cum = np.cumprod(1.0 + rets)
     run_max = np.maximum.accumulate(cum)
     mdd = float(np.min((cum - run_max) / run_max))
     return {
@@ -114,40 +125,72 @@ def _metrics_from_equity(curve: List[List[Any]]) -> Dict[str, float]:
 def _split_metrics(
     curve: List[List[Any]], trades: List[Dict[str, Any]]
 ) -> Dict[str, Any]:
-    """把日度净值曲线切 IS / OOS 两段，分别算指标。"""
+    """把日度净值曲线切 IS / OOS 两段，分别算指标。
+
+    IS  = [窗口起, 2025-05-08)
+    OOS = [2025-05-08, 窗口末]
+    OOS 段的收益以 **IS 段末净值** 为基数（复利衔接，不是重新归零）。
+    胜率口径对齐引擎：只统计 SELL 交易（引擎 winning/losing 都只取 SELL）。
+    """
     out: Dict[str, Any] = {}
-    for label, lo, hi in (
-        ("is", None, IS_END),
-        ("oos", IS_END, None),
-        ("full", None, None),
-    ):
-        seg = []
+
+    def seg_rows(lo: Optional[pd.Timestamp], hi: Optional[pd.Timestamp]):
+        rows = []
         for row in curve:
             d = pd.Timestamp(row[0])
             if lo is not None and d < lo:
                 continue
             if hi is not None and d >= hi:
                 continue
-            seg.append(row)
-        m = _metrics_from_equity(seg)
-        # 段内交易数与胜率
-        n_tr = 0
-        n_win = 0
+            rows.append(row)
+        return rows
+
+    is_rows = seg_rows(None, IS_END)
+    oos_rows = seg_rows(IS_END, None)
+    all_rows = seg_rows(None, None)
+
+    # OOS 基数 = IS 段最后一根 K 线的净值
+    oos_base = float(is_rows[-1][1]) if is_rows else INITIAL_CASH
+
+    for label, rows, base in (
+        ("is", is_rows, INITIAL_CASH),
+        ("oos", oos_rows, oos_base),
+        ("full", all_rows, INITIAL_CASH),
+    ):
+        m = _metrics_from_equity(rows, base)
+        # 段内交易数与胜率（引擎口径：只算 SELL 的 pnl）
+        sells = 0
+        win = 0
+        lose = 0
         for t in trades:
             ts = t.get("timestamp")
             if not ts:
                 continue
             d = pd.Timestamp(ts).normalize()
-            if lo is not None and d < lo:
+            if label == "is" and d >= IS_END:
                 continue
-            if hi is not None and d >= hi:
+            if label == "oos" and d < IS_END:
                 continue
-            n_tr += 1
+            if t.get("action") != "SELL":
+                continue
+            sells += 1
             pnl = t.get("pnl")
-            if pnl is not None and float(pnl) > 0:
-                n_win += 1
-        m["trades"] = n_tr
-        m["win_rate"] = round(n_win / n_tr, 4) if n_tr else 0.0
+            if pnl is None:
+                continue
+            if float(pnl) > 0:
+                win += 1
+            elif float(pnl) < 0:
+                lose += 1
+        m["sells"] = sells
+        m["win_rate"] = round(win / (win + lose), 4) if (win + lose) else 0.0
+        m["n_trades"] = sum(
+            1 for t in trades
+            if t.get("timestamp") and (
+                (label == "is" and pd.Timestamp(t["timestamp"]).normalize() < IS_END)
+                or (label == "oos" and pd.Timestamp(t["timestamp"]).normalize() >= IS_END)
+                or label == "full"
+            )
+        )
         out[label] = m
     return out
 
@@ -160,7 +203,7 @@ def _yearly_from_equity(curve: List[List[Any]]) -> Dict[str, float]:
     df = df.set_index("date").sort_index()
     yearly = df["value"].resample("YE").last()
     r = yearly.pct_change().dropna()
-    return {str(int(y)): round(float(v), 6) for y, v in r.items()}
+    return {str(int(ts.year)): round(float(v), 6) for ts, v in r.items()}
 
 
 # ── 股票池 ────────────────────────────────────────────────────────
@@ -302,9 +345,14 @@ BASE: Dict[str, Any] = {
     "n_drop": N_DROP,
     "rebalance_days": "weekly",
     "rebalance_weekday": 4,
-    "horizon": 1,
+    # 基线选择依据（backend/scripts/diag_gbm_ic.py 实测 1500 只 / 3 年 rank-IC）：
+    #   目标变量 rank 的模型 IC 最高（h1 0.0616 / h5 0.0758 / h20 0.0779），
+    #   raw 目标被市场 beta 污染（IC 0.020~0.033），vol_std 最差（0.007~0.009）。
+    #   训练 horizon 越长，模型在长周期评估上的 IC 越好。
+    #   → 基线 = horizon 5 + target rank（IC 最优组合），各维度在此基线上单因子扫描。
+    "horizon": 5,
     "label_anchor": "trade",
-    "target": "cs_z",
+    "target": "rank",
     "model": "lgbm",
     "n_estimators": 100,
     "max_depth": 3,
@@ -501,11 +549,14 @@ def main() -> None:
             "variant_id": vid, "status": "ok", "config": cfg,
             "wall_s": r.get("wall_s"),
             "is_sharpe": r["is"]["sharpe"], "is_return": r["is"]["return"],
-            "is_mdd": r["is"]["mdd"], "is_trades": r["is"]["trades"],
+            "is_mdd": r["is"]["mdd"], "is_trades": r["is"]["n_trades"],
+            "is_win_rate": r["is"]["win_rate"],
             "oos_sharpe": r["oos"]["sharpe"], "oos_return": r["oos"]["return"],
-            "oos_mdd": r["oos"]["mdd"], "oos_trades": r["oos"]["trades"],
+            "oos_mdd": r["oos"]["mdd"], "oos_trades": r["oos"]["n_trades"],
+            "oos_win_rate": r["oos"]["win_rate"],
             "full_sharpe": r["full"]["sharpe"], "full_return": r["full"]["return"],
-            "full_mdd": r["full"]["mdd"], "full_trades": r["full"]["trades"],
+            "full_mdd": r["full"]["mdd"], "full_trades": r["full"]["n_trades"],
+            "full_win_rate": r["full"]["win_rate"],
             "yearly": r.get("yearly", {}),
         })
 
@@ -522,7 +573,8 @@ def main() -> None:
             "oos_window": f"{IS_END.date()}→{WIN_END.date()}",
             "universe": "qlib_official_data/instruments/all.txt (PIT)",
             "n_universe": len(codes),
-            "rf": RF,
+            "sharpe_formula": "mean(daily_ret)/std(daily_ret)*sqrt(252) "
+                              "(引擎口径，不减无风险利率)",
             "selection_rule": "按 IS 夏普排序选参；OOS 仅作验证，不参与选择",
         },
         "stage": args.stage,
@@ -554,11 +606,13 @@ def main() -> None:
           f"失败 {len(rows) - len(ok_rows)}", flush=True)
     print(f"[search] 已写入 {path}", flush=True)
     print(f"\n{'variant':<22}{'IS夏普':>9}{'OOS夏普':>9}{'IS收益':>10}"
-          f"{'OOS收益':>10}{'IS回撤':>9}{'OOS回撤':>9}{'IS笔':>7}{'OOS笔':>7}")
+          f"{'OOS收益':>10}{'IS回撤':>9}{'OOS回撤':>9}{'IS胜率':>8}{'OOS胜率':>8}"
+          f"{'IS笔':>7}{'OOS笔':>7}")
     for r in ok_rows:
         print(f"{r['variant_id']:<22}{r['is_sharpe']:>9.3f}{r['oos_sharpe']:>9.3f}"
               f"{r['is_return']:>10.2%}{r['oos_return']:>10.2%}"
               f"{r['is_mdd']:>9.2%}{r['oos_mdd']:>9.2%}"
+              f"{r['is_win_rate']:>8.1%}{r['oos_win_rate']:>8.1%}"
               f"{r['is_trades']:>7d}{r['oos_trades']:>7d}")
 
 
