@@ -443,7 +443,14 @@ def run_line(
     extras: Optional[Dict[str, Any]] = None,
     adj_close: Optional[pd.DataFrame] = None,
 ) -> Dict[str, Any]:
-    """跑一条线的调仓（周频：周五收盘打分 → 记纸面成交）。"""
+    """跑一条线的调仓（周频：周五收盘打分 → **下一交易日**成交）。
+
+    2026-10-26 起口径改为 **lag1**（对齐回测的真实盘口径）：
+      - `signal_day`（周五收盘）出信号、选股
+      - `trade_day`（下一交易日）成交 —— 价格、涨跌停判定都用成交日
+    原因：回测已改成 `lag=1`（用当日收盘价算信号又用同一收盘价成交是
+    实盘做不到的），纸面盘必须同口径，否则「纸面业绩 vs 回测预期」不可比。
+    """
     # 所有 score 函数统一签名 (frames, master, panel=None)
     # gbm_voltgt 额外需要 rebalance_day（单模型模式的切点）
     if spec["score"] is score_gbm_voltgt:
@@ -453,17 +460,36 @@ def run_line(
         comp = spec["score"](frames, master, panel, explain_date=rebalance_day)
     else:
         comp = spec["score"](frames, master, panel)
-    latest = pd.Timestamp(rebalance_day)
-    if latest not in comp.index:
-        # 调仓日不在打分矩阵里（数据窗口未覆盖）→ 用矩阵里最后一天
-        latest = comp.index[-1]
+
+    # ── 信号日 / 成交日 ───────────────────────────────────────────
+    signal_day = pd.Timestamp(rebalance_day)
+    # 打分矩阵里取**不晚于**信号日的最后一天（不能往后取 → 那是未来数据）
+    usable = comp.index[comp.index <= signal_day]
+    if len(usable) == 0:
+        raise SystemExit(
+            f"❌ {strategy}：打分矩阵里没有不晚于 {signal_day.date()} 的数据，"
+            f"无法生成信号（矩阵起点 {comp.index[0].date()}）"
+        )
+    latest = usable[-1]
+
+    # 成交日 = 信号日之后的第一个交易日（数据里必须存在）
+    _after = master[master > signal_day]
+    if len(_after) == 0:
+        raise SystemExit(
+            f"❌ {strategy}：信号日 {signal_day.date()} 之后还没有交易日的行情数据。\n"
+            f"   lag1 口径需要**下一交易日**才能成交（价格 + 涨跌停判定都在成交日）。\n"
+            f"   数据最新只到 {master[-1].date()}，请等下一交易日的日线包发布后重跑。",
+        )
+    trade_day = _after[0]
+
     close_mat = ds.to_mat(frames, master, "close")
-    close = close_mat.loc[latest]
-    vol = ds.to_mat(frames, master, "volume").loc[latest]
-    open_price = ds.to_mat(frames, master, "open").loc[latest]
-    high = ds.to_mat(frames, master, "high").loc[latest]
-    low = ds.to_mat(frames, master, "low").loc[latest]
-    close_prev = close_mat.shift(1).loc[latest]
+    # 成交价与涨跌停判定一律用**成交日**
+    close = close_mat.loc[trade_day]
+    vol = ds.to_mat(frames, master, "volume").loc[trade_day]
+    open_price = ds.to_mat(frames, master, "open").loc[trade_day]
+    high = ds.to_mat(frames, master, "high").loc[trade_day]
+    low = ds.to_mat(frames, master, "low").loc[trade_day]
+    close_prev = close_mat.shift(1).loc[trade_day]
     day_ret = close / close_prev - 1.0
     # 本次调仓因可成交性被拦下的标的（写进结果，让用户知道「为什么没买」）
     blocked_buys: List[Dict[str, Any]] = []
@@ -659,14 +685,17 @@ def run_line(
 
     end_value = cash + sum(_pos_value(c) for c in positions)
     paper.update({"cash": round(cash, 2), "positions": positions,
-                  "last_signal": str(latest.date()),
+                  # last_signal = **信号日**（周五出信号）
+                  # last_trade  = **成交日**（下一交易日成交，lag1 口径）
+                  "last_signal": str(signal_day.date()),
+                  "last_trade": str(trade_day.date()),
                   "last_value": round(end_value, 2),
                   "fill_assumption": "Friday close"})
     save_holdings(strategy, paper)
 
     rows = []
     for s in sells:
-        rows.append({"date": str(latest.date()), "action": "SELL",
+        rows.append({"date": str(trade_day.date()), "action": "SELL",
                      "code": s["code"], "name": s["name"], "price": s["price"],
                      "shares": s["shares"], "amount": s["amount"],
                      "commission": s["commission"], "stamp_tax": s["stamp_tax"],
@@ -674,7 +703,7 @@ def run_line(
                      "cash_after": round(cash, 2),
                      "portfolio_value": round(end_value, 2)})
     for b in buys:
-        rows.append({"date": str(latest.date()), "action": "BUY",
+        rows.append({"date": str(trade_day.date()), "action": "BUY",
                      "code": b["code"], "name": b["name"], "price": b["price"],
                      "shares": b["shares"], "amount": b["amount"],
                      "commission": b["commission"], "stamp_tax": 0.0,
@@ -685,6 +714,8 @@ def run_line(
 
     return {
         "strategy": strategy,
+        "signal_date": str(signal_day.date()),
+        "trade_date": str(trade_day.date()),
         "desc": spec["desc"],
         "date": str(latest.date()),
         "topk": topk,
@@ -748,13 +779,18 @@ def main() -> None:
     days_since_friday = (today.dayofweek - 4) % 7
     expected_friday = today - pd.Timedelta(days=days_since_friday)
 
+    # 2026-10-26（lag1 口径）：信号日必须是**最后一个周五**，
+    # 成交日 = 它的下一个交易日。数据到周一/周二时，信号日仍取上周五，
+    # 成交日取周一 —— 与回测 `lag=1` 完全一致。
     fridays = [d for d in master if d.dayofweek == 4]
-    if latest_all.dayofweek == 4:
-        rebalance_day = latest_all
-    elif fridays:
+    if fridays:
         rebalance_day = fridays[-1]
     else:
         rebalance_day = latest_all
+    trade_day = None
+    _after = master[master > rebalance_day]
+    if len(_after):
+        trade_day = _after[0]
 
     # 数据新鲜度硬校验：真实日期已过本周五，但数据还没到 → 报错退出，不静默用旧周五
     if today.dayofweek == 4 and not args.force and latest_all < expected_friday:
@@ -769,7 +805,11 @@ def main() -> None:
         sys.exit(2)
 
     if args.force and latest_all > rebalance_day:
-        rebalance_day = latest_all
+        # --force：仍保持「信号日 = 周五」的口径，只把信号日推到最近的周五
+        _f = [d for d in master if d.dayofweek == 4 and d <= latest_all]
+        rebalance_day = _f[-1] if _f else latest_all
+        _after = master[master > rebalance_day]
+        trade_day = _after[0] if len(_after) else None
 
     # 已有持仓的线：调仓日不得早于上次调仓日
     existing_signals = []
@@ -779,18 +819,21 @@ def main() -> None:
             existing_signals.append(pd.Timestamp(h["last_signal"]))
     if existing_signals:
         last_used = max(existing_signals)
-        if rebalance_day < last_used:
+        # 用 `<=` 而不是 `<`：同一天重复跑（手动重跑 / cron 补跑）时
+        # 信号日会相等 —— 原来只挡「更早」，会**重复调仓**（同一周买两次）。
+        if rebalance_day <= last_used and not args.force:
             print(
-                f"跳过：调仓日 {rebalance_day.date()} 早于已记录的 "
-                f"{last_used.date()}（时间倒流）。"
-                f"如需强制用更早日期请先清空对应线的持仓文件。",
+                f"跳过：信号日 {rebalance_day.date()} 不晚于已记录的 "
+                f"{last_used.date()}（已调仓过，重复执行会重复下单）。"
+                f"如需重跑请加 --force。",
                 flush=True,
             )
             return
-    if latest_all.dayofweek != 4 and not args.force:
+    if not args.force:
         print(
-            f"数据最新只到 {latest_all.date()}（非周五），"
-            f"用最近的调仓日 {rebalance_day.date()}",
+            f"信号日（周五）= {rebalance_day.date()}"
+            + (f"  成交日（下一交易日）= {trade_day.date()}" if trade_day is not None
+               else "  ⚠️ 还没有下一交易日的行情数据 → 本次不成交"),
             flush=True,
         )
 
@@ -827,12 +870,17 @@ def main() -> None:
 
     summary = {
         "meta": {
+            # signal_date = 周五出信号；trade_date = 下一交易日成交（lag1 口径）
             "date": str(rebalance_day.date()),
+            "signal_date": str(rebalance_day.date()),
+            "trade_date": str(trade_day.date()) if trade_day is not None else None,
             "data_latest": str(latest_all.date()),
             "capital_per_line": args.capital,
             "costs": {"commission": COMMISSION, "stamp_tax": STAMP_TAX,
                       "slippage": SLIPPAGE, "cash_reserve": CASH_RESERVE},
-            "fill_assumption": "Friday close (周一执行以周一收盘价重记)",
+            "fill_assumption": (
+                "lag1：周五收盘出信号，下一交易日成交（价格与涨跌停判定均在成交日）"
+            ),
             "generated_at": datetime.now().isoformat(),
             "lines_updated": [r["strategy"] for r in results],
         },

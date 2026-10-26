@@ -181,7 +181,14 @@ def main() -> None:
     if not chunks:
         return  # 无操作 → 静默
 
-    header = f"📊 每日信号 {sig_date}（{meta.get('data_latest', sig_date)} 数据）"
+    trade_date = meta.get("trade_date")
+    if trade_date and trade_date != sig_date:
+        # lag1 口径：信号在周五收盘产生，下一交易日才成交。
+        # 用户要照着做，必须告诉他**哪天操作**。
+        header = (f"📊 交易信号（信号日 {sig_date} → 成交日 {trade_date}）\n"
+                  f"   成交价用 {trade_date} 收盘价，涨停买不进、跌停卖不出")
+    else:
+        header = f"📊 每日信号 {sig_date}（{meta.get('data_latest', sig_date)} 数据）"
     print(header)
     print("=" * 28)
     print("\n\n".join(chunks))

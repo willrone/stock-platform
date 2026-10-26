@@ -42,11 +42,15 @@ print(run_incremental())
   env -u PYTHONPATH backend/.venv-py313/bin/python3 \
     backend/scripts/check_data_freshness.py --fail-if-stale
 
-  # 5) 周五收盘后自动跑多策略纸面盘（各线独立 100 万记账）
+  # 5) 周一收盘后自动跑多策略纸面盘（各线独立 100 万记账）
   #    22f / honest_42f / rsi_71421 / factor_ranking
-  #    判「周五」用真实日期，不用数据最新日
-  if [ "$(date +%u)" = "5" ]; then
-    echo "=== Friday: multi-strategy paper portfolio ==="
+  #
+  #    2026-10-26 改为**周一**而不是周五：纸面盘口径改成 lag1
+  #    （周五收盘出信号 → **下一交易日**成交，价格和涨跌停判定都在成交日）。
+  #    周五跑的时候下一交易日的数据还不存在 → 只能周一收盘后跑。
+  #    信号日仍取「master 里最后一个周五」，成交日取它的下一个交易日。
+  if [ "$(date +%u)" = "1" ]; then
+    echo "=== Monday: multi-strategy paper portfolio (lag1: 周五信号→周一成交) ==="
     env -u PYTHONPATH backend/.venv-py313/bin/python3 backend/scripts/paper_portfolio.py
     echo "=== paper portfolio done ==="
 
