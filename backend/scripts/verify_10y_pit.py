@@ -265,13 +265,21 @@ def main() -> None:
 
     os.makedirs(OUT_DIR, exist_ok=True)
     path = os.path.join(OUT_DIR, args.out)
+    # 口径标记（2026-10-27）：下游汇总脚本只接受真实盘口径的结果，
+    # 避免旧口径（lag0 + 无可成交性）的数字混进排名。
+    payload = {
+        "window": f"{start.date()}→{end.date()}",
+        "universe_size": len(codes),
+        "methodology": {
+            "lag": args.lag if args.lag is not None else 0,
+            "enable_tradability": not args.no_tradability,
+            "realistic": (args.lag == 1) and (not args.no_tradability),
+            "note": "真实盘口径 = lag 1 + 可成交性检查开",
+        },
+        "results": results,
+    }
     with open(path, "w") as fh:
-        json.dump(
-            {"window": f"{start.date()}→{end.date()}",
-             "data_root": data_root, "n_codes": len(codes),
-             "results": results},
-            fh, ensure_ascii=False, indent=1, default=str,
-        )
+        json.dump(payload, fh, ensure_ascii=False, indent=1, default=str)
     print(f"\n[verify] 已写入 {path}", flush=True)
 
 
