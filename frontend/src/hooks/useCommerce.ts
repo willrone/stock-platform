@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { message } from 'antd';
 import { EVENT_TYPES } from '@/services/api/commerce';
+import { useSnackbarStore } from '@/stores/useSnackbarStore';
 import { commerceService } from '@/services/commerce/commerce.service';
 
 /**
@@ -17,6 +17,9 @@ import { commerceService } from '@/services/commerce/commerce.service';
  */
 export function useCommerce() {
   const router = useRouter();
+  // 只取稳定的 action 引用（zustand store 对象每次渲染都是新引用）
+  const showError = useSnackbarStore(s => s.showError);
+  const showSuccess = useSnackbarStore(s => s.showSuccess);
   const [balance, setBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [checkResult, setCheckResult] = useState<{
@@ -32,11 +35,11 @@ export function useCommerce() {
       const balanceInfo = await commerceService.getBalance();
       setBalance(balanceInfo.balance_yuan);
     } catch (e) {
-      message.error('获取余额失败');
+      showError('获取余额失败');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showError]);
 
   // 检查是否可以执行指定操作
   const checkCanExecute = useCallback(async (event_type: string) => {
@@ -45,10 +48,10 @@ export function useCommerce() {
       setCheckResult(result);
       return result;
     } catch (e) {
-      message.error('检查失败');
+      showError('检查失败');
       return { can_proceed: false, message: '检查失败，请重试', estimated_cost_yuan: 0 };
     }
-  }, []);
+  }, [showError]);
 
   // 记录用量并扣费
   const recordUsage = useCallback(
@@ -68,14 +71,14 @@ export function useCommerce() {
           setBalance(balance - result.total_cost);
         }
 
-        message.success(`本次操作花费 ¥${result.total_cost.toFixed(2)}`);
+        showSuccess(`本次操作花费 ¥${result.total_cost.toFixed(2)}`);
         return result;
       } catch (e: any) {
-        message.error(e.message || '操作失败');
+        showError(e.message || '操作失败');
         throw e;
       }
     },
-    [balance, checkCanExecute]
+    [balance, checkCanExecute, showSuccess, showError]
   );
 
   // 充值
@@ -85,11 +88,11 @@ export function useCommerce() {
       // 重新查询余额
       const balanceInfo = await commerceService.getBalance();
       setBalance(balanceInfo.balance_yuan);
-      message.success(`充值成功！当前余额 ¥${balanceInfo.balance_yuan.toFixed(2)}`);
+      showSuccess(`充值成功！当前余额 ¥${balanceInfo.balance_yuan.toFixed(2)}`);
     } catch (e) {
-      message.error('充值失败');
+      showError('充值失败');
     }
-  }, []);
+  }, [showSuccess, showError]);
 
   // 刷新余额
   const refreshBalance = useCallback(async () => {
@@ -97,9 +100,9 @@ export function useCommerce() {
       const balanceInfo = await commerceService.getBalance();
       setBalance(balanceInfo.balance_yuan);
     } catch (e) {
-      message.error('刷新余额失败');
+      showError('刷新余额失败');
     }
-  }, []);
+  }, [showError]);
 
   // 自动初始化
   // 注意：这里使用 useEffect 会导致在服务器端执行，在客户端生效

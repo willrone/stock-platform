@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { AppLayout } from '../components/layout/AppLayout';
+import { RootShell } from '../components/layout/RootShell';
 import { ErrorBoundary } from '../components/common/ErrorBoundary';
 import { MUIThemeProvider } from '../theme/muiTheme';
 import './globals.css';
@@ -17,13 +17,20 @@ export const viewport: Viewport = {
   userScalable: true,
 };
 
+/**
+ * 根布局保持 server component（metadata / viewport 导出依赖它）。
+ * 按 pathname 决定是否套后台外壳的逻辑在 client 组件 RootShell 里
+ * （见 src/components/layout/RootShell.tsx）：
+ * 公开页（/login、/register 等）不渲染 AppLayout，不再出现后台菜单。
+ * GlobalSnackbar 也在 RootShell 内挂载（替代未启用的 Providers.tsx）。
+ */
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="zh-CN">
       <body>
         <MUIThemeProvider>
           <ErrorBoundary>
-            <AppLayout>{children}</AppLayout>
+            <RootShell>{children}</RootShell>
           </ErrorBoundary>
         </MUIThemeProvider>
       </body>

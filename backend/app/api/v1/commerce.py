@@ -8,12 +8,13 @@
 - 用量统计/账单历史
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.api.v1.dependencies import get_current_user, require_admin_user
+from app.api.v1.schemas import StandardResponse
 from app.core.database import AsyncSessionLocal
 from app.services.commerce.commission_service import (
     CommerceService,
@@ -104,23 +105,6 @@ class PricingRuleResponse(BaseModel):
     is_active: bool
 
 
-class BillingRecordResponse(BaseModel):
-    """账单记录响应。"""
-
-    id: str
-    user_id: str
-    usage_event_id: str
-    amount_cents: int
-    amount_yuan: float
-    charge_status: str
-    payment_method: Optional[str] = None
-    balance_before_cents: Optional[int] = None
-    balance_after_cents: Optional[int] = None
-    remark: Optional[str] = None
-    charged_at: Optional[str] = None
-    created_at: Optional[str] = None
-
-
 class UsageSummaryResponse(BaseModel):
     """用量汇总响应。"""
 
@@ -147,11 +131,13 @@ class BalanceResponse(BaseModel):
 # ──────────────────────────────────────────────────────────
 
 
-@router.post("/usage", response_model=UsageRecordResponse, summary="记录用量并扣费")
+@router.post(
+    "/usage", response_model=StandardResponse, summary="记录用量并扣费"
+)
 async def record_usage(
     request: UsageRecordRequest,
     user_id: str = Depends(get_current_user),
-) -> UsageRecordResponse:
+) -> StandardResponse:
     """记录一次用量事件并从用户余额扣费。
 
     - 回测：每次 ¥0.5 ~ ¥2
@@ -168,52 +154,57 @@ async def record_usage(
     )
 
     billing_status = billing.charge_status if billing else "skipped"
-    message = (
-        "扣费成功"
-        if billing and billing.charge_status == "charged"
-        else "余额不足，待充值"
-    )
+    charged = bool(billing and billing.charge_status == "charged")
+    message = "用量记录并扣费成功" if charged else "余额不足，待充值"
 
-    return UsageRecordResponse(
-        event_id=event.id,
-        event_type=event.event_type,
-        unit_cost=float(event.unit_cost),
-        quantity=event.quantity,
-        total_cost=float(event.total_cost),
-        billing_status=billing_status,
+    return StandardResponse(
+        success=True,
         message=message,
+        data=UsageRecordResponse(
+            event_id=event.id,
+            event_type=event.event_type,
+            unit_cost=float(event.unit_cost),
+            quantity=event.quantity,
+            total_cost=float(event.total_cost),
+            billing_status=billing_status,
+            message="扣费成功" if charged else "余额不足，待充值",
+        ),
     )
 
 
-@router.get("/balance", response_model=BalanceResponse, summary="查询余额")
+@router.get("/balance", response_model=StandardResponse, summary="查询余额")
 async def get_balance(
     user_id: str = Depends(get_current_user),
-) -> BalanceResponse:
+) -> StandardResponse:
     """查询用户当前余额。"""
     service = CommerceService()
     # get_or_create_balance 自己管 session 生命周期
     # （旧写法 AsyncSessionLocal().__aenter__() 从不关闭 → session 泄漏）
     balance = await service.get_or_create_balance(user_id)
 
-    return BalanceResponse(
-        user_id=balance.user_id,
-        balance_cents=balance.balance_cents,
-        balance_yuan=balance.balance_cents / 100.0,
-        credited_cents=balance.credited_cents,
-        total_spent_cents=balance.total_spent_cents,
-        updated_at=balance.updated_at.isoformat() if balance.updated_at else None,
+    return StandardResponse(
+        success=True,
+        message="余额查询成功",
+        data=BalanceResponse(
+            user_id=balance.user_id,
+            balance_cents=balance.balance_cents,
+            balance_yuan=balance.balance_cents / 100.0,
+            credited_cents=balance.credited_cents,
+            total_spent_cents=balance.total_spent_cents,
+            updated_at=balance.updated_at.isoformat() if balance.updated_at else None,
+        ),
     )
 
 
 @router.post(
     "/deposit",
-    response_model=DepositResponse,
+    response_model=StandardResponse,
     summary="创建充值订单（两段式）",
 )
 async def deposit(
     request: DepositRequest,
     user_id: str = Depends(get_current_user),
-) -> DepositResponse:
+) -> StandardResponse:
     """创建充值订单。
 
     ⚠️ 2026-10-25 语义变更：此接口**不再直接给余额加分**。
@@ -239,18 +230,22 @@ async def deposit(
     balance = await commerce.get_or_create_balance(user_id)
     balance_cents = int(getattr(balance, "balance_cents", 0) or 0)
     credited_cents = int(getattr(balance, "credited_cents", 0) or 0)
-    return DepositResponse(
-        balance_cents=balance_cents,
-        balance_yuan=balance_cents / 100.0,
-        credited_cents=credited_cents,
-        billing_record_id=None,
-        order_no=order.order_no,
-        order_status=order.status,
-        amount_cents=order.amount_cents,
-        payment_method=order.payment_method,
-        payee_account=config.get("payee_account", ""),
-        qr_image_url=config.get("qr_image_url", ""),
-        instructions=config.get("instructions", ""),
+    return StandardResponse(
+        success=True,
+        message="充值下单成功",
+        data=DepositResponse(
+            balance_cents=balance_cents,
+            balance_yuan=balance_cents / 100.0,
+            credited_cents=credited_cents,
+            billing_record_id=None,
+            order_no=order.order_no,
+            order_status=order.status,
+            amount_cents=order.amount_cents,
+            payment_method=order.payment_method,
+            payee_account=config.get("payee_account", ""),
+            qr_image_url=config.get("qr_image_url", ""),
+            instructions=config.get("instructions", ""),
+        ),
     )
 
 
@@ -259,45 +254,64 @@ async def deposit(
 # ──────────────────────────────────────────────────────────
 
 
-@router.get("/payment/orders", summary="我的充值订单")
+@router.get("/payment/orders", response_model=StandardResponse, summary="我的充值订单")
 async def list_my_orders(
     user_id: str = Depends(get_current_user),
     limit: int = Query(50, ge=1, le=200),
-) -> Dict[str, Any]:
+) -> StandardResponse:
     """列出当前用户的充值订单。"""
     orders = await PaymentService().list_orders(user_id=user_id, limit=limit)
-    return {"orders": orders, "count": len(orders)}
+    return StandardResponse(
+        success=True,
+        message="我的充值订单获取成功",
+        data={"orders": orders, "count": len(orders)},
+    )
 
 
-@router.get("/payment/config", summary="收款方式配置（公开）")
-async def get_payment_config() -> Dict[str, Any]:
+@router.get(
+    "/payment/config", response_model=StandardResponse, summary="收款方式配置（公开）"
+)
+async def get_payment_config() -> StandardResponse:
     """获取收款指引（用户充值页要显示的收款码/账号）。"""
     config = await PaymentService().get_config()
     config["min_deposit_cents"] = MIN_DEPOSIT_CENTS
     config["max_deposit_cents"] = MAX_DEPOSIT_CENTS
-    return config
+    return StandardResponse(
+        success=True,
+        message="收款方式配置获取成功",
+        data=config,
+    )
 
 
-@router.get("/admin/payment/orders", summary="全部充值订单（管理员）")
+@router.get(
+    "/admin/payment/orders",
+    response_model=StandardResponse,
+    summary="全部充值订单（管理员）",
+)
 async def admin_list_orders(
     admin: Any = Depends(require_admin_user),
     status: Optional[str] = Query(None),
     limit: int = Query(100, ge=1, le=500),
-) -> Dict[str, Any]:
+) -> StandardResponse:
     """管理员查看全部充值订单。"""
     orders = await PaymentService().list_orders(user_id=None, status=status, limit=limit)
-    return {"orders": orders, "count": len(orders)}
+    return StandardResponse(
+        success=True,
+        message="全部充值订单获取成功",
+        data={"orders": orders, "count": len(orders)},
+    )
 
 
 @router.post(
     "/admin/payment/orders/{order_no}/confirm",
+    response_model=StandardResponse,
     summary="确认订单到账（管理员）",
 )
 async def admin_confirm_order(
     order_no: str,
     admin: Any = Depends(require_admin_user),
     remark: str = Query("", description="管理员备注"),
-) -> Dict[str, Any]:
+) -> StandardResponse:
     """确认充值订单已到账 → 余额入账（+ 自动升级套餐）。"""
     order, err = await PaymentService().confirm_order(
         order_no, admin_id=str(getattr(admin, "id", "")), admin_remark=remark
@@ -320,27 +334,36 @@ async def admin_confirm_order(
     except Exception:  # noqa: BLE001
         tier = None
 
-    return {
-        "order": order.to_dict(),
-        "message": "已确认到账，余额已入账",
-        "subscription_tier": tier,
-    }
+    return StandardResponse(
+        success=True,
+        message="管理员确认到账成功",
+        data={
+            "order": order.to_dict(),
+            "message": "已确认到账，余额已入账",
+            "subscription_tier": tier,
+        },
+    )
 
 
 @router.post(
     "/admin/payment/orders/{order_no}/cancel",
+    response_model=StandardResponse,
     summary="取消充值订单（管理员）",
 )
 async def admin_cancel_order(
     order_no: str,
     admin: Any = Depends(require_admin_user),
     remark: str = Query("", description="管理员备注"),
-) -> Dict[str, Any]:
+) -> StandardResponse:
     """取消充值订单。"""
     order, err = await PaymentService().cancel_order(order_no, admin_remark=remark)
     if err:
         raise HTTPException(status_code=400, detail=err)
-    return {"order": order.to_dict(), "message": "订单已取消"}
+    return StandardResponse(
+        success=True,
+        message="充值订单取消成功",
+        data={"order": order.to_dict(), "message": "订单已取消"},
+    )
 
 
 class PaymentConfigRequest(BaseModel):
@@ -353,11 +376,13 @@ class PaymentConfigRequest(BaseModel):
     is_enabled: bool = Field(True, description="是否开启在线充值")
 
 
-@router.post("/admin/payment/config", summary="设置收款方式（管理员）")
+@router.post(
+    "/admin/payment/config", response_model=StandardResponse, summary="设置收款方式（管理员）"
+)
 async def admin_update_payment_config(
     request: PaymentConfigRequest,
     admin: Any = Depends(require_admin_user),
-) -> Dict[str, Any]:
+) -> StandardResponse:
     """设置收款方式（人工收款场景下替代 Stripe）。"""
     config = await PaymentService().update_config(
         method_name=request.method_name,
@@ -366,14 +391,18 @@ async def admin_update_payment_config(
         instructions=request.instructions,
         is_enabled=request.is_enabled,
     )
-    return {"config": config, "message": "收款配置已更新"}
+    return StandardResponse(
+        success=True,
+        message="收款方式配置更新成功",
+        data={"config": config, "message": "收款配置已更新"},
+    )
 
 
-@router.post("/refund", summary="退款")
+@router.post("/refund", response_model=StandardResponse, summary="退款")
 async def refund(
     request: RefundRequest,
     user_id: str = Depends(get_current_user),
-) -> Dict[str, Any]:
+) -> StandardResponse:
     """退款操作。"""
     service = CommerceService()
     record = await service.refund(
@@ -385,75 +414,99 @@ async def refund(
     if record is None:
         raise HTTPException(status_code=404, detail="退款记录创建失败")
 
-    return {
-        "refund_record_id": record.id,
-        "amount_yuan": record.amount_cents / 100.0,
-        "status": record.charge_status,
-    }
+    return StandardResponse(
+        success=True,
+        message="退款成功",
+        data={
+            "refund_record_id": record.id,
+            "amount_yuan": record.amount_cents / 100.0,
+            "status": record.charge_status,
+        },
+    )
 
 
-@router.get("/usage/summary", response_model=UsageSummaryResponse, summary="用量汇总")
+@router.get(
+    "/usage/summary", response_model=StandardResponse, summary="用量汇总"
+)
 async def usage_summary(
     user_id: str = Depends(get_current_user),
     month: Optional[int] = Query(None, description="月份（1-12），默认当月"),
     year: Optional[int] = Query(None, description="年份，默认当年"),
-) -> UsageSummaryResponse:
+) -> StandardResponse:
     """查询用户当月用量汇总。"""
     service = CommerceService()
     summary = await service.get_usage_summary(user_id, month, year)
-    return UsageSummaryResponse(**summary)
+    return StandardResponse(
+        success=True,
+        message="用量汇总查询成功",
+        data=UsageSummaryResponse(**summary),
+    )
 
 
 @router.get(
     "/billing/history",
-    response_model=List[BillingRecordResponse],
+    response_model=StandardResponse,
     summary="账单历史",
 )
 async def billing_history(
     user_id: str = Depends(get_current_user),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-) -> List[Dict[str, Any]]:
+) -> StandardResponse:
     """查询用户账单历史。"""
     service = CommerceService()
     records = await service.get_billing_history(user_id, limit, offset)
-    return [r.to_dict() for r in records]
+    return StandardResponse(
+        success=True,
+        message="账单历史查询成功",
+        data=[r.to_dict() for r in records],
+    )
 
 
 @router.get(
-    "/pricing/rules", response_model=List[PricingRuleResponse], summary="计费规则列表"
+    "/pricing/rules",
+    response_model=StandardResponse,
+    summary="计费规则列表",
 )
 async def get_pricing_rules(
     event_type: Optional[str] = Query(None, description="事件类型筛选"),
-) -> List[PricingRuleResponse]:
+) -> StandardResponse:
     """查询计费规则列表（公开）。"""
     service = CommerceService()
     rules = await service.get_pricing_rules(event_type)
-    return [PricingRuleResponse(**r.to_dict()) for r in rules]
+    return StandardResponse(
+        success=True,
+        message="计费规则列表获取成功",
+        data=[PricingRuleResponse(**r.to_dict()) for r in rules],
+    )
 
 
-@router.post("/pricing/seed", summary="初始化默认计费规则")
+@router.post("/pricing/seed", response_model=StandardResponse, summary="初始化默认计费规则")
 async def seed_pricing(
     user_id: str = Depends(get_current_user),
-) -> Dict[str, Any]:
+) -> StandardResponse:
     """初始化默认计费规则（仅管理员）。"""
     # 注意：需要管理员权限检查
     db = AsyncSessionLocal()
     try:
         rules = await seed_default_pricing_rules(db)
-        return {
-            "seeded": len(rules),
-            "rules": [r.event_type for r in rules],
-        }
+        return StandardResponse(
+            success=True,
+            message="默认计费规则初始化成功",
+            data={
+                "seeded": len(rules),
+                "rules": [r.event_type for r in rules],
+            },
+        )
     finally:
         await db.close()
 
 
-@router.get("/check/{event_type}", summary="检查是否可以执行操作")
+@router.get("/check/{event_type}", response_model=StandardResponse, summary="检查是否可以执行操作")
 async def check_can_execute(
     event_type: str,
     user_id: str = Depends(get_current_user),
-) -> Dict[str, Any]:
+) -> StandardResponse:
     """检查用户余额是否足够执行指定操作。"""
     can_proceed, message = await check_can_proceed(user_id, event_type)
 
@@ -461,9 +514,13 @@ async def check_can_execute(
     pricing = await service._get_pricing_rule(event_type)
     cost_yuan = pricing.base_price_cents / 100.0 if pricing else 0
 
-    return {
-        "can_proceed": can_proceed,
-        "message": message,
-        "event_type": event_type,
-        "estimated_cost_yuan": cost_yuan,
-    }
+    return StandardResponse(
+        success=True,
+        message=message,
+        data={
+            "can_proceed": can_proceed,
+            "message": message,
+            "event_type": event_type,
+            "estimated_cost_yuan": cost_yuan,
+        },
+    )

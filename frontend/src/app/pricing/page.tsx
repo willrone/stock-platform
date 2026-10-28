@@ -58,6 +58,12 @@ type Plan = {
   features: string[];
   notIncluded?: string[];
   cta: string;
+  /**
+   * 【P0 · landing】后端订阅套餐主键是 UUID。
+   * 旧实现把档位名（'pro'）当 plan_id 传给 /billing/checkout，
+   * 后端按 UUID 查表 → 必然 400。真实 UUID 从 /billing/plans 拉取。
+   */
+  planId?: string;
 };
 
 const plans: Plan[] = [
@@ -137,6 +143,15 @@ export default function PricingPage() {
   const [loggedIn, setLoggedIn] = useState(false);
   const [loadingPlan, setLoadingPlan] = useState<Plan['id'] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * 【P0-5 / P1-9】套餐元数据（真实 UUID + 真实价格）从后端拉，
+   * 不用前端硬编码。拉不到时保留静态文案兜底，但 planId 会缺失 →
+   * 此时点 CTA 明确提示"套餐信息加载中/暂不可用"，而不是发一个必然 400 的请求。
+   */
+  const [planMeta, setPlanMeta] = useState<
+    Record<string, { id: string; monthly_price_cents: number; display_name?: string }>
+  >({});
+  const [planMetaLoading, setPlanMetaLoading] = useState(true);
 
   useEffect(() => {
     const token = window.localStorage.getItem('access_token');
@@ -152,6 +167,44 @@ export default function PricingPage() {
     }
   }, []);
 
+  // 拉取真实套餐（公开端点，无需登录）
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiRequest.get<
+          Array<{ id: string; name: string; monthly_price_cents: number; display_name?: string }>
+        >('/billing/plans');
+        const list = Array.isArray(res) ? res : (res as unknown as { plans?: typeof res })?.plans ?? [];
+        if (cancelled) return;
+        const map: typeof planMeta = {};
+        for (const p of list) {
+          if (!p?.name) continue;
+          map[p.name] = {
+            id: p.id,
+            monthly_price_cents: p.monthly_price_cents ?? 0,
+            display_name: p.display_name,
+          };
+        }
+        setPlanMeta(map);
+      } catch {
+        // 拉不到就保持静态兜底，不阻断页面
+      } finally {
+        if (!cancelled) setPlanMetaLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /** 展示用价格：优先后端真实价，缺失时用静态文案 */
+  const displayPrice = (plan: Plan): string => {
+    const meta = planMeta[plan.id];
+    if (!meta) return plan.price;
+    return `¥${(meta.monthly_price_cents / 100).toFixed(0)}`;
+  };
+
   const choosePlan = async (plan: Plan) => {
     if (!loggedIn) {
       router.push('/login');
@@ -161,7 +214,24 @@ export default function PricingPage() {
       return;
     }
     if (plan.id === 'enterprise') {
-      router.push('/register');
+      // 【P1-12】已登录用户点「联系销售」不该被送去注册页（他已经有账号了）。
+      // 未登录 → 去注册；已登录 → 去钱包下单，备注里带上意向套餐。
+      if (!loggedIn) {
+        router.push('/register');
+      } else {
+        router.push('/wallet');
+      }
+      return;
+    }
+
+    // 【P0-5】必须用后端套餐 UUID，旧实现传 'pro' 必然 400
+    const meta = planMeta[plan.id];
+    if (!meta?.id) {
+      setError(
+        planMetaLoading
+          ? '套餐信息加载中，请稍候再试'
+          : '暂时无法获取套餐信息，请稍后重试或联系客服',
+      );
       return;
     }
 
@@ -171,7 +241,7 @@ export default function PricingPage() {
       // Stripe 通道（STRIPE_SECRET_KEY 为空时不可用）→ 失败则回落到人工对账
       const result = await apiRequest.post<{ checkout_url?: string; url?: string }>(
         '/billing/checkout',
-        { plan_id: plan.id, interval: 'monthly' }
+        { plan_id: meta.id, interval: 'monthly' }
       );
       const checkoutUrl = result?.checkout_url || result?.url;
       if (checkoutUrl) {
@@ -279,7 +349,7 @@ export default function PricingPage() {
 
                     <Stack direction="row" alignItems="baseline" spacing={1} sx={{ mb: 0.5 }}>
                       <Typography variant="h4" sx={{ fontWeight: 700, color: plan.accent }}>
-                        {plan.price}
+                        {displayPrice(plan)}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
                         {plan.priceNote}
@@ -341,7 +411,8 @@ export default function PricingPage() {
                       ) : isCurrent ? (
                         '当前套餐'
                       ) : !loggedIn ? (
-                        '免费注册'
+                        // 【P1-8】未登录用户点付费档也要有付费语义，不能全显示"免费注册"
+                        plan.id === 'free' ? '免费注册' : `注册并开通${plan.name}`
                       ) : (
                         plan.cta
                       )}

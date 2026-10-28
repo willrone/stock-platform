@@ -167,7 +167,7 @@ export default function TuningPage() {
     let cancelled = false;
     setTasksLoading(true);
     apiRequest
-      .get<TaskBrief[]>('/api/v1/tasks?limit=200&status=completed')
+      .get<TaskBrief[]>('/tasks?limit=200&status=completed')
       .then(data => {
         if (cancelled) return;
         // data 可能是 {tasks, total, ...} 结构，按两种形态归一为列表
@@ -196,7 +196,7 @@ export default function TuningPage() {
     setNewTaskName('');
     try {
       const resp = await apiRequest.get<Record<string, unknown>>(
-        `/api/v1/tasks/${task.task_id}/config`
+        `/tasks/${task.task_id}/config`
       );
       const snapshot = resp;
       if (snapshot && typeof snapshot === 'object') {
@@ -264,7 +264,7 @@ export default function TuningPage() {
     }
 
     try {
-      const resp = await apiRequest.post<PreviewResponse>('/api/v1/tasks/tuning/preview-config', {
+      const resp = await apiRequest.post<PreviewResponse>('/tasks/tuning/preview-config', {
         base_task_id: selectedTask.task_id,
         overrides: typedOverrides,
       });
@@ -302,7 +302,7 @@ export default function TuningPage() {
     }
 
     try {
-      const resp = await apiRequest.post<SubmitResponse>('/api/v1/tasks/tuning/submit', {
+      const resp = await apiRequest.post<SubmitResponse>('/tasks/tuning/submit', {
         base_task_id: selectedTask.task_id,
         task_name: newTaskName,
         overrides: typedOverrides,

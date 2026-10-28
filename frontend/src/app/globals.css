@@ -5,11 +5,35 @@
 :root {
   --background: 0 0% 100%;
   --foreground: 222.2 84% 4.9%;
+  /*
+   * 【P0-11】--border 之前从未定义，导致 `* { border-color: hsl(var(--border)) }`
+   * 整条规则失效、边框回落到 currentColor（全站边框变近黑）。
+   * 值与 src/theme/tokens.ts 的 borderColors.default (#E2E8F0) 对齐。
+   */
+  --border: 214 32% 89%;
+  --border-strong: 214 20% 84%;
+
+  /*
+   * 【P0-18】安全区变量。
+   * 直接用 env() 在部分 iOS WebView / 桌面浏览器里会解析成 0，
+   * 导致吸顶栏被系统状态栏压住、底部固定栏被 home indicator 盖住。
+   * 这里用 max() 给一个最小值兜底：env 有值就用 env，没值（或为 0）用兜底值。
+   */
+  --safe-top: max(env(safe-area-inset-top, 0px), 12px);
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), 8px);
 }
 
+/*
+ * 【P1 · design】本项目只做浅色主题，不再维护暗色变体。
+ * 保留 .dark 选择器仅为兼容历史 localStorage / 第三方 class，不渲染暗色色板。
+ */
 .dark {
-  --background: 222.2 84% 4.9%;
-  --foreground: 210 40% 98%;
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+  --border: 214 32% 89%;
+  --border-strong: 214 20% 84%;
+  --safe-top: max(env(safe-area-inset-top, 0px), 12px);
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), 8px);
 }
 
 * {
@@ -40,15 +64,13 @@ body {
   background: hsl(var(--foreground) / 0.3);
 }
 
-/* 图表容器样式 */
-.chart-container {
-  background: hsl(var(--background));
-  border-radius: 12px;
-  border: 1px solid hsl(var(--foreground) / 0.1);
-  width: 100%;
-  height: 400px;
-  margin: 16px 0;
-}
+/*
+ * 【P3 · design 清理】以下工具类全站 0 引用（grep 确认只在定义处命中），已删除：
+ *   .chart-container / .fade-in / .slide-up / .status-indicator / .task-status-*
+ * 其中 .status-indicator / .task-status-* 还用了 Tailwind 色板
+ * (#06b6d4/#10b981/#ef4444/#f59e0b)，与 MUI 主题色冲突，留着必被误用。
+ * 状态色请改用 theme.palette.statusColors.*，涨跌色用 palette.semantics.*。
+ */
 
 /* 卡片阴影效果 */
 .card-shadow {
@@ -61,95 +83,4 @@ body {
   box-shadow:
     0 10px 15px -3px rgb(0 0 0 / 0.1),
     0 4px 6px -4px rgb(0 0 0 / 0.1);
-}
-
-/* 动画效果 */
-.fade-in {
-  animation: fadeIn 0.3s ease-in-out;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.slide-up {
-  animation: slideUp 0.3s ease-out;
-}
-
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* 状态指示器 */
-.status-indicator {
-  position: relative;
-}
-
-.status-indicator::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: -12px;
-  transform: translateY(-50%);
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  animation: pulse 2s infinite;
-}
-
-.status-indicator.running::before {
-  background-color: #06b6d4;
-}
-
-.status-indicator.completed::before {
-  background-color: #10b981;
-}
-
-.status-indicator.failed::before {
-  background-color: #ef4444;
-}
-
-.status-indicator.pending::before {
-  background-color: #f59e0b;
-}
-
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
-}
-
-/* 任务状态样式 */
-.task-status-pending {
-  color: #f59e0b;
-}
-
-.task-status-running {
-  color: #06b6d4;
-}
-
-.task-status-completed {
-  color: #10b981;
-}
-
-.task-status-failed {
-  color: #ef4444;
 }

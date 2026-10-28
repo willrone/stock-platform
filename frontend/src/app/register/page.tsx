@@ -1,28 +1,39 @@
 'use client';
 
+/**
+ * 注册
+ *
+ * 【P0 · state】统一走 apiRequest（自动兼容 `{success,data}` 信封与裸 payload），
+ * 不再用裸 fetch —— 后端 /auth/register 返回形态变化时裸 fetch 会静默拿不到 token。
+ *
+ * 【P0 · state】用户字段归一走 store 的 normalizeUser，删掉 `as unknown as`，
+ * 保证 subscription_tier / is_admin 在注册后就是对的（否则管理员入口不显示）。
+ *
+ * 【P1 · design】从 antd 迁移到 MUI。
+ */
+
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Alert, Button, Card, Form, Input, Space, Typography } from 'antd';
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  CircularProgress,
+  TextField,
+  Typography,
+} from '@mui/material';
 import { ArrowLeft, UserPlus } from 'lucide-react';
-import { useAppStore } from '@/stores/useAppStore';
 
-const { Title, Paragraph, Text } = Typography;
-// 用相对路径，走 Next.js rewrites 代理到后端（服务端代理，远程客户端可用）
-const apiBase = '';
-const authBase = apiBase.endsWith('/api') ? `${apiBase}/v1/auth` : `${apiBase}/api/v1/auth`;
-
-type RegisterValues = {
-  email: string;
-  username: string;
-  password: string;
-  confirmPassword: string;
-};
+import { apiRequest } from '@/services/api';
+import { normalizeUser, useAppStore } from '@/stores/useAppStore';
 
 type AuthResponse = {
-  access_token: string;
+  access_token?: string;
   refresh_token?: string;
-  user: Record<string, unknown>;
+  user?: Record<string, unknown>;
 };
 
 export default function RegisterPage() {
@@ -31,27 +42,53 @@ export default function RegisterPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const submit = async (values: RegisterValues) => {
-    setLoading(true);
+  // 受控表单值
+  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  const submit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
     setError('');
+
+    if (!email.trim()) {
+      setError('请输入邮箱');
+      return;
+    }
+    if (username.trim().length < 2 || username.trim().length > 50) {
+      setError('用户名长度为 2–50 个字符');
+      return;
+    }
+    if (password.length < 6) {
+      setError('密码至少 6 位');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError('两次输入的密码不一致');
+      return;
+    }
+
+    setLoading(true);
     try {
-      const response = await fetch(`${authBase}/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: values.email,
-          username: values.username,
-          password: values.password,
-        }),
+      const data = await apiRequest.post<AuthResponse>('/auth/register', {
+        email: email.trim(),
+        username: username.trim(),
+        password,
       });
-      const data = (await response.json()) as AuthResponse & { detail?: string };
-      if (!response.ok) {
-        throw new Error(data.detail || '注册失败，请检查输入信息');
+
+      if (!data?.access_token) {
+        throw new Error('注册响应缺少 access_token');
       }
+
       localStorage.setItem('access_token', data.access_token);
       if (data.refresh_token) localStorage.setItem('refresh_token', data.refresh_token);
-      localStorage.setItem('user_info', JSON.stringify(data.user));
-      setUser(data.user as unknown as Parameters<typeof setUser>[0]);
+      if (data.user) localStorage.setItem('user_info', JSON.stringify(data.user));
+
+      // 统一归一：保证 subscription_tier / is_admin 正确
+      const normalized = normalizeUser(data.user ?? null);
+      if (normalized) setUser(normalized);
+
       router.push('/dashboard');
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : '注册失败，请稍后重试');
@@ -61,68 +98,111 @@ export default function RegisterPage() {
   };
 
   return (
-    <div style={{ maxWidth: 460, margin: '28px auto', padding: '0 12px' }}>
+    <Box sx={{ maxWidth: 460, mx: 'auto', pt: 3.5, px: 1.5 }}>
       <Card>
-        <Space direction="vertical" size={4} style={{ width: '100%', marginBottom: 24 }}>
-          <Link href="/login">
-            <ArrowLeft size={15} style={{ verticalAlign: 'text-bottom' }} /> 返回登录
-          </Link>
-          <Title level={2} style={{ margin: '12px 0 0' }}>
-            <UserPlus size={23} style={{ marginRight: 8, verticalAlign: '-3px' }} />
-            创建账号
-          </Title>
-          <Paragraph type="secondary" style={{ margin: 0 }}>
-            注册后即可开始创建策略和运行回测。
-          </Paragraph>
-        </Space>
-        {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
-        <Form layout="vertical" onFinish={submit} requiredMark={false}>
-          <Form.Item
-            name="email"
-            label="邮箱"
-            rules={[{ required: true, type: 'email', message: '请输入有效邮箱' }]}
+        <CardContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, mb: 3 }}>
+            <Link
+              href="/login"
+              style={{
+                color: 'inherit',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 0.5,
+                minHeight: 44,
+              }}
+            >
+              <ArrowLeft size={15} aria-hidden /> 返回登录
+            </Link>
+            <Typography
+              variant="h4"
+              component="h1"
+              sx={{ mt: 1, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}
+            >
+              <UserPlus size={23} aria-hidden />
+              创建账号
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              注册后即可开始创建策略和运行回测。
+            </Typography>
+          </Box>
+
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
+
+          <Box
+            component="form"
+            onSubmit={submit}
+            noValidate
+            sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}
           >
-            <Input placeholder="you@example.com" autoComplete="email" />
-          </Form.Item>
-          <Form.Item
-            name="username"
-            label="用户名"
-            rules={[{ required: true, min: 2, max: 50, message: '用户名长度为 2–50 个字符' }]}
+            <TextField
+              label="邮箱"
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              autoComplete="email"
+              required
+              fullWidth
+              slotProps={{ htmlInput: { style: { fontSize: 16 } } }}
+            />
+            <TextField
+              label="用户名"
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+              placeholder="你的研究昵称"
+              autoComplete="username"
+              required
+              fullWidth
+              slotProps={{ htmlInput: { minLength: 2, maxLength: 50, style: { fontSize: 16 } } }}
+            />
+            <TextField
+              label="密码"
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="至少 6 位"
+              autoComplete="new-password"
+              required
+              fullWidth
+              slotProps={{ htmlInput: { minLength: 6, style: { fontSize: 16 } } }}
+            />
+            <TextField
+              label="确认密码"
+              type="password"
+              value={confirmPassword}
+              onChange={e => setConfirmPassword(e.target.value)}
+              placeholder="再次输入密码"
+              autoComplete="new-password"
+              required
+              fullWidth
+              slotProps={{ htmlInput: { minLength: 6, style: { fontSize: 16 } } }}
+            />
+            <Button
+              type="submit"
+              variant="contained"
+              fullWidth
+              disabled={loading}
+              startIcon={loading ? <CircularProgress size={16} /> : undefined}
+              sx={{ minHeight: 44 }}
+            >
+              创建账号
+            </Button>
+          </Box>
+
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ display: 'block', textAlign: 'center', mt: 2.25 }}
           >
-            <Input placeholder="你的研究昵称" autoComplete="username" />
-          </Form.Item>
-          <Form.Item
-            name="password"
-            label="密码"
-            rules={[{ required: true, min: 6, message: '密码至少 6 位' }]}
-          >
-            <Input.Password placeholder="至少 6 位" autoComplete="new-password" />
-          </Form.Item>
-          <Form.Item
-            name="confirmPassword"
-            label="确认密码"
-            dependencies={['password']}
-            rules={[
-              { required: true, message: '请再次输入密码' },
-              ({ getFieldValue }) => ({
-                validator(_, value) {
-                  return !value || getFieldValue('password') === value
-                    ? Promise.resolve()
-                    : Promise.reject(new Error('两次输入的密码不一致'));
-                },
-              }),
-            ]}
-          >
-            <Input.Password placeholder="再次输入密码" autoComplete="new-password" />
-          </Form.Item>
-          <Button type="primary" htmlType="submit" block loading={loading}>
-            创建账号
-          </Button>
-        </Form>
-        <Text type="secondary" style={{ display: 'block', textAlign: 'center', marginTop: 18 }}>
-          已有账号？ <Link href="/login">立即登录</Link>
-        </Text>
+            已有账号？ <Link href="/login">立即登录</Link>
+          </Typography>
+        </CardContent>
       </Card>
-    </div>
+    </Box>
   );
 }

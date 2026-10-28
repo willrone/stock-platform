@@ -23,7 +23,6 @@ from app.core.database import AsyncSessionLocal
 from app.models.strategy_config_models import StrategyConfig
 from app.models.task_models import Task, TaskStatus, TaskType
 from app.models.user_models import User
-from app.repositories.task_repository import TaskRepository
 
 router = APIRouter(prefix="/dashboard", tags=["用量统计"])
 
@@ -67,17 +66,25 @@ async def get_dashboard_stats(user_id: str = Depends(get_current_user)) -> Any:
             )
             strategy_count = (await session.execute(strategy_count_stmt)).scalar() or 0
 
-            # 4. 当前活跃任务数（running + pending）
-            task_repo = TaskRepository(session)
-            active_running = task_repo.count_tasks_by_user(
-                user_id=user_id,
-                status_filter=TaskStatus.RUNNING,
+            # 4. 当前活跃任务数（running + queued + created）
+            #    注意：这里必须用异步查询。原实现用同步的 TaskRepository.count_tasks_by_user
+            #    （内部走 SQLAlchemy 1.x 的 db.query()），而本函数持有的是 AsyncSession，
+            #    没有 .query 属性 → 500（'AsyncSession' object has no attribute 'query'）。
+            #    活跃口径与 app/middleware/rbac.py 的 max_concurrent_tasks 配额保持一致：
+            #    created + queued + running。
+            active_task_stmt = select(func.count(Task.task_id)).where(
+                and_(
+                    Task.user_id == user_id,
+                    Task.status.in_(
+                        [
+                            TaskStatus.CREATED.value,
+                            TaskStatus.QUEUED.value,
+                            TaskStatus.RUNNING.value,
+                        ]
+                    ),
+                )
             )
-            active_pending = task_repo.count_tasks_by_user(
-                user_id=user_id,
-                status_filter=TaskStatus.PENDING,
-            )
-            active_total = active_running + active_pending
+            active_total = (await session.execute(active_task_stmt)).scalar() or 0
 
             usage = {
                 "backtests_this_month": int(backtest_count),

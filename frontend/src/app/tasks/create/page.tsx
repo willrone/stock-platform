@@ -47,6 +47,7 @@ import {
   PortfolioStrategyItem,
 } from '../../../components/backtest/PortfolioStrategyConfig';
 import { StrategyConfigService, StrategyConfig } from '../../../services/strategyConfigService';
+import { apiRequest } from '../../../services/api';
 
 function CreateTaskPageContent() {
   const router = useRouter();
@@ -99,6 +100,11 @@ function CreateTaskPageContent() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [rebuildTaskName, setRebuildTaskName] = useState<string>('');
   const [isRebuild, setIsRebuild] = useState(false);
+  // 策略列表加载状态：失败时必须提示并禁止提交，避免静默使用默认策略
+  const [strategiesLoading, setStrategiesLoading] = useState(false);
+  const [strategiesError, setStrategiesError] = useState<string | null>(null);
+  // 手动重试计数器：点击「重试加载策略」时递增，重新触发加载 effect
+  const [strategiesReloadKey, setStrategiesReloadKey] = useState(0);
 
   // 加载模型列表
   useEffect(() => {
@@ -122,27 +128,47 @@ function CreateTaskPageContent() {
   useEffect(() => {
     const loadStrategies = async () => {
       if (taskType === 'backtest') {
+        setStrategiesLoading(true);
+        setStrategiesError(null);
         try {
-          const response = await fetch('/api/v1/backtest/strategies');
-          const resp = await response.json();
-          if (resp.success && resp.data) {
-            setAvailableStrategies(resp.data);
+          // 走统一 apiRequest 客户端（baseURL=/api/v1，自动注入 token、归一化错误）
+          const resp = await apiRequest.get<
+            Array<{
+              key: string;
+              name: string;
+              description: string;
+              tier?: 'standard' | 'advanced' | 'basic';
+              price?: string;
+              est_seconds?: number;
+              sharpe_10y?: number;
+              parameters?: Record<string, StrategyParameter>;
+            }>
+          >('/backtest/strategies');
+          const list = Array.isArray(resp) ? resp : [];
+          if (list.length > 0) {
+            setAvailableStrategies(list);
             // 如果当前策略不在列表中，设置为第一个策略
-            if (
-              resp.data.length > 0 &&
-              !resp.data.find((s: any) => s.key === formData.strategy_name)
-            ) {
-              updateFormData('strategy_name', resp.data[0].key);
+            if (!list.find(s => s.key === formData.strategy_name)) {
+              updateFormData('strategy_name', list[0].key);
             }
+          } else {
+            setStrategiesError('策略列表为空，请检查后端服务');
           }
         } catch (error) {
+          const msg =
+            error instanceof Error && error.message
+              ? error.message
+              : '加载策略列表失败，请刷新重试';
+          setStrategiesError(msg);
           logger.error('加载策略列表失败:', error);
+        } finally {
+          setStrategiesLoading(false);
         }
       }
     };
 
     loadStrategies();
-  }, [taskType]);
+  }, [taskType, strategiesReloadKey]);
 
   useEffect(() => {
     const typeParam = searchParams.get('type');
@@ -154,6 +180,44 @@ function CreateTaskPageContent() {
       if (modeParam === 'model') {
         setStrategyType('model');
         updateFormData('strategy_name', 'model_signal');
+      }
+    }
+
+    // 模板「一键使用」预填：接收模板页跳转的全部参数并回填
+    const templateId = searchParams.get('templateId');
+    if (templateId) {
+      setTaskType('backtest');
+      setStrategyType('single');
+      const strategyParam = searchParams.get('strategy');
+      if (strategyParam) {
+        updateFormData('strategy_name', strategyParam);
+      }
+      const startDateParam = searchParams.get('startDate');
+      if (startDateParam) {
+        updateFormData('start_date', startDateParam);
+      }
+      const endDateParam = searchParams.get('endDate');
+      if (endDateParam) {
+        updateFormData('end_date', endDateParam);
+      }
+      const initialCashParam = searchParams.get('initialCash');
+      if (initialCashParam) {
+        const cash = parseFloat(initialCashParam);
+        if (!Number.isNaN(cash) && cash > 0) {
+          updateFormData('initial_cash', cash);
+        }
+      }
+      const configParam = searchParams.get('config');
+      if (configParam) {
+        try {
+          const parsed = JSON.parse(configParam);
+          if (parsed && typeof parsed === 'object') {
+            setStrategyConfig(parsed);
+            setConfigFormKey(prev => prev + 1);
+          }
+        } catch {
+          logger.warn('模板配置参数解析失败:', configParam);
+        }
       }
     }
 
@@ -336,6 +400,9 @@ function CreateTaskPageContent() {
       }
     } else {
       // backtest
+      if (strategyType === 'single' && !formData.strategy_name) {
+        newErrors.strategy_name = '请选择交易策略';
+      }
       if (strategyType === 'model' && !formData.model_id) {
         newErrors.model_id = '请选择用于回测的模型';
       }
@@ -642,7 +709,12 @@ function CreateTaskPageContent() {
                 {strategyType === 'single' ? (
                   <>
                     {/* 单策略选择 */}
-                    <FormControl fullWidth required disabled={availableStrategies.length === 0}>
+                    <FormControl
+                      fullWidth
+                      required
+                      disabled={strategiesLoading || availableStrategies.length === 0}
+                      error={!!errors.strategy_name}
+                    >
                       <InputLabel>交易策略</InputLabel>
                       <Select
                         value={formData.strategy_name}
@@ -694,6 +766,19 @@ function CreateTaskPageContent() {
                           </MenuItem>
                         ))}
                       </Select>
+                      <FormHelperText>
+                        {strategiesError
+                          ? strategiesError
+                          : strategiesLoading
+                            ? '正在加载策略列表...'
+                            : formData.strategy_name
+                              ? `当前选中策略：${
+                                  availableStrategies.find(
+                                    s => s.key === formData.strategy_name
+                                  )?.name || formData.strategy_name
+                                }（${formData.strategy_name}）`
+                              : '请选择交易策略'}
+                      </FormHelperText>
                     </FormControl>
 
                     {/* 单策略配置表单 */}
@@ -932,11 +1017,28 @@ function CreateTaskPageContent() {
               color="primary"
               size="large"
               onClick={handleSubmit}
-              disabled={loading}
+              disabled={
+                loading ||
+                (taskType === 'backtest' &&
+                  strategyType !== 'model' &&
+                  (strategiesLoading || !!strategiesError))
+              }
               fullWidth
             >
               {loading ? '创建中...' : '创建任务'}
             </Button>
+            {taskType === 'backtest' && strategyType !== 'model' && strategiesError && (
+              <Button
+                variant="outlined"
+                color="warning"
+                onClick={() => {
+                  setStrategiesError(null);
+                  setStrategiesReloadKey(prev => prev + 1);
+                }}
+              >
+                重试加载策略
+              </Button>
+            )}
             <Button variant="outlined" size="large" onClick={handleBack}>
               取消
             </Button>

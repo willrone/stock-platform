@@ -19,7 +19,10 @@ describe('前端项目结构测试', () => {
     expect(packageJson.version).toBe('0.1.0');
     expect(packageJson.dependencies).toHaveProperty('next');
     expect(packageJson.dependencies).toHaveProperty('react');
-    expect(packageJson.dependencies).toHaveProperty('@heroui/react');
+    expect(packageJson.dependencies).toHaveProperty('@mui/material');
+    // 【P1 · design】HeroUI 已移除（全站 0 引用，只注入 128KB 死 CSS）
+    expect(packageJson.dependencies).not.toHaveProperty('@heroui/react');
+    expect(packageJson.dependencies).not.toHaveProperty('@heroui/theme');
   });
 
   test('TypeScript 配置存在', () => {

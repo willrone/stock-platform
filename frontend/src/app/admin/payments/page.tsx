@@ -1,6 +1,15 @@
 'use client';
 
 /**
+ * 充值订单管理（管理员）
+ *
+ * 【P1 · mobile】订单列表用项目统一的 <ResponsiveTable> 包裹：
+ * 原先裸 <Table> 在 390px 视口下宽 464px，外层 Card 的 overflow:hidden
+ * 会把「状态 / 备注 / 操作」三列**硬裁且无法横向滚动**（前端审计 P1-8 同类问题）。
+ * ResponsiveTable 提供 overflowX:auto + minWidth + 「左右滑动」提示。
+ */
+
+/**
  * 管理员 · 充值订单管理
  *
  * 2026-10-25 新增。背景：充值改为两段式订单制（用户下单 → 管理员确认到账
@@ -8,11 +17,11 @@
  * 缺失的最后一环。
  *
  * 配套后端接口：
- *   GET  /api/v1/admin/payment/orders?status=pending
- *   POST /api/v1/admin/payment/orders/{order_no}/confirm
- *   POST /api/v1/admin/payment/orders/{order_no}/cancel
+ *   GET  /api/v1/commerce/admin/payment/orders?status=pending
+ *   POST /api/v1/commerce/admin/payment/orders/{order_no}/confirm
+ *   POST /api/v1/commerce/admin/payment/orders/{order_no}/cancel
  *   GET  /api/v1/commerce/payment/config
- *   POST /api/v1/admin/payment/config
+ *   POST /api/v1/commerce/admin/payment/config
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -37,6 +46,7 @@ import {
 } from '@mui/material';
 import { RefreshCw, CheckCircle2, XCircle } from 'lucide-react';
 import { apiRequest } from '@/services/api';
+import { ResponsiveTable } from '@/components/mobile/ResponsiveTable';
 
 type Order = {
   id: string;
@@ -81,7 +91,7 @@ export default function AdminPaymentsPage() {
     setError(null);
     try {
       const q = filter ? `?status=${filter}&limit=200` : '?limit=200';
-      const res = await apiRequest.get<{ orders: Order[] }>(`/admin/payment/orders${q}`);
+      const res = await apiRequest.get<{ orders: Order[] }>(`/commerce/admin/payment/orders${q}`);
       setOrders(res.orders || []);
     } catch (e) {
       setError(e instanceof Error ? e.message : '加载订单失败');
@@ -113,7 +123,7 @@ export default function AdminPaymentsPage() {
     setBusyOrder(orderNo);
     setError(null);
     try {
-      await apiRequest.post(`/admin/payment/orders/${orderNo}/confirm?remark=后台确认到账`);
+      await apiRequest.post(`/commerce/admin/payment/orders/${orderNo}/confirm?remark=后台确认到账`);
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : '确认失败');
@@ -126,7 +136,7 @@ export default function AdminPaymentsPage() {
     setBusyOrder(orderNo);
     setError(null);
     try {
-      await apiRequest.post(`/admin/payment/orders/${orderNo}/cancel?remark=管理员取消`);
+      await apiRequest.post(`/commerce/admin/payment/orders/${orderNo}/cancel?remark=管理员取消`);
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : '取消失败');
@@ -140,7 +150,7 @@ export default function AdminPaymentsPage() {
     setSavingConfig(true);
     setError(null);
     try {
-      await apiRequest.post('/admin/payment/config', {
+      await apiRequest.post('/commerce/admin/payment/config', {
         method_name: config.method_name || '',
         payee_account: config.payee_account || '',
         qr_image_url: config.qr_image_url || '',
@@ -175,8 +185,14 @@ export default function AdminPaymentsPage() {
         </Alert>
       )}
 
-      <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
-        <Card sx={{ minWidth: 180 }}>
+      {/* 【P1 · mobile】窄屏换行：两个 minWidth:180 的卡片 + 间距 = 392px，
+          在 390px 视口下会横向溢出 29px。xs 纵向、md 横向。 */}
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={2}
+        sx={{ mb: 2 }}
+      >
+        <Card sx={{ minWidth: { xs: 0, sm: 180 } }}>
           <CardContent>
             <Typography variant="caption" color="text.secondary">
               待确认订单
@@ -184,7 +200,7 @@ export default function AdminPaymentsPage() {
             <Typography variant="h5">{pendingCount}</Typography>
           </CardContent>
         </Card>
-        <Card sx={{ minWidth: 180 }}>
+        <Card sx={{ minWidth: { xs: 0, sm: 180 } }}>
           <CardContent>
             <Typography variant="caption" color="text.secondary">
               待确认金额
@@ -194,7 +210,11 @@ export default function AdminPaymentsPage() {
         </Card>
       </Stack>
 
-      <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{ mb: 2, flexWrap: 'wrap', rowGap: 1 }}
+      >
         {['', 'pending', 'paid', 'cancelled'].map((s) => (
           <Chip
             key={s || 'all'}
@@ -216,7 +236,8 @@ export default function AdminPaymentsPage() {
           ) : orders.length === 0 ? (
             <Typography color="text.secondary">暂无充值订单</Typography>
           ) : (
-            <Table size="small">
+            <ResponsiveTable minWidth={640}>
+              <Table size="small">
               <TableHead>
                 <TableRow>
                   <TableCell>订单号</TableCell>
@@ -279,7 +300,8 @@ export default function AdminPaymentsPage() {
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+              </Table>
+            </ResponsiveTable>
           )}
         </CardContent>
       </Card>

@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 
 from app.api.v1.dependencies import require_current_user
+from app.api.v1.schemas import StandardResponse
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.security import (
@@ -54,7 +55,27 @@ class ProfileUpdateRequest(BaseModel):
     username: str = Field(..., min_length=2, max_length=50)
 
 
-class AuthResponse(BaseModel):
+class AuthResponse(StandardResponse):
+    """认证响应（信封 + 顶层冗余字段，双形态）。
+
+    2026-10-27：登录/注册原先只返回裸 dict（access_token/refresh_token/
+    token_type/user），与项目其它 40+ 端点的 StandardResponse 信封不一致；
+    前端 api.ts 的响应拦截器要求 success 字段，任何走信封路径读 token 的
+    逻辑都会拿到 undefined。
+
+    这里同时给出两种形态，兼容过渡期的新旧前端：
+      - 信封形态：success / message / data / timestamp，data 内含四个 token 字段；
+      - 顶层形态：access_token / refresh_token / token_type / user 直接在响应体顶层。
+
+    顶层字段是**过渡期兼容冗余**（frontend/src/app/login/page.tsx:46 与
+    register/page.tsx:51 写的是 localStorage.setItem('access_token', data.access_token)，
+    其中 data 是 axios response.data 即响应体顶层）。后端全量统一、
+    前端全部改为读 data.access_token 之后，可以删除这里的顶层冗余字段。
+
+    注意：字段顺序即 JSON 输出顺序 —— 基类字段在前（success/message/data/
+    timestamp），子类字段在后（access_token/...）。
+    """
+
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
@@ -111,12 +132,29 @@ def _tokens_for_user(user: User) -> tuple[str, str]:
     )
 
 
-def _auth_response(user: User) -> AuthResponse:
+def _auth_response(user: User, message: str = "认证成功") -> AuthResponse:
+    """构造认证响应（信封 + 顶层冗余字段，双形态）。
+
+    - data 里放 access_token/refresh_token/token_type/user（信封路径消费）
+    - 同样的四个字段同时冗余在响应体顶层（旧前端路径消费）
+    """
     access_token, refresh_token = _tokens_for_user(user)
+    user_payload = _user_payload(user)
+    token_payload = {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "user": user_payload,
+    }
     return AuthResponse(
+        success=True,
+        message=message,
+        data=token_payload,
+        # 顶层冗余：过渡期兼容旧前端（详见 AuthResponse 文档字符串）
         access_token=access_token,
         refresh_token=refresh_token,
-        user=_user_payload(user),
+        token_type="bearer",
+        user=user_payload,
     )
 
 
@@ -144,7 +182,7 @@ def register(req: RegisterRequest):
             logger.warning("注册唯一约束冲突: {}", integrity_err)
             raise HTTPException(status_code=409, detail="邮箱或用户名已被使用")
         session.refresh(user)
-        return _auth_response(user)
+        return _auth_response(user, message="注册成功")
     except HTTPException:
         raise
     except OperationalError as op_err:
@@ -176,7 +214,7 @@ def login(req: LoginRequest):
         user.last_login_at = datetime.utcnow()
         session.commit()
         session.refresh(user)
-        return _auth_response(user)
+        return _auth_response(user, message="登录成功")
     except HTTPException:
         raise
     except OperationalError as op_err:
@@ -214,7 +252,7 @@ def refresh_token(req: RefreshTokenRequest):
             raise HTTPException(status_code=401, detail="用户不存在")
         if not user.is_active:
             raise HTTPException(status_code=403, detail="账户已被禁用")
-        return _auth_response(user)
+        return _auth_response(user, message="Token 刷新成功")
     finally:
         session.close()
 

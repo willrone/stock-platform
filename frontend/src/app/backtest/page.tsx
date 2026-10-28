@@ -6,7 +6,7 @@
  * 显示回测任务列表和管理界面
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Card,
   CardContent,
@@ -43,7 +43,7 @@ import {
   Clock,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useTaskStore, Task } from '../../stores/useTaskStore';
+import { Task } from '../../stores/useTaskStore';
 import { TaskService } from '../../services/taskService';
 import { wsService } from '../../services/websocket';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
@@ -53,12 +53,21 @@ import { useSnackbarStore } from '../../stores/useSnackbarStore';
 export default function BacktestPage() {
   const router = useRouter();
   const showSnackbar = useSnackbarStore();
-  const { tasks, setTasks, updateTask } = useTaskStore();
+  /**
+   * 【state P0-8】服务端回测任务列表由本页本地持有，不放全局 store，
+   * 避免与 /tasks 页互相污染。
+   */
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+
+  /** 局部更新单条任务（WebSocket 实时进度用） */
+  const updateTask = useCallback((taskId: string, patch: Partial<Task>) => {
+    setTasks(prev => prev.map(t => (t.task_id === taskId ? { ...t, ...patch } : t)));
+  }, []);
 
   // 过滤出回测任务
   const backtestTasks = tasks.filter(task => {
@@ -94,8 +103,7 @@ export default function BacktestPage() {
       setRefreshing(true);
       // 获取所有任务（不限制数量，确保获取所有回测任务）
       const result = await TaskService.getTasks(undefined, 1000, 0);
-      // 使用setTasks更新整个任务列表
-      setTasks(result.tasks, result.total);
+      setTasks(result.tasks ?? []);
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : '加载回测任务失败';
       console.error('加载回测任务失败:', error);
@@ -206,20 +214,58 @@ export default function BacktestPage() {
     return new Date(dateString).toLocaleString('zh-CN');
   };
 
-  // 获取回测结果摘要
+  /**
+   * 获取回测结果摘要
+   *
+   * 【P0-03】列表接口的指标来源是 `task.result_summary`（后端 TaskSummaryDTO 提供），
+   * 旧的实现读 `task.result` —— 列表接口不返回该字段，导致已完成回测的
+   * 收益/夏普列永远显示 "-"（看起来像没跑）。
+   *
+   * 缺失指标一律返回 null，UI 显示 "—"，**绝不用 0 冒充**（0 会被读成"收益为零"）。
+   */
   const getBacktestSummary = (task: Task) => {
-    const backtestData = task.results?.backtest_results || task.backtest_results || task.result;
-    if (!backtestData) {
+    const summary = task.result_summary;
+    const detail =
+      (task.results?.backtest_results as Record<string, unknown> | undefined) ??
+      (task.backtest_results as Record<string, unknown> | undefined) ??
+      (task.result as Record<string, unknown> | undefined);
+
+    const pick = (key: string): number | null => {
+      const raw = summary?.[key] ?? detail?.[key];
+      return typeof raw === 'number' && Number.isFinite(raw) ? raw : null;
+    };
+
+    const totalReturn = pick('total_return');
+    const sharpeRatio = pick('sharpe_ratio');
+    const maxDrawdown = pick('max_drawdown');
+    const winRate = pick('win_rate');
+
+    // 一个指标都拿不到 → 视为无摘要
+    if (
+      totalReturn === null &&
+      sharpeRatio === null &&
+      maxDrawdown === null &&
+      winRate === null
+    ) {
       return null;
     }
 
     return {
-      totalReturn: backtestData.total_return || 0,
-      sharpeRatio: backtestData.sharpe_ratio || 0,
-      maxDrawdown: backtestData.max_drawdown || 0,
-      winRate: backtestData.win_rate || 0,
+      totalReturn,
+      sharpeRatio,
+      maxDrawdown,
+      winRate,
+      annualizedReturn: pick('annualized_return'),
+      totalTrades: pick('total_trades'),
+      turnover: pick('turnover'),
     };
   };
+
+  /** 数值 → 展示文本；null 显示破折号（不是 0，也不是 undefined） */
+  const fmtMetric = (value: number | null | undefined, digits = 2): string =>
+    value === null || value === undefined || !Number.isFinite(value)
+      ? '—'
+      : value.toFixed(digits);
 
   if (loading) {
     return <LoadingSpinner text="加载回测任务..." />;
@@ -431,17 +477,33 @@ export default function BacktestPage() {
                                 </Box>
                               ) : task.status === 'completed' && summary ? (
                                 <Box>
-                                  <Typography variant="caption" color="success.main">
-                                    总收益: {(summary.totalReturn * 100).toFixed(2)}%
+                                  {/* 【P0-03 + 语义色】收益列改读 result_summary；
+                                      涨跌色走 palette.semantics（红涨绿跌），
+                                      不用 success.main（那是"操作成功"色）。 */}
+                                  <Typography
+                                    variant="caption"
+                                    sx={{
+                                      color:
+                                        summary.totalReturn === null
+                                          ? 'text.secondary'
+                                          : summary.totalReturn >= 0
+                                            ? 'semantics.up'
+                                            : 'semantics.down',
+                                    }}
+                                  >
+                                    总收益:{' '}
+                                    {summary.totalReturn === null
+                                      ? '—'
+                                      : `${(summary.totalReturn * 100).toFixed(2)}%`}
                                   </Typography>
                                   <br />
                                   <Typography variant="caption" color="text.secondary">
-                                    夏普: {summary.sharpeRatio.toFixed(2)}
+                                    夏普: {fmtMetric(summary.sharpeRatio)}
                                   </Typography>
                                 </Box>
                               ) : (
                                 <Typography variant="caption" color="text.secondary">
-                                  -
+                                  —
                                 </Typography>
                               )}
                             </TableCell>

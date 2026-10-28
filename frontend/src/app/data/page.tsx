@@ -26,11 +26,22 @@ import {
   TableCell,
   TableHead,
   TableRow,
+  TableSortLabel,
   Tabs,
   TextField,
   Typography,
 } from '@mui/material';
-import { Server, RefreshCw, Wifi, WifiOff, XCircle, Zap, Database, Download } from 'lucide-react';
+import {
+  Server,
+  RefreshCw,
+  Wifi,
+  WifiOff,
+  XCircle,
+  Zap,
+  Database,
+  Download,
+  Search,
+} from 'lucide-react';
 import {
   DataService,
   type DataServiceSummary,
@@ -40,6 +51,12 @@ import {
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { wsService } from '../../services/websocket';
 import { MobileStockCard } from '../../components/mobile/MobileStockCard';
+import { MobileBottomNav } from '../../components/mobile/MobileBottomNav';
+import { SafeAreaTop } from '../../components/mobile/SafeAreaTop';
+import { Pagination } from '../../components/mobile/Pagination';
+import { ResponsiveTable } from '../../components/mobile/ResponsiveTable';
+import { ErrorState } from '../../components/mobile/ErrorState';
+import { BOTTOM_NAV_CONTENT_PADDING, MIN_TOUCH_TARGET } from '../../components/mobile/safeArea';
 import { useSnackbarStore } from '../../stores/useSnackbarStore';
 
 interface ServiceStatus {
@@ -110,6 +127,17 @@ export default function DataManagementPage() {
   const [remoteStocksLoading, setRemoteStocksLoading] = useState(false);
   const [localStocksLoading, setLocalStocksLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('remote');
+  // ── 大数据量渲染治理（2026-10-27）──
+  // 一次渲染 5594 行会把浏览器渲染进程拖垮（实测页高 29.8 万 px、窄屏
+  // 51 万 px → OOM）。改成客户端分页 + 搜索 + 排序。
+  const [stockPage, setStockPage] = useState(0);
+  const [stockPageSize, setStockPageSize] = useState(50);
+  const [stockQuery, setStockQuery] = useState('');
+  const [sortKey, setSortKey] = useState<'code' | 'record_count' | 'total_size' | 'file_count'>(
+    'code'
+  );
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [localStocksError, setLocalStocksError] = useState<string | null>(null);
   const [syncResult, setSyncResult] = useState<{
     success: boolean;
     message: string;
@@ -247,13 +275,16 @@ export default function DataManagementPage() {
   const loadLocalStocks = async () => {
     try {
       setLocalStocksLoading(true);
+      setLocalStocksError(null);
       const result = await DataService.getLocalStockList();
       setLocalStocks(result.stocks || []);
+      setStockPage(0);
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : '加载本地股票列表失败';
       console.error('加载本地股票列表失败:', error);
       showSnackbar.showError(errMsg);
       setLocalStocks([]);
+      setLocalStocksError(errMsg);
     } finally {
       setLocalStocksLoading(false);
     }
@@ -271,6 +302,46 @@ export default function DataManagementPage() {
 
     loadData();
   }, []);
+
+  // ── 搜索 + 排序 + 分页（5594 行不能一次性渲染）──────────────────
+  const sortedLocalStocks = React.useMemo(() => {
+    const q = stockQuery.trim().toLowerCase();
+    const filtered = q
+      ? localStocks.filter(
+          s =>
+            s.ts_code.toLowerCase().includes(q) ||
+            (s.name ?? '').toLowerCase().includes(q)
+        )
+      : localStocks;
+    const dir = sortDir === 'asc' ? 1 : -1;
+    return [...filtered].sort((a, b) => {
+      switch (sortKey) {
+        case 'record_count':
+          return ((a.record_count ?? 0) - (b.record_count ?? 0)) * dir;
+        case 'total_size':
+          return ((a.total_size ?? 0) - (b.total_size ?? 0)) * dir;
+        case 'file_count':
+          return ((a.file_count ?? 0) - (b.file_count ?? 0)) * dir;
+        default:
+          return a.ts_code.localeCompare(b.ts_code) * dir;
+      }
+    });
+  }, [localStocks, stockQuery, sortKey, sortDir]);
+
+  const pagedLocalStocks = React.useMemo(() => {
+    const start = stockPage * stockPageSize;
+    return sortedLocalStocks.slice(start, start + stockPageSize);
+  }, [sortedLocalStocks, stockPage, stockPageSize]);
+
+  const handleSort = (key: 'code' | 'record_count' | 'total_size' | 'file_count') => {
+    if (sortKey === key) {
+      setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir(key === 'code' ? 'asc' : 'desc');
+    }
+    setStockPage(0);
+  };
 
   useEffect(() => {
     loadDataServiceSummary();
@@ -446,7 +517,12 @@ export default function DataManagementPage() {
   }
 
   return (
-    <Box data-testid="data-route-smoke" sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+    <Box
+      data-testid="data-route-smoke"
+      sx={{ display: 'flex', flexDirection: 'column', gap: 3, pb: { xs: 10, md: 3 } }}
+    >
+      <SafeAreaTop />
+      <MobileBottomNav />
       {/* 页面标题 */}
       <Box
         sx={{
@@ -774,7 +850,15 @@ export default function DataManagementPage() {
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>
                     数据服务日志
                   </Typography>
-                  <Stack direction="row" spacing={1} alignItems="center">
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    alignItems="center"
+                    // 窄屏（如 360px）时 Tabs + 按钮放不下一行，
+                    // Stack 默认 nowrap 会撑破 CardContent 并被 Card 的
+                    // overflow:hidden 裁掉按钮右半边 —— 这里允许换行。
+                    sx={{ flexWrap: 'wrap', rowGap: 1, maxWidth: '100%' }}
+                  >
                     <Tabs
                       value={logType}
                       onChange={(_event, value) => {
@@ -939,11 +1023,12 @@ export default function DataManagementPage() {
               startIcon={<RefreshCw size={16} />}
               onClick={() => {
                 if (activeTab === 'remote') {
-                  loadRemoteStocks();
+                  void loadRemoteStocks();
                 } else {
-                  loadLocalStocks();
+                  void loadLocalStocks();
                 }
               }}
+              sx={{ minHeight: MIN_TOUCH_TARGET }}
             >
               刷新
             </Button>
@@ -1081,6 +1166,13 @@ export default function DataManagementPage() {
                   <Box sx={{ textAlign: 'center', py: 4 }}>
                     <LoadingSpinner text="加载本地股票列表..." />
                   </Box>
+                ) : localStocksError ? (
+                  <ErrorState
+                    title="加载本地股票列表失败"
+                    message={localStocksError}
+                    onRetry={() => void loadLocalStocks()}
+                    retrying={localStocksLoading}
+                  />
                 ) : localStocks.length === 0 ? (
                   <Box sx={{ textAlign: 'center', py: 4 }}>
                     <Typography variant="body2" color="text.secondary">
@@ -1096,66 +1188,149 @@ export default function DataManagementPage() {
                   </Box>
                 ) : (
                   <Box>
-                    {/* 移动端：卡片列表 */}
+                    {/* 搜索 + 排序工具条 */}
+                    <Stack
+                      direction={{ xs: 'column', sm: 'row' }}
+                      spacing={1.5}
+                      alignItems={{ sm: 'center' }}
+                      sx={{ mb: 1.5 }}
+                    >
+                      <TextField
+                        size="small"
+                        value={stockQuery}
+                        onChange={e => {
+                          setStockQuery(e.target.value);
+                          setStockPage(0);
+                        }}
+                        placeholder="搜索代码或名称"
+                        aria-label="搜索股票代码或名称"
+                        InputProps={{
+                          startAdornment: (
+                            <Box sx={{ display: 'flex', alignItems: 'center', mr: 1 }}>
+                              <Search size={16} color="#888" />
+                            </Box>
+                          ),
+                        }}
+                        sx={{ minWidth: { xs: '100%', sm: 260 } }}
+                      />
+                      <Typography variant="caption" color="text.secondary">
+                        共 {localStocks.length.toLocaleString('zh-CN')} 只
+                        {stockQuery.trim() ? ` · 命中 ${sortedLocalStocks.length.toLocaleString('zh-CN')} 只` : ''}
+                      </Typography>
+                    </Stack>
+
+                    {/* 移动端：卡片列表（分页） */}
                     <Box sx={{ display: { xs: 'block', md: 'none' } }}>
-                      {localStocks.map(stock => (
+                      {pagedLocalStocks.map(stock => (
                         <MobileStockCard key={stock.ts_code} stock={stock} type="local" />
                       ))}
                     </Box>
 
-                    {/* 桌面端：表格 */}
-                    <Box sx={{ display: { xs: 'none', md: 'block' }, overflowX: 'auto' }}>
-                      <Table>
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>股票代码</TableCell>
-                            <TableCell>股票名称</TableCell>
-                            <TableCell>数据范围</TableCell>
-                            <TableCell>文件数</TableCell>
-                            <TableCell>记录数</TableCell>
-                            <TableCell>文件大小</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {localStocks.map(stock => (
-                            <TableRow key={stock.ts_code}>
+                    {/* 桌面端：表格（分页 + 可排序） */}
+                    <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+                      <ResponsiveTable minWidth={720}>
+                        <Table>
+                          <TableHead>
+                            <TableRow>
                               <TableCell>
-                                <Typography
-                                  variant="body2"
-                                  sx={{ fontFamily: 'monospace', fontWeight: 500 }}
+                                <TableSortLabel
+                                  active={sortKey === 'code'}
+                                  direction={sortKey === 'code' ? sortDir : 'asc'}
+                                  onClick={() => handleSort('code')}
                                 >
-                                  {stock.ts_code}
-                                </Typography>
+                                  股票代码
+                                </TableSortLabel>
                               </TableCell>
-                              <TableCell>{stock.name || stock.ts_code}</TableCell>
-                              <TableCell>
-                                {stock.data_range ? (
-                                  <Box>
-                                    <Typography variant="body2">
-                                      {stock.data_range.start_date} 至 {stock.data_range.end_date}
-                                    </Typography>
-                                    {stock.data_range.total_days && (
-                                      <Typography variant="caption" color="text.secondary">
-                                        {stock.data_range.total_days} 天
-                                      </Typography>
-                                    )}
-                                  </Box>
-                                ) : (
-                                  '--'
-                                )}
+                              <TableCell>股票名称</TableCell>
+                              <TableCell>数据范围</TableCell>
+                              <TableCell align="right">
+                                <TableSortLabel
+                                  active={sortKey === 'file_count'}
+                                  direction={sortKey === 'file_count' ? sortDir : 'asc'}
+                                  onClick={() => handleSort('file_count')}
+                                >
+                                  文件数
+                                </TableSortLabel>
                               </TableCell>
-                              <TableCell>{stock.file_count || 0}</TableCell>
-                              <TableCell>{stock.record_count?.toLocaleString() || '--'}</TableCell>
-                              <TableCell>
-                                {stock.total_size
-                                  ? `${(stock.total_size / 1024 / 1024).toFixed(2)} MB`
-                                  : '--'}
+                              <TableCell align="right">
+                                <TableSortLabel
+                                  active={sortKey === 'record_count'}
+                                  direction={sortKey === 'record_count' ? sortDir : 'asc'}
+                                  onClick={() => handleSort('record_count')}
+                                >
+                                  记录数
+                                </TableSortLabel>
+                              </TableCell>
+                              <TableCell align="right">
+                                <TableSortLabel
+                                  active={sortKey === 'total_size'}
+                                  direction={sortKey === 'total_size' ? sortDir : 'asc'}
+                                  onClick={() => handleSort('total_size')}
+                                >
+                                  文件大小
+                                </TableSortLabel>
                               </TableCell>
                             </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                          </TableHead>
+                          <TableBody>
+                            {pagedLocalStocks.map(stock => (
+                              <TableRow key={stock.ts_code}>
+                                <TableCell>
+                                  <Typography
+                                    variant="body2"
+                                    sx={{ fontFamily: 'monospace', fontWeight: 500 }}
+                                  >
+                                    {stock.ts_code}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell>{stock.name || stock.ts_code}</TableCell>
+                                <TableCell>
+                                  {stock.data_range ? (
+                                    <Box>
+                                      <Typography variant="body2">
+                                        {stock.data_range.start_date} 至 {stock.data_range.end_date}
+                                      </Typography>
+                                      {stock.data_range.total_days && (
+                                        <Typography variant="caption" color="text.secondary">
+                                          {stock.data_range.total_days} 天
+                                        </Typography>
+                                      )}
+                                    </Box>
+                                  ) : (
+                                    '--'
+                                  )}
+                                </TableCell>
+                                <TableCell align="right">
+                                  {(stock.file_count ?? 0).toLocaleString('zh-CN')}
+                                </TableCell>
+                                <TableCell align="right">
+                                  {stock.record_count
+                                    ? stock.record_count.toLocaleString('zh-CN')
+                                    : '--'}
+                                </TableCell>
+                                <TableCell align="right">
+                                  {stock.total_size
+                                    ? `${(stock.total_size / 1024 / 1024).toFixed(2)} MB`
+                                    : '--'}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </ResponsiveTable>
                     </Box>
+
+                    <Pagination
+                      total={sortedLocalStocks.length}
+                      pageSize={stockPageSize}
+                      page={stockPage}
+                      onPageChange={setStockPage}
+                      allowPageSizeChange
+                      onPageSizeChange={size => {
+                        setStockPageSize(size);
+                        setStockPage(0);
+                      }}
+                    />
                   </Box>
                 )}
               </Box>
@@ -1163,6 +1338,8 @@ export default function DataManagementPage() {
           </Box>
         </CardContent>
       </Card>
+
+      <Box sx={{ height: BOTTOM_NAV_CONTENT_PADDING, display: { xs: 'block', md: 'none' } }} aria-hidden="true" />
     </Box>
   );
 }

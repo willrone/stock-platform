@@ -1,3 +1,31 @@
+/**
+ * 任务列表接口返回的指标摘要（后端 `extract_result_summary` 产出）。
+ *
+ * 列表接口默认 `exclude_result=True`，因此 **`result` / `results` 大字段不存在**，
+ * 只有这个精简摘要可用。前端读取回测指标必须优先读 `result_summary`。
+ */
+export interface TaskResultSummary {
+  total_return?: number;
+  annualized_return?: number;
+  sharpe_ratio?: number;
+  max_drawdown?: number;
+  total_trades?: number;
+  win_rate?: number;
+  volatility?: number;
+  profit_factor?: number;
+  final_value?: number;
+  /**
+   * 净值曲线（后端可选提供）。缺失时 UI 必须优雅降级为「—」，
+   * 不得用任何占位数字伪造曲线。
+   */
+  nav_history?: Array<{ date: string; value: number }>;
+  /**
+   * 年化换手次数（次/年）。后端可选提供，缺失时降级为「—」。
+   */
+  turnover?: number;
+  [key: string]: unknown;
+}
+
 export interface Task {
   task_id: string;
   task_name: string;
@@ -12,6 +40,8 @@ export interface Task {
   error_message?: string;
   result?: any;
   backtest_results?: any;
+  /** 列表接口提供的指标摘要（P0-03 的正确数据源） */
+  result_summary?: TaskResultSummary | null;
   config?: {
     backtest_config?: {
       strategy_name?: string;

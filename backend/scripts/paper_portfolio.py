@@ -27,8 +27,11 @@
 输出:
   data/paper/<strategy>_holdings.json   每条线的持仓 + 现金
   data/paper/<strategy>_ledger.csv      每条线的逐笔账本
-  data/paper/portfolio.json             全部线的汇总（供前端/MCP 读）
-  frontend/public/paper-portfolio.json  前端静态 JSON
+  data/paper/portfolio.json             全部线的汇总（供后端 / MCP 读）
+
+注意：脚本**不再**输出到 frontend/public/ —— 静态文件无鉴权可下载，
+会泄露付费信号的持仓与逐笔明细。前端统一读受保护端点
+GET /api/v1/trading/signal（需 Bearer token）。
 """
 from __future__ import annotations
 
@@ -1067,10 +1070,11 @@ def main() -> None:
     with open(portfolio_path, "w") as fh:
         json.dump(summary, fh, ensure_ascii=False, indent=1)
 
-    frontend_public = os.path.join(ROOT, "frontend", "public")
-    os.makedirs(frontend_public, exist_ok=True)
-    with open(os.path.join(frontend_public, "paper-portfolio.json"), "w") as fh:
-        json.dump(summary, fh, ensure_ascii=False, indent=1)
+    # 【P1 · security】不再写 frontend/public/。
+    # public/ 目录下的静态文件**无需鉴权**即可 GET，等于把付费信号的
+    # 持仓/金额/逐笔明细免费公开（前端审计 P1-4 实测：curl 直接拿到 200）。
+    # 前端现在统一走受保护端点 GET /api/v1/trading/signal（需 token），
+    # 这里只保留 data/paper/ 下的受控副本供后端 / MCP 读取。
 
     print(f"\n{'='*60}", flush=True)
     print(f"{'strategy':<20}{'value':>14}{'cash':>12}{'pos':>6}{'buy':>5}{'sell':>6}")
@@ -1078,8 +1082,6 @@ def main() -> None:
         print(f"{r['strategy']:<20}¥{r['value']:>13,.0f}¥{r['cash']:>11,.0f}"
               f"{r['n_positions']:>6}{len(r['buys']):>5}{len(r['sells']):>6}")
     print(f"\n[saved] {os.path.join(PAPER_DIR, 'portfolio.json')}", flush=True)
-    print(f"[saved] {os.path.join(frontend_public, 'paper-portfolio.json')}",
-          flush=True)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { Alert, Box, Button, Typography } from '@mui/material';
 
 export default function Error({
   error,
@@ -14,35 +15,37 @@ export default function Error({
   }, [error]);
 
   return (
-    <div
-      style={{
+    <Box
+      sx={{
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
         minHeight: '60vh',
-        padding: 32,
+        p: 4,
         textAlign: 'center',
       }}
     >
-      <h1 style={{ fontSize: 24, fontWeight: 600, marginBottom: 8, color: '#d32f2f' }}>出错了</h1>
-      <p style={{ fontSize: 14, color: '#666', marginBottom: 24, maxWidth: 400 }}>
+      <Typography variant="h5" sx={{ fontWeight: 600, color: 'error.main', mb: 2 }}>
+        出错了
+      </Typography>
+      <Alert severity="error" sx={{ maxWidth: 480, textAlign: 'left' }}>
         {error.message || '页面加载时遇到错误'}
-      </p>
-      <button
+        {error.digest ? `（错误编号：${error.digest}）` : ''}
+      </Alert>
+      <Button
+        variant="contained"
         onClick={reset}
-        style={{
-          padding: '8px 24px',
-          fontSize: 14,
-          border: 'none',
-          borderRadius: 8,
-          backgroundColor: '#1976d2',
-          color: '#fff',
-          cursor: 'pointer',
+        sx={{
+          mt: 3,
+          '&:focus-visible': {
+            outline: '2px solid primary.main',
+            outlineOffset: 2,
+          },
         }}
       >
         重试
-      </button>
-    </div>
+      </Button>
+    </Box>
   );
 }

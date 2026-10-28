@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useAppStore } from '@/stores/useAppStore';
+import { normalizeUser, useAppStore } from '@/stores/useAppStore';
+import { apiRequest } from '@/services/api';
 import {
   Box,
   Card,
@@ -18,7 +19,15 @@ import {
 } from '@mui/material';
 
 // 用相对路径，走 Next.js rewrites 代理到后端（服务端代理，远程客户端可用）
-const API_BASE = '';
+// 【P0 · state】所有请求统一走 apiRequest（内部用相对路径 /api/v1 前缀），
+// 这里不再需要单独的 API_BASE 常量。
+
+/** 登录/注册响应（apiRequest 已归一信封，这里直接取 payload） */
+type AuthResponse = {
+  access_token?: string;
+  refresh_token?: string;
+  user?: Record<string, unknown>;
+};
 
 export default function LoginPage() {
   const router = useRouter();
@@ -33,34 +42,26 @@ export default function LoginPage() {
     setError('');
     const form = new FormData(e.currentTarget);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: form.get('email'),
-          password: form.get('password'),
-        }),
+      // 【P0 · state】走统一 apiRequest：后端 /auth/login 返回裸体或信封都能读
+      const data = await apiRequest.post<AuthResponse>('/auth/login', {
+        email: String(form.get('email') ?? ''),
+        password: String(form.get('password') ?? ''),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || '登录失败');
+      if (!data?.access_token) {
+        throw new Error('登录响应缺少 access_token');
+      }
       localStorage.setItem('access_token', data.access_token);
       if (data.refresh_token) {
         localStorage.setItem('refresh_token', data.refresh_token);
       }
-      localStorage.setItem('user_info', JSON.stringify(data.user));
-      // store 的 User 用 name 字段；后端返回 username —— 映射并带上 is_admin
-      // （管理端入口如「充值订单」按 is_admin 显示）
-      setUser({
-        id: data.user?.id || '',
-        name: data.user?.username || data.user?.name || data.user?.email || '',
-        email: data.user?.email || '',
-        role: data.user?.subscription_tier || 'free',
-        is_admin: Boolean(data.user?.is_admin),
-        subscription_tier: data.user?.subscription_tier,
-      });
+      if (data.user) localStorage.setItem('user_info', JSON.stringify(data.user));
+      // 统一归一：subscription_tier / is_admin 由 normalizeUser 处理，
+      // 不再手写映射（手写版本漏字段会让管理员入口不显示）
+      const normalized = normalizeUser(data.user ?? null);
+      if (normalized) setUser(normalized);
       router.push('/dashboard');
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : '登录失败');
     } finally {
       setLoading(false);
     }
@@ -72,26 +73,24 @@ export default function LoginPage() {
     setError('');
     const form = new FormData(e.currentTarget);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: form.get('email'),
-          username: form.get('username'),
-          password: form.get('password'),
-        }),
+      const data = await apiRequest.post<AuthResponse>('/auth/register', {
+        email: String(form.get('email') ?? ''),
+        username: String(form.get('username') ?? ''),
+        password: String(form.get('password') ?? ''),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || '注册失败');
+      if (!data?.access_token) {
+        throw new Error('注册响应缺少 access_token');
+      }
       localStorage.setItem('access_token', data.access_token);
       if (data.refresh_token) {
         localStorage.setItem('refresh_token', data.refresh_token);
       }
-      localStorage.setItem('user_info', JSON.stringify(data.user));
-      setUser(data.user);
+      if (data.user) localStorage.setItem('user_info', JSON.stringify(data.user));
+      const normalized = normalizeUser(data.user ?? null);
+      if (normalized) setUser(normalized);
       router.push('/dashboard');
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : '注册失败');
     } finally {
       setLoading(false);
     }

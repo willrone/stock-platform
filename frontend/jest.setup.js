@@ -63,15 +63,7 @@ jest.mock('echarts', () => ({
   registerTheme: jest.fn(),
 }));
 
-// Mock @heroui/react components that cause issues
-jest.mock('@heroui/react', () => {
-  const React = require('react');
-  
-  return {
-    ...jest.requireActual('@heroui/react'),
-    Tooltip: ({ children, content, ...props }) => React.createElement('div', { 'data-testid': 'tooltip', title: content }, children),
-    Progress: ({ value, ...props }) => React.createElement('div', { 'data-testid': 'progress', 'data-value': value }),
-    Tabs: ({ children, ...props }) => React.createElement('div', { 'data-testid': 'tabs' }, children),
-    Tab: ({ children, title, ...props }) => React.createElement('div', { 'data-testid': 'tab', 'data-title': title }, children),
-  };
-});
+/*
+ * 【P1 · design】HeroUI 已移除（全站 0 引用，只注入 128KB 死 CSS），
+ * 对应的 jest mock 同步删除 —— 否则 jest.mock('@heroui/react') 会因模块不存在而失败。
+ */

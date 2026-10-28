@@ -306,15 +306,10 @@ def main() -> None:
     with open(snap_path, "w") as fh:
         json.dump(snapshot, fh, ensure_ascii=False, indent=1)
 
-    # 同步给前端 /paper-signal 页面（Next static public JSON）
-    try:
-        frontend_public = os.path.join(ROOT, "frontend", "public")
-        os.makedirs(frontend_public, exist_ok=True)
-        with open(os.path.join(frontend_public, "paper-signal.json"), "w") as fh:
-            json.dump(snapshot, fh, ensure_ascii=False, indent=1)
-        print(f"[frontend] {os.path.join(frontend_public, 'paper-signal.json')}", flush=True)
-    except Exception as exc:
-        print(f"[frontend] 同步失败: {exc}", flush=True)
+    # 【P1 · security】不再同步到 frontend/public/。
+    # public/ 下的静态文件无需鉴权即可 GET，等于把付费信号的持仓与逐笔
+    # 明细免费公开（前端审计 P1-4）。前端现在读受保护端点
+    # GET /api/v1/trading/signal（需 Bearer token），口径与本快照一致。
 
     print(f"\n{'='*60}", flush=True)
     print(f"周频信号 {latest.date()} (周五) → 下周一执行", flush=True)
