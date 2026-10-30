@@ -66,7 +66,7 @@ import os
 import random
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -112,6 +112,9 @@ SLIPPAGE = 0.0001
 MIN_SAMPLES = 200
 #: 候选池上限（每类）。太多会让轮动噪声变大，也拖慢撮合。
 MAX_CANDIDATES_PER_CLASS = 12
+#: 窗口起点容忍度（自然日）：窗口起点常落在节假日/非交易日，ETF 数据实际从
+#: 下一个交易日起。严格比较 "> 窗口起点" 会把**全部**候选清空。
+START_TOLERANCE_DAYS = 7
 
 
 # --------------------------------------------------------------------------
@@ -225,6 +228,9 @@ def candidates_by_class(
 
     s_str = start.strftime("%Y-%m-%d")
     e_str = end.strftime("%Y-%m-%d")
+    # 起点容忍度：窗口起点常落在节假日/非交易日，ETF 数据实际从下一个交易日
+    # 才开始。严格比较 "> 窗口起点" 会把**全部**候选清空（2019-01-01 踩过）。
+    start_lim = (start + timedelta(days=START_TOLERANCE_DAYS)).strftime("%Y-%m-%d")
     by_class: Dict[str, List[Tuple[float, str]]] = {c: [] for c in L3_CLASSES}
 
     for code, meta in universe["etfs"].items():
@@ -239,8 +245,8 @@ def candidates_by_class(
         w = df[(df["date"] >= s_str) & (df["date"] <= e_str)]
         if len(w) < MIN_SAMPLES:
             continue
-        if str(w["date"].iloc[0]) > s_str:
-            continue  # 上市晚于窗口起点 → 不可用
+        if str(w["date"].iloc[0]) > start_lim:
+            continue  # 上市晚于窗口起点 + 容忍度 → 不可用
         amt = float((w["volume"].fillna(0) * w["close"] * 100).mean())
         if amt <= 0:
             continue
