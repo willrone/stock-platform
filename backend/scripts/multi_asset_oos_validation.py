@@ -165,10 +165,20 @@ def main() -> None:
         all_cls = sorted(class_navs)
         configs: Dict[str, Dict[str, Any]] = {}
 
-        # ★ 主窗口推荐配置：A股50% + 黄金/债券/商品/红利 各12.5%（剔除 cross_border）
+        # ★ 最终推荐配置：A股腿50% + 黄金/债券/商品 各16.67%
+        #   （由「按与 A 股腿相关性降序逐个剔除」的预先设定规则导出，两个窗口
+        #     独立收敛到同一集合；bond 为例外——剔除它在两窗口都负向，
+        #     因为它年化波动仅 3.3%、夏普 1.19~1.54，贡献低风险稳定收益）
+        RECOMMENDED = ["gold", "bond", "commodity"]
+        if all(c in class_navs for c in RECOMMENDED):
+            configs["★推荐_3类低相关"] = {
+                "classes": RECOMMENDED,
+                "scheme": "capital_equal",
+            }
+        # 参考：4 类版本（去 cross_border 但保留 dividend）
         if "cross_border" in class_navs:
             keep = [c for c in all_cls if c != "cross_border"]
-            configs["★推荐_去cross_border_4类"] = {
+            configs["参考_去cross_border_4类"] = {
                 "classes": keep,
                 "scheme": "capital_equal",
             }
