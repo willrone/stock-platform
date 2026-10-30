@@ -377,6 +377,10 @@ def main() -> None:
 
     # ── 机制：gold 权重漂移 ──
     print("\n[lh] 机制：买入持有下 gold 权重漂移", flush=True)
+    # 显式重载长窗口的价格：上面的 12 个子窗口各自调过 load_prices，
+    # 索引是全局单例。虽然 load_prices 现在改为合并（只增不减），这里再
+    # 重载一次做双保险 —— 这段是「机制解释」，算错会直接误导结论。
+    prices = L.load_prices(all_codes)
     legs = {}
     for c in classes:
         t = L.build_static_targets(cal, prices, {c: picks[c]}, {c: 1.0})

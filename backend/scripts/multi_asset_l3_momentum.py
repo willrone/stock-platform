@@ -152,7 +152,15 @@ def load_prices(codes: List[str]) -> Dict[str, Dict[str, Dict[str, float]]]:
             "open": [rows[d]["open"] for d in ds],
             "close": [rows[d]["close"] for d in ds],
         }
-    load_prices.index = idx  # type: ignore[attr-defined]
+    # ⚠️ 必须**合并**而不是替换。
+    # `simulate()` / `momentum()` 通过 `load_prices.index` 取价，而这个属性是
+    # 全局单例 —— 任何一次后续 `load_prices(别的代码)` 都会把它整体冲掉。
+    # 曾因此让长历史脚本的「机制」段（跑在 12 个子窗口之后）用错了价格索引，
+    # 算出错误的 gold 权重漂移（33.3%→40.2% vs 正确的 33.3%→59.1%）。
+    # 合并后索引只增不减，代码 → 数据的映射保持正确。
+    existing: Dict[str, Dict[str, Any]] = getattr(load_prices, "index", {})
+    existing.update(idx)
+    load_prices.index = existing  # type: ignore[attr-defined]
     return out
 
 
@@ -274,6 +282,7 @@ def simulate(
     class_of: Dict[str, str],
     class_weights: Dict[str, float],
     capital: float = 1_000_000.0,
+    snapshot_out: Optional[List[Tuple[str, Dict[str, float]]]] = None,
 ) -> Tuple[List[Tuple[str, float]], Dict[str, Any]]:
     """按调仓日目标权重撮合。
 
@@ -281,8 +290,22 @@ def simulate(
     - 成交价 = 该日 open；买入滑点上浮、卖出滑点下压
     - 佣金 0.03%（ETF 免印花税），按成交额扣
     - 未在目标里的持仓 → 全部卖出
+    - `snapshot_out` 若传入，追加 (日期, {code: 收盘市值}) —— 用于精确计算
+      **类别权重漂移**（比值法会把「相对表现」误当成「权重」）
     """
     idx = getattr(load_prices, "index", {})
+    # 护栏：目标里的每个代码都必须在价格索引里。索引是全局单例，
+    # 历史上曾被后续的 load_prices 调用整体冲掉 → 持仓被静默跳过、
+    # 净值悄悄算错。宁可当场报错也不要静默错数。
+    missing = set()
+    for _d, t in targets.items():
+        missing |= {c for c in t if c not in idx}
+    if missing:
+        raise SystemExit(
+            f"[simulate] ❌ 价格索引缺少 {len(missing)} 个代码: "
+            f"{sorted(missing)[:5]} —— load_prices.index 被冲掉了，"
+            f"请在 simulate 前重新 load_prices"
+        )
     cash = capital
     shares: Dict[str, float] = {}
     nav: List[Tuple[str, float]] = []
@@ -360,11 +383,16 @@ def simulate(
 
         # 收盘 mark-to-market
         val = cash
+        pos_vals: Dict[str, float] = {}
         for code, sh in shares.items():
             p = px(code, d, "close")
             if p is not None:
-                val += sh * p
+                v = sh * p
+                val += v
+                pos_vals[code] = v
         nav.append((d, val))
+        if snapshot_out is not None:
+            snapshot_out.append((d, pos_vals))
 
     rec = {
         "commission_total": round(total_cost, 2),

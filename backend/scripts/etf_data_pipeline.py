@@ -62,7 +62,7 @@ import os
 import sys
 import time
 from datetime import date, datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 ROOT = os.path.abspath(os.path.join(BACKEND_DIR, ".."))
@@ -85,13 +85,37 @@ SEGMENT_OVERLAP_DAYS = 10
 
 #: 资产类别 → 关键词（用于给 ETF 清单打标签）
 ASSET_CLASSES: Dict[str, List[str]] = {
-    "gold": ["黄金", "金ETF", "有色金属期货", "上海金"],
+    "gold": ["黄金", "金ETF", "上海金"],
     "bond": ["债ETF", "国债ETF", "国债", "政金债", "信用债", "短融", "同业存单", "城投债"],
     "cross_border": ["纳指", "标普", "恒生", "日经", "德国", "法国", "沙特", "东南亚", "海外", "全球", "亚太", "美国", "日本"],
     "dividend": ["红利", "低波", "低波动", "价值", "央企", "国企"],
-    "commodity": ["豆粕", "商品", "能源化工", "有色期货", "原油"],
+    "commodity": ["豆粕", "商品", "能源化工", "有色期货", "有色金属期货", "原油"],
     "a_share": ["沪深300", "中证500", "中证1000", "中证2000", "创业板", "科创", "上证50", "北证", "A50", "等权", "微盘", "中盘", "全指"],
 }
+
+#: 名称关键词 → 强制重定向到指定类别（**覆盖**关键词匹配的结果）。
+#: 规则按顺序匹配，**只应用第一条命中的**（从具体到宽泛）。
+#:
+#: 为什么需要：纯关键词匹配会把**资产性质完全不同**的 ETF 混进同一类，
+#: 而本项目的全部结论都建立在「类别 = 低相关资产」这个前提上。
+#:
+#: - 「黄金股 ETF」「黄金产业 ETF」跟踪的是**矿业公司股价**（股票 beta，
+#:   与 A 股腿高相关），不是金价。混进 gold 类会让 gold 腿的相关性假设失效。
+#: - 「有色金属**期货** ETF」跟踪**工业金属期货**（铜/铝/锌），属于商品。
+#: - 「有色金属**主题/矿业** ETF」跟踪的是**A股有色板块股票**，属于股票，
+#:   绝不能当商品 —— 它与 A 股腿高相关，混进 commodity 会直接毒化商品腿。
+#:
+#: 曾实测（2026-10-30）：159980 大成有色金属期货ETF 在两个窗口的成交额
+#: 排名都进入 commodity 前 3，却因为关键词 "有色金属期货" 被标成 gold；
+#: 而 26 只 "中证有色金属主题/矿业 ETF" 又会被宽泛的 "有色金属" 扫进来。
+CLASS_OVERRIDES: List[Tuple[List[str], Optional[str]]] = [
+    # 黄金股 / 黄金产业 → 单独一类（非 gold）
+    (["黄金股", "黄金产业"], "gold_equity"),
+    # 有色金属期货 → commodity
+    (["有色金属期货", "有色期货"], "commodity"),
+    # 有色金属主题/矿业（股票）→ a_share
+    (["有色金属", "有色矿业", "工业有色"], "a_share"),
+]
 
 
 def _to_market_code(code: str) -> str:
@@ -253,12 +277,27 @@ def load_existing(code: str) -> List[Dict[str, Any]]:
 
 
 def tag_asset_class(name: str) -> List[str]:
-    """按名称关键词打资产类别标签（一只 ETF 可多标签）。"""
+    """按名称关键词打资产类别标签（一只 ETF 可多标签）。
+
+    `CLASS_OVERRIDES` 里的规则**覆盖**关键词匹配：命中的关键词会把 ETF
+    从误判的类别（gold）里踢出，并归入正确类别。
+    """
     tags = []
     n = str(name)
     for cls, kws in ASSET_CLASSES.items():
         if any(k in n for k in kws):
             tags.append(cls)
+    for kws, target in CLASS_OVERRIDES:
+        if not any(k in n for k in kws):
+            continue
+        # 只应用第一条命中的规则（规则表按具体→宽泛排序）
+        if "gold" in tags:
+            tags.remove("gold")
+        if "commodity" in tags and target != "commodity":
+            tags.remove("commodity")
+        if target and target not in tags:
+            tags.append(target)
+        break
     return tags
 
 
@@ -297,6 +336,44 @@ def select_pool(universe: Dict[str, Any], classes: List[str]) -> List[str]:
     return sorted(picked)
 
 
+def retag_universe() -> Dict[str, Any]:
+    """**离线**重打资产类别标签：读现有 etf_universe.json，用当前的
+    `tag_asset_class` 重算 tags 并写回。
+
+    为什么需要：`data/` 在 .gitignore 里，universe json 不进版本库。
+    改了分类逻辑（`CLASS_OVERRIDES`）之后必须有一条**可复现**的离线命令
+    把已有清单的标签刷新，否则新克隆的仓库仍带着旧标签（且旧标签里
+    gold 类混着黄金股 ETF 和有色金属期货 ETF）。
+
+    不需要网络：ETF 清单和名称都不变，只重算标签。
+    """
+    if not os.path.exists(UNIVERSE_PATH):
+        raise SystemExit(f"❌ 找不到 {UNIVERSE_PATH}，先跑一次 build_universe")
+    with open(UNIVERSE_PATH, encoding="utf-8") as fh:
+        payload = json.load(fh)
+    changed = []
+    for code, meta in payload.get("etfs", {}).items():
+        old = list(meta.get("tags", []))
+        new = tag_asset_class(meta.get("name", ""))
+        if sorted(old) != sorted(new):
+            changed.append((code, meta.get("name", ""), old, new))
+        meta["tags"] = new
+    payload["asset_classes"] = ASSET_CLASSES
+    payload["class_overrides"] = [
+        {"keywords": list(kws), "target": target} for kws, target in CLASS_OVERRIDES
+    ]
+    payload.setdefault("notes", {})["retag"] = (
+        "离线重打标签：黄金股/黄金产业ETF→gold_equity；有色金属期货ETF→commodity；"
+        "有色金属主题/矿业股票ETF→a_share"
+    )
+    with open(UNIVERSE_PATH, "w", encoding="utf-8") as fh:
+        json.dump(payload, fh, ensure_ascii=False, indent=1)
+    print(f"[retag] {len(changed)} 个 ETF 类别发生变化")
+    for code, name, old, new in changed:
+        print(f"  {code} {name:36s} {old} → {new}")
+    return payload
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--codes", default="", help="逗号分隔的 6 位 ETF 代码")
@@ -306,7 +383,13 @@ def main() -> None:
     ap.add_argument("--start", default="2019-01-01")
     ap.add_argument("--end", default=date.today().isoformat())
     ap.add_argument("--limit-per-class", type=int, default=0, help="每类最多抓几只（0=不限）")
+    ap.add_argument("--retag", action="store_true",
+                    help="离线重打资产类别标签（不联网、不抓数据）")
     args = ap.parse_args()
+
+    if args.retag:
+        retag_universe()
+        return
 
     os.makedirs(PARQUET_DIR, exist_ok=True)
     start_date = datetime.strptime(args.start, "%Y-%m-%d").date()
