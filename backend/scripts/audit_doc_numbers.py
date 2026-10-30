@@ -53,6 +53,9 @@ ART = {
     'l3o': J('multi_asset_l3_oos.json'),
     'lh': J('multi_asset_long_history.json'),
     'ctrl': J('multi_asset_controls.json'),
+    'xc': J('multi_asset_xclass.json'),
+    'xco': J('multi_asset_xclass_oos.json'),
+    'xclh': J('multi_asset_xclass_long_history.json'),
 }
 
 
@@ -160,6 +163,62 @@ def build_anchors():
         ('L3_MOMENTUM', 13, 'top3 双周再平衡', '两窗口下界', ('j', 'l3o', 'results.static_top3_rebal_biweekly.combined_sharpe')),
         ('L3_MOMENTUM', 13, 'top1 每月再平衡', '两窗口下界', ('j', 'l3o', 'results.static_top1_rebal_monthly.combined_sharpe')),
     ]
+    # ── XCLASS_MOMENTUM 表0/1/2: P1 跨类动量 ──
+    A += [
+        ('XCLASS_MOMENTUM', 0, 'momentum 族均值（24 配置）', 'main', ('l3fam_mean', 'l3', 'mom')),
+        ('XCLASS_MOMENTUM', 0, 'momentum 族均值（24 配置）', 'oos', ('l3fam_mean', 'l3o', 'mom')),
+        ('XCLASS_MOMENTUM', 0, 'random 族均值（18 次运行）', 'main', ('l3fam_mean', 'l3', 'rand')),
+        ('XCLASS_MOMENTUM', 0, 'random 族均值（18 次运行）', 'oos', ('l3fam_mean', 'l3o', 'rand')),
+        ('XCLASS_MOMENTUM', 0, 'random L60 K1 月度均值 vs static top1 再平衡', 'main', ('l3_delta', 'l3')),
+        ('XCLASS_MOMENTUM', 0, 'random L60 K1 月度均值 vs static top1 再平衡', 'oos', ('l3_delta', 'l3o')),
+        ('XCLASS_MOMENTUM', 2, 'mom_L60_top1', 'main', ('j', 'xc', 'results.xclass_mom_L60_top1.combined_sharpe')),
+        ('XCLASS_MOMENTUM', 2, 'mom_L60_top1', 'oos', ('j', 'xco', 'results.xclass_mom_L60_top1.combined_sharpe')),
+        ('XCLASS_MOMENTUM', 2, 'mom_L60_top1', '随机均值(main)', ('mean_rand', 'xc', 'top1')),
+        ('XCLASS_MOMENTUM', 2, 'mom_L60_top1', '随机均值(oos)', ('mean_rand', 'xco', 'top1')),
+        ('XCLASS_MOMENTUM', 2, 'mom_L60_top2', 'main', ('j', 'xc', 'results.xclass_mom_L60_top2.combined_sharpe')),
+        ('XCLASS_MOMENTUM', 2, 'mom_L60_top2', 'oos', ('j', 'xco', 'results.xclass_mom_L60_top2.combined_sharpe')),
+        ('XCLASS_MOMENTUM', 2, 'mom_L60_top2', '随机均值(main)', ('mean_rand', 'xc', 'top2')),
+        ('XCLASS_MOMENTUM', 2, 'mom_L60_top2', '随机均值(oos)', ('mean_rand', 'xco', 'top2')),
+        ('XCLASS_MOMENTUM', 2, 'mom_L60_weighted', 'main', ('j', 'xc', 'results.xclass_mom_L60_weighted.combined_sharpe')),
+        ('XCLASS_MOMENTUM', 2, 'mom_L60_weighted', 'oos', ('j', 'xco', 'results.xclass_mom_L60_weighted.combined_sharpe')),
+        ('XCLASS_MOMENTUM', 2, 'mom_L60_weighted', '随机均值(main)', ('mean_rand', 'xc', 'weighted')),
+        ('XCLASS_MOMENTUM', 2, 'mom_L60_weighted', '随机均值(oos)', ('mean_rand', 'xco', 'weighted')),
+        ('XCLASS_MOMENTUM', 2, 'mom_L120_top1', 'main', ('j', 'xc', 'results.xclass_mom_L120_top1.combined_sharpe')),
+        ('XCLASS_MOMENTUM', 2, 'mom_L120_top1', 'oos', ('j', 'xco', 'results.xclass_mom_L120_top1.combined_sharpe')),
+        ('XCLASS_MOMENTUM', 2, 'mom_L120_top2', 'main', ('j', 'xc', 'results.xclass_mom_L120_top2.combined_sharpe')),
+        ('XCLASS_MOMENTUM', 2, 'mom_L120_top2', 'oos', ('j', 'xco', 'results.xclass_mom_L120_top2.combined_sharpe')),
+        ('XCLASS_MOMENTUM', 2, 'mom_L120_weighted', 'main', ('j', 'xc', 'results.xclass_mom_L120_weighted.combined_sharpe')),
+        ('XCLASS_MOMENTUM', 2, 'mom_L120_weighted', 'oos', ('j', 'xco', 'results.xclass_mom_L120_weighted.combined_sharpe')),
+        ('XCLASS_MOMENTUM', 2, 'mom_L250_top1', 'main', ('j', 'xc', 'results.xclass_mom_L250_top1.combined_sharpe')),
+        ('XCLASS_MOMENTUM', 2, 'mom_L250_top1', 'oos', ('j', 'xco', 'results.xclass_mom_L250_top1.combined_sharpe')),
+        ('XCLASS_MOMENTUM', 2, 'mom_L250_top2', 'main', ('j', 'xc', 'results.xclass_mom_L250_top2.combined_sharpe')),
+        ('XCLASS_MOMENTUM', 2, 'mom_L250_top2', 'oos', ('j', 'xco', 'results.xclass_mom_L250_top2.combined_sharpe')),
+        ('XCLASS_MOMENTUM', 2, 'mom_L250_weighted', 'main', ('j', 'xc', 'results.xclass_mom_L250_weighted.combined_sharpe')),
+        ('XCLASS_MOMENTUM', 2, 'mom_L250_weighted', 'oos', ('j', 'xco', 'results.xclass_mom_L250_weighted.combined_sharpe')),
+    ]
+    # ── XCLASS_MOMENTUM 表3: 随机对照离散度 ──
+    A += [
+        ('XCLASS_MOMENTUM', 3, 'rand_top1', 'main 均值', ('mean_rand', 'xc', 'top1')),
+        ('XCLASS_MOMENTUM', 3, 'rand_top1', 'oos 均值', ('mean_rand', 'xco', 'top1')),
+        ('XCLASS_MOMENTUM', 3, 'rand_top2', 'main 均值', ('mean_rand', 'xc', 'top2')),
+        ('XCLASS_MOMENTUM', 3, 'rand_top2', 'oos 均值', ('mean_rand', 'xco', 'top2')),
+        ('XCLASS_MOMENTUM', 3, 'rand_weighted', 'main 均值', ('mean_rand', 'xc', 'weighted')),
+        ('XCLASS_MOMENTUM', 3, 'rand_weighted', 'oos 均值', ('mean_rand', 'xco', 'weighted')),
+        ('XCLASS_MOMENTUM', 3, '基线', 'main 均值', ('j', 'xc', 'results.base_top3_rebal_monthly.combined_sharpe')),
+        ('XCLASS_MOMENTUM', 3, '基线', 'oos 均值', ('j', 'xco', 'results.base_top3_rebal_monthly.combined_sharpe')),
+    ]
+    # ── XCLASS_MOMENTUM 表4: 长历史独立审判 ──
+    A += [
+        ('XCLASS_MOMENTUM', 4, 'baseline_fixed_equal', '袖套夏普', ('j', 'xclh', 'results.baseline_fixed_equal.sleeve_sharpe')),
+        ('XCLASS_MOMENTUM', 4, 'mom_L60_top2', '袖套夏普', ('j', 'xclh', 'results.mom_L60_top2.sleeve_sharpe')),
+        ('XCLASS_MOMENTUM', 4, 'mom_L60_weighted', '袖套夏普', ('j', 'xclh', 'results.mom_L60_weighted.sleeve_sharpe')),
+        ('XCLASS_MOMENTUM', 4, 'mom_L250_top2', '袖套夏普', ('j', 'xclh', 'results.mom_L250_top2.sleeve_sharpe')),
+        ('XCLASS_MOMENTUM', 4, 'mom_L250_weighted', '袖套夏普', ('j', 'xclh', 'results.mom_L250_weighted.sleeve_sharpe')),
+        ('XCLASS_MOMENTUM', 4, 'rand_top2（6 种子均值）', '袖套夏普', ('j', 'xclh', 'random_summary.top2.mean')),
+        ('XCLASS_MOMENTUM', 4, 'rand_weighted（6 种子均值）', '袖套夏普', ('j', 'xclh', 'random_summary.weighted.mean')),
+        ('XCLASS_MOMENTUM', 4, 'mom_L250_top2', '滚动504日夏普胜率', ('j', 'xclh', 'results.mom_L250_top2.rolling_sharpe_504d.sharpe_win_rate')),
+        ('XCLASS_MOMENTUM', 4, 'mom_L60_top2', '滚动504日夏普胜率', ('j', 'xclh', 'results.mom_L60_top2.rolling_sharpe_504d.sharpe_win_rate')),
+    ]
     # ── L3_MOMENTUM 表14: §三 推荐配置表 ──
     A += [
         ('L3_MOMENTUM', 14, '夏普', 'main（推导）', F1M),
@@ -223,9 +282,30 @@ def find_cell(header_cells, data_cells, row_label, col_header):
     return hit[ci], None
 
 
+SEEDS = (20261030, 7, 99, 1234, 555, 8888)
+
+
 def resolve(spec):
     if spec[0] == 'lit':
         return spec[1]
+    if spec[0] == 'l3fam_mean':
+        # L3 产物里某族（mom_/random_）所有 combined_sharpe 的均值
+        art, fam = spec[1], spec[2]
+        pre = 'mom_' if fam == 'mom' else 'random_'
+        vals = [dig(ART[art], f'results.{k}.combined_sharpe')
+                for k in ART[art]['results'] if k.startswith(pre)]
+        return sum(vals) / len(vals)
+    if spec[0] == 'l3_delta':
+        # random L60 K1 月度均值 - static_top1_rebal_monthly
+        art = spec[1]
+        vals = [dig(ART[art], f'results.random_L60_K1_monthly_s{s}.combined_sharpe')
+                for s in SEEDS]
+        return sum(vals) / len(vals) - dig(ART[art], 'results.static_top1_rebal_monthly.combined_sharpe')
+    if spec[0] == 'mean_rand':
+        # 随机对照某个分组的夏普均值（产物路径由 art 决定）
+        art, grp = spec[1], spec[2]
+        vals = [dig(ART[art], f'results.xclass_rand_{grp}_s{s}.combined_sharpe') for s in SEEDS]
+        return sum(vals) / len(vals)
     return dig(ART[spec[1]], spec[2])
 
 
@@ -263,6 +343,9 @@ def check(texts, anchors):
             continue
         want = resolve(spec)
         cands = [want, want * 100]
+        # 单元格写成百分比（0.1848 → "18.5%"）时，用 0.05 的绝对容差（四舍五入到 0.1%）
+        if '%' in cell and abs(got - want * 100) <= 0.05:
+            continue
         if not any(abs(got - c) <= TOL for c in cands):
             problems.append(
                 f'{doc}[表{tidx}] 「{row_label}」×「{col_hdr}」= {got}，'
