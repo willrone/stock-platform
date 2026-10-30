@@ -1,0 +1,78 @@
+{
+  "generated_at": "2026-10-31T03:37:25",
+  "git_commit": "353dd426",
+  "data_dir": "data/backtest",
+  "files": {
+    "ALL_real_lag1_v2.json": {
+      "sha256": "efb254805144f802e57dcbaa08030cab21c71cb6c4a169c276b3cc671bc1b0cf",
+      "bytes": 8326,
+      "mtime": "2026-10-28T11:45:21"
+    },
+    "multi_asset_l3.json": {
+      "sha256": "858bc3ea500a6e089013b46d45c969054ab73204a55cc1b3a30f4fead7f3383f",
+      "bytes": 1062264,
+      "mtime": "2026-10-30T21:10:12"
+    },
+    "multi_asset_l3_oos.json": {
+      "sha256": "c4bd323b50d48b21b7c8498778d7e0cf0682a64fe6fad5998a51d0e762283845",
+      "bytes": 721560,
+      "mtime": "2026-10-30T21:11:43"
+    },
+    "multi_asset_p2_main.json": {
+      "sha256": "3ad3cac4615d0cd082594321d697331b709408fd3729442bc0617d12f2d7983e",
+      "bytes": 241171,
+      "mtime": "2026-10-31T02:24:34"
+    },
+    "multi_asset_p2_oos.json": {
+      "sha256": "66649da0c3570db46eeac0282470e139bf8faa67838ec027849d7f13269a0160",
+      "bytes": 166143,
+      "mtime": "2026-10-31T02:25:26"
+    },
+    "multi_asset_p2_long.json": {
+      "sha256": "c13c8655a776c524540beb68f2fe9556bb3fb418c50bca8452dca1aef12c2e0e",
+      "bytes": 533321,
+      "mtime": "2026-10-31T02:26:51"
+    },
+    "multi_asset_p2_attrib.json": {
+      "sha256": "9e046a8ad6e42dd32172dba501fdf943f917a044928f533f7a092bcd3e33fa69",
+      "bytes": 2821,
+      "mtime": "2026-10-31T02:29:08"
+    },
+    "multi_asset_p3_main.json": {
+      "sha256": "a6eafa3e710f3ff17bb5cc15dbfd93a817d18a4af60184fd9f6767c12065d5ac",
+      "bytes": 165071,
+      "mtime": "2026-10-31T03:33:58"
+    },
+    "multi_asset_p3_oos.json": {
+      "sha256": "1007b4024b8870a4c741763a1dd33a33e0eec5e2c0c2b42b031ec49c7395244a",
+      "bytes": 128886,
+      "mtime": "2026-10-31T03:34:02"
+    },
+    "multi_asset_p3_long.json": {
+      "sha256": "5281687c13c8520c5bc3b2b6f96f37f2ca48bb90968e2f41522a1b9195e9185f",
+      "bytes": 48286,
+      "mtime": "2026-10-31T03:32:10"
+    },
+    "p3_recon.json": {
+      "sha256": "da5d6e313c052f5e965991d94cbc8adf0fedffac87d42787fadedc81d7e836d0",
+      "bytes": 55438,
+      "mtime": "2026-10-31T02:48:30"
+    },
+    "p3_bond_recon.json": {
+      "sha256": "c97b1e674bebc1596d471b0186171ec81689e59029c5c4bac561d2c2e1ca4eb7",
+      "bytes": 3027,
+      "mtime": "2026-10-31T02:50:23"
+    },
+    "multi_asset_p4_main.json": {
+      "sha256": "9d8c49f2632440121bb5adee92e7ee0977b46de0bbc564caffb4396f5ced749a",
+      "bytes": 852942,
+      "mtime": "2026-10-31T03:34:08"
+    },
+    "multi_asset_p4_oos.json": {
+      "sha256": "31554150aebf6f2437496f094f9f742f817d522c253edc44a0ff4325a442cf26",
+      "bytes": 575595,
+      "mtime": "2026-10-31T03:34:11"
+    }
+  },
+  "missing": []
+}

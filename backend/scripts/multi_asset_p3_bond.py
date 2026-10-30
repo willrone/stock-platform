@@ -475,18 +475,34 @@ def main() -> None:
         combined = merge_by_date([a_nav, sleeve_nav], [0.5, 0.5])
         cs = sharpe(combined)
         navs[label] = combined
-        # 剔 gold 口径：去掉 gold 类后重新缩放权重（中性口径，留出的仓位归零）
+        # 剔 gold 口径：去掉 gold 类后，把 gold 的仓位**重新分配给剩余两类并补满**
+        # （scale = len(classes)/len(ng)）。
+        # ⚠️ 旧公式乘的是 (1/len(classes))/(1/len(ng)) = 2/3 → 袖套仓位只剩 4/9，
+        #    既不是"gold 变现金"也不是"补满仓" → 夏普与满仓口径不可比。已修正。
         ng = [c for c in classes if c != "gold"]
-        ng_t: Dict[str, Dict[str, float]] = {}
-        for d, t in tg.items():
-            nt = {code: w * (1.0 / len(classes)) / (1.0 / len(ng))
-                  for code, w in t.items() if c_of.get(code) != "gold"}
-            if nt:
-                ng_t[d] = nt
-        ng_sleeve, _ = L3.simulate(calendar, prices, ng_t, c_of,
-                                   {c: 1.0 / len(ng) for c in ng})
-        ng_comb = merge_by_date([a_nav, ng_sleeve], [0.5, 0.5]) if ng_sleeve else []
-        sharpe_ex_gold = round(sharpe(ng_comb), 4) if ng_comb else None
+        sharpe_ex_gold: Optional[float] = None
+        if ng and len(ng) < len(classes):
+            ng_t: Dict[str, Dict[str, float]] = {}
+            for d, t in tg.items():
+                # 按**当日 gold 实际权重**归一（动态权重下不能写死 1/len(classes)）；
+                # gold 的份额按原比例分给剩余类 → 总仓位补满 1，夏普与满仓口径可比。
+                rest_w = sum(w for code, w in t.items() if c_of.get(code) != "gold")
+                if rest_w <= 1e-12:
+                    continue
+                scale = 1.0 / rest_w
+                nt = {code: w * scale for code, w in t.items()
+                      if c_of.get(code) != "gold"}
+                if nt:
+                    ng_t[d] = nt
+            # 不变量：剔 gold 后每个调仓日的总权重必须为 1（否则仓位变化污染夏普）
+            for _d, _t in ng_t.items():
+                if abs(sum(_t.values()) - 1.0) > 1e-6:
+                    raise SystemExit(
+                        f"[p3] ❌ 剔 gold 后权重和 {sum(_t.values())} != 1（{_d}）")
+            ng_sleeve, _ = L3.simulate(calendar, prices, ng_t, c_of,
+                                       {c: 1.0 / len(ng) for c in ng})
+            ng_comb = merge_by_date([a_nav, ng_sleeve], [0.5, 0.5]) if ng_sleeve else []
+            sharpe_ex_gold = round(sharpe(ng_comb), 4) if ng_comb else None
 
         # 每类单独与 A 股腿的 ρ
         cls_rho: Dict[str, Any] = {}

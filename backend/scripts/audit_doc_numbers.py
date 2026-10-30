@@ -32,6 +32,7 @@ import sys
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 BACK = os.path.join(ROOT, 'data', 'backtest')
 DOCS = os.path.join(ROOT, 'docs', 'backtest')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # artifact_manifest 同目录
 
 
 def J(name):
@@ -60,11 +61,23 @@ ART = {
     'p2o': J('multi_asset_p2_oos.json'),
     'p2l': J('multi_asset_p2_long.json'),
     'p2a': J('multi_asset_p2_attrib.json'),
+    'p4m': J('multi_asset_p4_main.json'),
+    'p4o': J('multi_asset_p4_oos.json'),
+    'p4l': J('multi_asset_p4_long.json'),
+    'p5': J('p5_class_audit.json'),
     'p3m': J('multi_asset_p3_main.json'),
     'p3o': J('multi_asset_p3_oos.json'),
     'p3l': J('multi_asset_p3_long.json'),
     'p3br': J('p3_bond_recon.json'),
 }
+
+
+def safe_dig(art, path):
+    """取不到就返回 None（而不是抛 KeyError）——用于「该字段可能不存在」的锚点。"""
+    try:
+        return dig(ART[art], path)
+    except (KeyError, TypeError, IndexError):
+        return None
 
 
 def norm(s):
@@ -454,6 +467,102 @@ def build_anchors():
         if _old:
             A.append((P3DOC, 16, _lbl, '旧定稿', ('j', _art, f'results.{_old}.{_fld}')))
         A.append((P3DOC, 16, _lbl, '新定稿', ('j', _art, f'results.{_new}.{_fld}')))
+
+    # ── P4 · 类间配权（表格 2/3/4/5/6/7/9）──
+    P4DOC = 'P4_CLASS_WEIGHT'
+    P4_CANDS = ['base_equal', 'invvol', 'invvol_nocap', 'minvol',
+                 'riskparity', 'lowcorr', 'sharpew']
+    P4_NAMES = {
+        'base_equal': '类间等权（定稿基线）',
+        'invvol': '逆波动率 cap40/floor8',
+        'invvol_nocap': '逆波动率 无 cap',
+        'minvol': '100% 给最低波动类',
+        'riskparity': '风险平价',
+        'lowcorr': '∝(1−ρ(类,A股腿))',
+        'sharpew': '∝max(夏普,0)',
+    }
+    _p4_cols = [
+        ('组合夏普', 'combined_sharpe', None),
+        ('Δ基线', None, 'p4delta'),
+        ('剔 gold 夏普', 'sharpe_ex_gold', None),
+        ('ρ(袖套,A股腿)', 'corr_sleeve_ashare', None),
+        ('最大回撤', 'combined_maxdd', None),
+        ('收益', 'combined_return', None),
+        ('换手', 'cost.turnover_ratio', 'j2'),
+    ]
+    for _tidx, _art in ((2, 'p4m'), (4, 'p4o')):
+        for _k in P4_CANDS:
+            _lbl = f"`{_k}` {P4_NAMES[_k]}"
+            for _col, _fld, _spec in _p4_cols:
+                if _spec == 'j2':
+                    A.append((P4DOC, _tidx, _lbl, _col,
+                              ('j2', _art, f'results.{_k}.{_fld}')))
+                elif _spec:
+                    A.append((P4DOC, _tidx, _lbl, _col, (_spec, _art, _k)))
+                else:
+                    A.append((P4DOC, _tidx, _lbl, _col,
+                              ('j', _art, f'results.{_k}.{_fld}')))
+            # 504 日胜率：base_equal 是参照系(None)；oos 窗口不足 504 天(None)
+            if safe_dig(_art, f'results.{_k}.roll_win_504') is not None:
+                A.append((P4DOC, _tidx, _lbl, '504 日胜率',
+                          ('j', _art, f'results.{_k}.roll_win_504')))
+    for _tidx, _art in ((3, 'p4m'), (5, 'p4o')):
+        for _lbl, _pre in (('固定权重 `rand_s*`', 'rand_s'),
+                           ('动态权重 `randdyn_s*`', 'randdyn_s')):
+            A.append((P4DOC, _tidx, _lbl, 'n', ('p4fam', _art, _pre, 'n')))
+            A.append((P4DOC, _tidx, _lbl, '均值', ('p4fam', _art, _pre, 'mean')))
+            A.append((P4DOC, _tidx, _lbl, '范围', ('p4fam', _art, _pre, 'min')))
+    _p4l_cols = [
+        ('袖套夏普', 'sleeve_sharpe', None),
+        ('Δ基线', None, 'p4ldelta'),
+        ('袖套波动', 'sleeve_vol', None),
+        ('ρ(袖套,510300)', 'corr_sleeve_proxy', None),
+    ]
+    for _k in P4_CANDS:
+        _lbl = f"`{_k}` {P4_NAMES[_k]}"
+        for _col, _fld, _spec in _p4l_cols:
+            if _spec:
+                A.append((P4DOC, 6, _lbl, _col, (_spec, 'p4l', _k)))
+            else:
+                A.append((P4DOC, 6, _lbl, _col, ('j', 'p4l', f'results.{_k}.{_fld}')))
+        if safe_dig('p4l', f'results.{_k}.roll_win_504') is not None:
+            A.append((P4DOC, 6, _lbl, '504 日胜率',
+                      ('j', 'p4l', f'results.{_k}.roll_win_504')))
+    for _lbl, _pre in (('固定权重 `rand_s*`', 'rand_s'),
+                       ('动态权重 `randdyn_s*`', 'randdyn_s')):
+        A.append((P4DOC, 7, _lbl, 'n', ('p4fam', 'p4l', _pre, 'n')))
+        A.append((P4DOC, 7, _lbl, '袖套夏普均值', ('p4fam', 'p4l', _pre, 'mean')))
+        A.append((P4DOC, 7, _lbl, '范围', ('p4fam', 'p4l', _pre, 'min')))
+    for _lbl, _k in (('类间等权', 'base_equal'), ('逆波动率', 'invvol'),
+                     ('逆波动率 无 cap', 'invvol_nocap'),
+                     ('100% 最低波动类', 'minvol')):
+        A.append((P4DOC, 9, _lbl, 'bond 平均权重',
+                  ('j', 'p4m', f'results.{_k}.avg_class_weight.bond')))
+        A.append((P4DOC, 9, _lbl, '袖套波动', ('j', 'p4m', f'results.{_k}.sleeve_vol')))
+        A.append((P4DOC, 9, _lbl, 'ρ(袖套,A股腿)',
+                  ('j', 'p4m', f'results.{_k}.corr_sleeve_ashare')))
+        A.append((P4DOC, 9, _lbl, '组合收益', ('j', 'p4m', f'results.{_k}.combined_return')))
+        A.append((P4DOC, 9, _lbl, '组合夏普', ('j', 'p4m', f'results.{_k}.combined_sharpe')))
+
+    # ── P5 · 分类审计（gold 表 0/1/2，commodity 表 3/4/5）──
+    P5DOC = 'P5_CLASS_AUDIT'
+    for _cls, _off in (('gold', 0), ('commodity', 3)):
+        _ref_col = 'ρ(纯金基准)' if _cls == 'gold' else 'ρ(有色基准)'
+        for _w, _wi in (('w2020', 0), ('oos_2021', 1), ('main_2023', 2)):
+            _tidx = _off + _wi
+            for _row in ART['p5']['windows'][_w]['classes'][_cls]['rows']:
+                _c = _row['code']
+                _base = f"windows.{_w}.classes.{_cls}.by_code.{_c}"
+                if _row.get('rho_ref') is not None:
+                    A.append((P5DOC, _tidx, _c, _ref_col, ('j', 'p5', f'{_base}.rho_ref')))
+                if _row.get('rho_proxy') is not None:
+                    A.append((P5DOC, _tidx, _c, 'ρ(A股代理)',
+                              ('j', 'p5', f'{_base}.rho_proxy')))
+                if _row.get('vol') is not None:
+                    A.append((P5DOC, _tidx, _c, '年化波动', ('j', 'p5', f'{_base}.vol')))
+                if _row.get('turnover'):
+                    A.append((P5DOC, _tidx, _c, '窗口前 120 日日均成交额',
+                              ('jwan', 'p5', f'{_base}.turnover')))
     return A
 
 
@@ -544,6 +653,34 @@ def resolve(spec):
     if spec[0] == 'jyi':
         # 成交额（亿元），保留 3 位小数
         return round(dig(ART[spec[1]], spec[2]) / 1e8, 3)
+    if spec[0] == 'j2':
+        # 文档按 2 位小数展示的量（换手等）—— 期望值同样取到 2 位再比
+        return round(dig(ART[spec[1]], spec[2]), 2)
+    if spec[0] == 'p4delta':
+        # P4 组合夏普相对 base_equal 的差
+        art, key = spec[1], spec[2]
+        return (dig(ART[art], f'results.{key}.combined_sharpe')
+                - dig(ART[art], 'results.base_equal.combined_sharpe'))
+    if spec[0] == 'p4ldelta':
+        # P4 袖套夏普相对 base_equal 的差
+        art, key = spec[1], spec[2]
+        return (dig(ART[art], f'results.{key}.sleeve_sharpe')
+                - dig(ART[art], 'results.base_equal.sleeve_sharpe'))
+    if spec[0] == 'p4fam':
+        # P4 random 族统计：art, prefix('rand_s'|'randdyn_s'), stat('mean'|'max'|'min'|'n')
+        art, pre, stat = spec[1], spec[2], spec[3]
+        field = 'sleeve_sharpe' if art == 'p4l' else 'combined_sharpe'
+        vals = [dig(ART[art], f'results.{k}.{field}')
+                for k in ART[art]['results'] if k.startswith(pre)]
+        if stat == 'n':
+            return len(vals)
+        if stat == 'mean':
+            return sum(vals) / len(vals)
+        if stat == 'max':
+            return max(vals)
+        if stat == 'min':
+            return min(vals)
+        raise SystemExit(f'[audit] 未知 p4fam stat {stat}')
     if spec[0] == 'jmin':
         # 两个产物值取小者
         return min(dig(ART[spec[1]], spec[2]), dig(ART[spec[3]], spec[4]))
@@ -628,7 +765,23 @@ def scan_stale(texts):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--neg', action='store_true', help='自检：注入错误验证审计能抓到')
+    ap.add_argument('--skip-manifest', action='store_true',
+                    help='跳过产物指纹校验（仅在刚重跑完实验、清单待刷新时用）')
     args = ap.parse_args()
+
+    # ── 产物指纹校验（必须在数字核对之前）──
+    # data/ 被 gitignore → 产物没有版本控制。若某个迟到的后台进程覆盖了 JSON，
+    # 下面的数字核对会"成功"核对出一份已被改过的产物，静默失效。
+    # 所以先验 sha256，产物被动过就直接退出。
+    if not args.skip_manifest:
+        import artifact_manifest
+        print('=' * 78)
+        print('产物指纹校验（防静默覆盖）')
+        print('=' * 78)
+        if artifact_manifest.verify() != 0:
+            print('  → 产物已被改动/丢失，后续数字核对无意义，退出。')
+            return 2
+        print()
 
     texts = load_docs()
     anchors = build_anchors()
@@ -665,16 +818,29 @@ def main():
         if broken == original:
             print('  ❌ 注入失败：目标字符串未找到')
             return 1
+        # 第二个注入点：P4 新增锚点（防止只对老文档有效）
+        p4target = os.path.join(DOCS, 'P4_CLASS_WEIGHT_2026-10-31.md')
+        p4orig = open(p4target, encoding='utf-8').read()
+        p4broken = p4orig.replace(
+            '| `lowcorr` ∝(1−ρ(类,A股腿)) | 1.4472 |',
+            '| `lowcorr` ∝(1−ρ(类,A股腿)) | 9.9999 |')
+        p4_ok = p4broken != p4orig
         try:
             open(target, 'w', encoding='utf-8').write(broken)
+            if p4_ok:
+                open(p4target, 'w', encoding='utf-8').write(p4broken)
             t2 = load_docs()
             p2 = check(t2, anchors)
             print(f'  注入后断言失败数：{len(p2)}（期望 > 0）')
-            for p in p2[:5]:
+            for p in p2[:6]:
                 print(f'      {p}')
-            neg_ok = len(p2) > 0
+            neg_ok = len(p2) > 0 and p4_ok
+            if not p4_ok:
+                print('  ❌ P4 注入点未找到（文档结构变了？）')
         finally:
             open(target, 'w', encoding='utf-8').write(original)
+            if p4_ok:
+                open(p4target, 'w', encoding='utf-8').write(p4orig)
         print(f'  自检结论：{"✅ 审计能抓到注入的错误" if neg_ok else "❌ 审计有漏洞"}')
         print('  已还原文档。')
 
