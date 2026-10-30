@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-31T03:37:25",
-  "git_commit": "353dd426",
+  "generated_at": "2026-10-31T03:47:18",
+  "git_commit": "e2ef7190",
   "data_dir": "data/backtest",
   "files": {
     "ALL_real_lag1_v2.json": {
@@ -72,7 +72,53 @@
       "sha256": "31554150aebf6f2437496f094f9f742f817d522c253edc44a0ff4325a442cf26",
       "bytes": 575595,
       "mtime": "2026-10-31T03:34:11"
+    },
+    "multi_asset_p4_long.json": {
+      "sha256": "463abdcdae894c2572321557f791896238ef776c5ad41d0546a2cd2f554fafe5",
+      "bytes": 2151036,
+      "mtime": "2026-10-31T03:34:15"
+    },
+    "p5_class_audit.json": {
+      "sha256": "1bc65a41023d68405a18be3475a4cdfc59af916ea67ff5ce88e5801617ca1850",
+      "bytes": 21636,
+      "mtime": "2026-10-31T03:37:25"
+    },
+    "multi_asset_final_robustness.json": {
+      "sha256": "f9b92ae4d7783488e586cd50a0fba3d7f3bce2a1fff5b8ba21fdb21101f852e7",
+      "bytes": 18614,
+      "mtime": "2026-10-31T01:05:17"
+    },
+    "multi_asset_final_robustness_oos.json": {
+      "sha256": "676b1ec5c6e5402c4b85a94bdca22990df3c6a391f87edc5e0235b618e3b7e0c",
+      "bytes": 14214,
+      "mtime": "2026-10-30T21:11:46"
+    },
+    "multi_asset_long_history.json": {
+      "sha256": "36fe3f1288860b0e2add739271fc74be44e9c1d4e0b0fc836f8371af96b729e1",
+      "bytes": 16753,
+      "mtime": "2026-10-30T21:11:52"
+    },
+    "multi_asset_controls.json": {
+      "sha256": "bbe7fa72fd3bdb05a9c17c993f408dabf875345ddd7f2d904b51ab71f95859f1",
+      "bytes": 5176,
+      "mtime": "2026-10-30T22:13:08"
+    },
+    "multi_asset_xclass.json": {
+      "sha256": "fa187a7894da2727fb10a6b77e0d0e6b8666f355b1232e1f15a1260a0613fa49",
+      "bytes": 433353,
+      "mtime": "2026-10-31T01:25:42"
+    },
+    "multi_asset_xclass_oos.json": {
+      "sha256": "2149a711da183b5bb3a8c9023fde38c006f84ab87010f8f4fdb8095e2efd243e",
+      "bytes": 296443,
+      "mtime": "2026-10-31T01:34:44"
+    },
+    "multi_asset_xclass_long_history.json": {
+      "sha256": "04e9614e035c1f34c7ca60d0b2cab3ba3034bc47e2d5eefacc1bb6ed18231c15",
+      "bytes": 607646,
+      "mtime": "2026-10-31T01:39:26"
     }
   },
-  "missing": []
+  "missing": [],
+  "uncovered_audited": []
 }

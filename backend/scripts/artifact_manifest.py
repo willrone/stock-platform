@@ -49,8 +49,44 @@ TRACKED = [
     "multi_asset_p3_long.json",
     "p3_recon.json",
     "p3_bond_recon.json",
-    "multi_asset_p4_main.json",           # P4 配权（后续追加）
+    "multi_asset_p4_main.json",           # P4 配权
     "multi_asset_p4_oos.json",
+    "multi_asset_p4_long.json",
+    "p5_class_audit.json",                # P5 分类审计
+    # ↓ 以下为 audit_doc_numbers.py 的 ART 字典里其余产物
+    "multi_asset_final_robustness.json",  # FR 稳健性（main）
+    "multi_asset_final_robustness_oos.json",
+    "multi_asset_long_history.json",      # 7.7 年长历史
+    "multi_asset_controls.json",          # 控制组
+    "multi_asset_xclass.json",            # P1 跨类动量
+    "multi_asset_xclass_oos.json",
+    "multi_asset_xclass_long_history.json",
+]
+
+# 审计器读取的产物文件 —— 必须与 TRACKED 一一对应（漏一个 = 该产物可被静默覆盖）
+AUDITED = [
+    "multi_asset_final_robustness.json",
+    "multi_asset_final_robustness_oos.json",
+    "multi_asset_l3.json",
+    "multi_asset_l3_oos.json",
+    "multi_asset_long_history.json",
+    "multi_asset_controls.json",
+    "multi_asset_xclass.json",
+    "multi_asset_xclass_oos.json",
+    "multi_asset_xclass_long_history.json",
+    "multi_asset_p2_main.json",
+    "multi_asset_p2_oos.json",
+    "multi_asset_p2_long.json",
+    "multi_asset_p2_attrib.json",
+    "multi_asset_p4_main.json",
+    "multi_asset_p4_oos.json",
+    "multi_asset_p4_long.json",
+    "p5_class_audit.json",
+    "multi_asset_p3_main.json",
+    "multi_asset_p3_oos.json",
+    "multi_asset_p3_long.json",
+    "p3_bond_recon.json",
+    "ALL_real_lag1_v2.json",
 ]
 
 
@@ -87,12 +123,15 @@ def build() -> int:
             "bytes": st.st_size,
             "mtime": datetime.fromtimestamp(st.st_mtime).isoformat(timespec="seconds"),
         }
+    # 覆盖完整性：审计器读的每个产物都必须在 TRACKED 里（否则它可被静默覆盖）
+    uncovered = [n for n in AUDITED if n not in TRACKED]
     manifest = {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "git_commit": git_commit(),
         "data_dir": os.path.relpath(DATA_DIR, ROOT),
         "files": entries,
         "missing": missing,
+        "uncovered_audited": uncovered,
     }
     os.makedirs(os.path.dirname(MANIFEST), exist_ok=True)
     with open(MANIFEST, "w", encoding="utf-8") as fh:
@@ -110,6 +149,9 @@ def verify() -> int:
     with open(MANIFEST, encoding="utf-8") as fh:
         manifest = json.load(fh)
     bad: List[str] = []
+    # 覆盖完整性：清单必须覆盖审计器依赖的全部产物
+    for n in manifest.get("uncovered_audited", []):
+        bad.append(f"{n}: 审计依赖但未纳入指纹清单")
     for name, meta in manifest.get("files", {}).items():
         p = os.path.join(DATA_DIR, name)
         if not os.path.exists(p):
@@ -125,6 +167,8 @@ def verify() -> int:
             print(f"   - {b}")
         print("\n   → 产物被覆盖或丢失，文档数字不可信。先查清是谁改的再重跑。")
         return 1
+    if manifest.get("missing"):
+        print(f"⚠️  清单记录的缺失产物：{manifest['missing']}")
     print(f"✅ 产物指纹校验通过：{len(manifest.get('files', {}))} 个产物与清单一致"
           f"（清单生成于 {manifest.get('generated_at')}，commit {manifest.get('git_commit')}）")
     return 0
