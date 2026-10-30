@@ -1,5 +1,10 @@
 # 定稿配置的完整稳健性诊断 —— F1~F7
 
+> ⚠️ **定稿已于 2026-10-31 更新（见 `P3_BOND_CLASS_2026-10-31.md`）**：
+> bond 类由「流动性 top-3」改为**固定长久期利率债组合**（可转债被剔除），
+> 组合夏普与回撤均改善。本文记录的是**变更前**的实验结果，
+> 数字保持原样以维持可审计性；**当前定稿以 P3 文档 §7 为准**。
+
 > 日期：2026-10-30
 > 脚本：`backend/scripts/multi_asset_final_robustness.py`
 > 产物：`data/backtest/multi_asset_final_robustness.json`（推导窗口）

@@ -60,6 +60,10 @@ ART = {
     'p2o': J('multi_asset_p2_oos.json'),
     'p2l': J('multi_asset_p2_long.json'),
     'p2a': J('multi_asset_p2_attrib.json'),
+    'p3m': J('multi_asset_p3_main.json'),
+    'p3o': J('multi_asset_p3_oos.json'),
+    'p3l': J('multi_asset_p3_long.json'),
+    'p3br': J('p3_bond_recon.json'),
 }
 
 
@@ -317,6 +321,139 @@ def build_anchors():
         ('L3_MOMENTUM', 14, '最大回撤', 'main（推导）', ('j', 'fr', 'F1_final.combined_maxdd')),
         ('L3_MOMENTUM', 14, '最大回撤', 'oos（样本外）', ('j', 'fro', 'F1_final.combined_maxdd')),
     ]
+
+    # ═══════════════════════ P3_BOND_CLASS ═══════════════════════
+    # P3: bond 类剔除可转债 → 换长久期利率债
+    P3DOC = 'P3_BOND_CLASS'
+    _br_main = [x['code'] for x in ART['p3br']['windows']['main']]
+    _br_oos = [x['code'] for x in ART['p3br']['windows']['oos']]
+    # ── 表1/表2: 债券池逐只特征（勘察产物）──
+    for _w, _codes in (('main', _br_main), ('oos', _br_oos)):
+        _tidx = 1 if _w == 'main' else 2
+        _cols = (['ρ(与 510300)', '年化波动', '窗口前 120 日均成交额(万)']
+                 if _w == 'main' else
+                 ['ρ(与 510300)', '年化波动', '窗口前 120 日均成交额(万)'])
+        for _i, _c in enumerate(_codes):
+            for _col, _fld, _sp in (
+                    (_cols[0], 'rho', 'j'),
+                    (_cols[1], 'vol', 'j'),
+                    (_cols[2], 'turnover', 'jwan')):
+                if _sp == 'j':
+                    A.append((P3DOC, _tidx, _c, _col,
+                              ('j', 'p3br', f'windows.{_w}.[{_i}].{_fld}')))
+                else:
+                    A.append((P3DOC, _tidx, _c, _col,
+                              (_sp, 'p3br', f'windows.{_w}.[{_i}].{_fld}')))
+    # ── 表4/表5: P3a 主结果表 ──
+    _p3_keys = (['base', 'bond_no_cb', 'bond_cb_to_lowrho', 'bond_lowrho3',
+                 'bond_all_rate']
+                + [f'swap_rand_s{s}' for s in SEEDS]
+                + ['bond_cb_sep', 'extra_lowrho3']
+                + [f'extra_rand_s{s}' for s in SEEDS])
+    for _w, _art, _tidx, _with504 in (('main', 'p3m', 4, True),
+                                      ('oos', 'p3o', 5, False)):
+        for _k in _p3_keys:
+            _lbl = 'base（旧定稿）' if _k == 'base' else _k
+            A.append((P3DOC, _tidx, _lbl, '组合夏普',
+                      ('j', _art, f'results.{_k}.combined_sharpe')))
+            A.append((P3DOC, _tidx, _lbl, '剔gold夏普',
+                      ('j', _art, f'results.{_k}.sharpe_ex_gold')))
+            A.append((P3DOC, _tidx, _lbl, '组合回撤',
+                      ('j', _art, f'results.{_k}.combined_maxdd')))
+            A.append((P3DOC, _tidx, _lbl, '组合收益',
+                      ('j', _art, f'results.{_k}.combined_return')))
+            A.append((P3DOC, _tidx, _lbl, 'ρ(袖套,A)',
+                      ('j', _art, f'results.{_k}.corr_sleeve_ashare')))
+            # base 是参照系，本身没有"胜率"（文档写的是 —）
+            if _k != 'base':
+                A.append((P3DOC, _tidx, _lbl, '滚动252日胜率',
+                          ('j', _art, f'results.{_k}.rolling_sharpe_252d_win_rate')))
+                if _with504:
+                    A.append((P3DOC, _tidx, _lbl, '滚动504日胜率',
+                              ('j', _art, f'results.{_k}.rolling_sharpe_504d_win_rate')))
+    # ── 表6/表7: 随机对照逐项 ──
+    for _w, _art, _tidx in (('main', 'p3m', 6), ('oos', 'p3o', 7)):
+        for _s in SEEDS:
+            _k = f'swap_rand_s{_s}'
+            A.append((P3DOC, _tidx, _k, '组合夏普',
+                      ('j', _art, f'results.{_k}.combined_sharpe')))
+            A.append((P3DOC, _tidx, _k, '滚动252日胜率',
+                      ('j', _art, f'results.{_k}.rolling_sharpe_252d_win_rate')))
+    # ── 表8: P3b 新增第 4 类 ──
+    A.append((P3DOC, 8, 'extra_lowrho3（全池ρ最低top-3作第4类）', 'main 夏普',
+              ('j', 'p3m', 'results.extra_lowrho3.combined_sharpe')))
+    A.append((P3DOC, 8, 'extra_lowrho3（全池ρ最低top-3作第4类）', 'oos 夏普',
+              ('j', 'p3o', 'results.extra_lowrho3.combined_sharpe')))
+    for _s in SEEDS:
+        _k = f'extra_rand_s{_s}'
+        A.append((P3DOC, 8, _k, 'main 夏普',
+                  ('j', 'p3m', f'results.{_k}.combined_sharpe')))
+        A.append((P3DOC, 8, _k, 'oos 夏普',
+                  ('j', 'p3o', f'results.{_k}.combined_sharpe')))
+    # ── 表9: 可转债独立成第 4 类 ──
+    for _w, _art in (('main', 'p3m'), ('oos', 'p3o')):
+        for _col, _fld in (('组合夏普', 'combined_sharpe'),
+                           ('剔gold夏普', 'sharpe_ex_gold'),
+                           ('ρ(袖套,A)', 'corr_sleeve_ashare'),
+                           ('滚动252日胜率', 'rolling_sharpe_252d_win_rate'),
+                           ('滚动504日胜率', 'rolling_sharpe_504d_win_rate')):
+            # oos 窗口只有 484 个交易日 < 504 → 504 日滚动胜率不存在
+            if _col == '滚动504日胜率' and _w == 'oos':
+                continue
+            A.append((P3DOC, 9, _w, _col,
+                      ('j', _art, f'results.bond_cb_sep.{_fld}')))
+    # ── 表10: bond 类 ρ 与自身夏普 ──
+    for _w, _art, _cfg in (('main', 'p3m', 'base'),
+                            ('main', 'p3m', 'bond_lowrho3'),
+                            ('oos', 'p3o', 'base'),
+                            ('oos', 'p3o', 'bond_lowrho3')):
+        _lbl = f'{_w} · {_cfg}'
+        A.append((P3DOC, 10, _lbl, 'ρ(bond 类, A 股腿)',
+                  ('j', _art, f'results.{_cfg}.class_rho.bond.rho_a')))
+        A.append((P3DOC, 10, _lbl, 'bond 类自身夏普',
+                  ('j', _art, f'results.{_cfg}.class_rho.bond.sleeve_sharpe')))
+    # ── 表11: 分年收益 ──
+    for _w, _art in (('main', 'p3m'), ('oos', 'p3o')):
+        for _y in ART[_art]['results']['base']['combined_yearly']:
+            A.append((P3DOC, 11, f'{_w} · {_y}', 'base',
+                      ('j', _art, f'results.base.combined_yearly.{_y}')))
+            A.append((P3DOC, 11, f'{_w} · {_y}', 'bond_lowrho3',
+                      ('j', _art, f'results.bond_lowrho3.combined_yearly.{_y}')))
+    # ── 表12: 长历史 ──
+    for _k in ('base_long', 'lowrho3_long', 'plus_cb_long'):
+        for _col, _fld in (('袖套夏普', 'sleeve_sharpe'),
+                           ('年化波动', 'sleeve_vol'),
+                           ('累计收益', 'sleeve_return'),
+                           ('最大回撤', 'sleeve_maxdd'),
+                           ('滚动252日胜率', 'rolling_sharpe_252d_win_rate'),
+                           ('滚动504日胜率', 'rolling_sharpe_504d_win_rate')):
+            # base_long 是参照系，本身没有胜率
+            if _col.startswith('滚动') and _k == 'base_long':
+                continue
+            A.append((P3DOC, 12, _k, _col, ('j', 'p3l', f'results.{_k}.{_fld}')))
+    # ── 表14: 当前流动性 ──
+    for _c in ('511260', '511010', '511020'):
+        A.append((P3DOC, 14, _c, '日均成交额(亿)',
+                  ('jyi', 'p3m', f'current_liquidity.{_c}.avg_amount_120d')))
+    # ── 表16: 前后对比 ──
+    _p3_cmp = [
+        ('组合夏普·推导窗口', 'main', 'base', 'bond_lowrho3', 'combined_sharpe'),
+        ('组合夏普·样本外', 'oos', 'base', 'bond_lowrho3_noliq', 'combined_sharpe'),
+        ('组合回撤·推导窗口', 'main', 'base', 'bond_lowrho3', 'combined_maxdd'),
+        ('组合回撤·样本外', 'oos', 'base', 'bond_lowrho3_noliq', 'combined_maxdd'),
+        ('ρ(袖套, A 股腿)·推导', 'main', 'base', 'bond_lowrho3', 'corr_sleeve_ashare'),
+        ('ρ(袖套, A 股腿)·样本外', 'oos', 'base', 'bond_lowrho3_noliq', 'corr_sleeve_ashare'),
+        ('ρ(bond 类, A 股腿)·推导', 'main', 'base', 'bond_lowrho3', 'class_rho.bond.rho_a'),
+        ('ρ(bond 类, A 股腿)·样本外', 'oos', 'base', 'bond_lowrho3_noliq', 'class_rho.bond.rho_a'),
+        ('剔gold夏普·推导', 'main', 'base', 'bond_lowrho3', 'sharpe_ex_gold'),
+        ('剔gold夏普·样本外', 'oos', 'base', 'bond_lowrho3_noliq', 'sharpe_ex_gold'),
+        ('滚动504日胜率·推导', 'main', None, 'bond_lowrho3', 'rolling_sharpe_504d_win_rate'),
+    ]
+    for _lbl, _w, _old, _new, _fld in _p3_cmp:
+        _art = 'p3m' if _w == 'main' else 'p3o'
+        if _old:
+            A.append((P3DOC, 16, _lbl, '旧定稿', ('j', _art, f'results.{_old}.{_fld}')))
+        A.append((P3DOC, 16, _lbl, '新定稿', ('j', _art, f'results.{_new}.{_fld}')))
     return A
 
 
@@ -401,6 +538,12 @@ def resolve(spec):
         vals = [dig(ART[art], f'results.{k}.{field}')
                 for k in ART[art]['results'] if k.startswith(pre)]
         return sum(vals) / len(vals)
+    if spec[0] == 'jwan':
+        # 成交额（万元），四舍五入到整数 —— 文档展示就是取整的，期望值同样取整
+        return round(dig(ART[spec[1]], spec[2]) / 1e4)
+    if spec[0] == 'jyi':
+        # 成交额（亿元），保留 3 位小数
+        return round(dig(ART[spec[1]], spec[2]) / 1e8, 3)
     if spec[0] == 'jmin':
         # 两个产物值取小者
         return min(dig(ART[spec[1]], spec[2]), dig(ART[spec[3]], spec[4]))
