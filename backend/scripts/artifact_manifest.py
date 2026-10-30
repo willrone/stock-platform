@@ -60,6 +60,8 @@ TRACKED = [
     "multi_asset_p7_oos.json",
     "multi_asset_p8_main.json",           # P8 暴露中性化复裁
     "multi_asset_p8_oos.json",
+    "multi_asset_p9_main.json",           # P9 主腿调仓频率曲线
+    "multi_asset_p9_oos.json",
     # ↓ 以下为 audit_doc_numbers.py 的 ART 字典里其余产物
     "multi_asset_final_robustness.json",  # FR 稳健性（main）
     "multi_asset_final_robustness_oos.json",
@@ -101,6 +103,8 @@ AUDITED = [
     "multi_asset_p7_oos.json",
     "multi_asset_p8_main.json",
     "multi_asset_p8_oos.json",
+    "multi_asset_p9_main.json",
+    "multi_asset_p9_oos.json",
 ]
 
 

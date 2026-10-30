@@ -75,6 +75,8 @@ ART = {
     'p7o': J('multi_asset_p7_oos.json'),
     'p8m': J('multi_asset_p8_main.json'),
     'p8o': J('multi_asset_p8_oos.json'),
+    'p9m': J('multi_asset_p9_main.json'),
+    'p9o': J('multi_asset_p9_oos.json'),
 }
 
 
@@ -95,6 +97,16 @@ def norm(s):
 # 断言清单
 #   (doc, table_idx, row_label, col_header, expect_spec)
 # ─────────────────────────────────────────────────────────────
+def _p9_rule_labels(art):
+    """P9 规则臂标签（固定顺序，排除随机对照臂）。"""
+    res = art.get('results', {})
+    order = ['daily', 'wk_fri', 'wk_mon', 'monthly']
+    labs = [l for l in order if l in res]
+    labs += sorted(l for l in res
+                   if l not in order and not l.startswith('rand_'))
+    return labs
+
+
 def build_anchors():
     """断言清单：(doc, table_idx, row_label, col_header, expect_spec)
 
@@ -671,6 +683,50 @@ def build_anchors():
                       ('j', _art, f'subwindows.{_sub}.base25')))
             A.append((P8DOC, 3, f"{_w}/{_sub}", 'neut25(开)',
                       ('j', _art, f'subwindows.{_sub}.neut25')))
+
+    # ── P9 · 主腿调仓频率曲线 ──
+    #   表 0=main规则臂, 1=main随机对照, 2=oos规则臂, 3=oos随机对照,
+    #   4=main子窗口, 5=oos子窗口, 6=main判据, 7=oos判据
+    P9DOC = 'P9_REBALANCE_FREQ'
+    _p9_cols = [
+        ('执行日数', 'rebalance_days'), ('交易笔数', 'total_trades'),
+        ('A腿夏普', 'a_share_sharpe'), ('组合夏普', 'combined_sharpe'),
+        ('组合收益', 'combined_return'), ('组合回撤', 'combined_maxdd'),
+        ('组合波动', 'combined_vol'),
+    ]
+    for _art, _ti in (('p9m', 0), ('p9o', 2)):
+        for _l in _p9_rule_labels(ART[_art]):
+            for _col, _fld in _p9_cols:
+                A.append((P9DOC, _ti, _l, _col,
+                          ('j', _art, f'results.{_l}.{_fld}')))
+            A.append((P9DOC, _ti, _l, 'Δ组合', ('p9delta', _art, _l)))
+    for _art, _ti in (('p9m', 1), ('p9o', 3)):
+        for _l in sorted(ART[_art].get('random_controls', {}) or {}):
+            A.append((P9DOC, _ti, _l, '执行日数',
+                      ('j', _art, f'results.{_l}.rebalance_days')))
+            A.append((P9DOC, _ti, _l, '组合夏普',
+                      ('j', _art, f'results.{_l}.combined_sharpe')))
+            A.append((P9DOC, _ti, _l, 'Δ规则臂', ('p9randdelta', _art, _l)))
+    for _art, _ti in (('p9m', 4), ('p9o', 5)):
+        for _sub in sorted(ART[_art]['subwindows']):
+            for _l in _p9_rule_labels(ART[_art]):
+                if safe_dig(_art, f'subwindows.{_sub}.{_l}') is not None:
+                    A.append((P9DOC, _ti, _sub, _l,
+                              ('j', _art, f'subwindows.{_sub}.{_l}')))
+            A.append((P9DOC, _ti, _sub, '天数',
+                      ('j', _art, f'subwindows.{_sub}.n')))
+    for _art, _ti in (('p9m', 6), ('p9o', 7)):
+        for _l in _p9_rule_labels(ART[_art]):
+            for _col, _path in (('Δ组合', 'delta_vs_base_combined'),
+                                ('ΔA腿', 'delta_vs_base_ashare'),
+                                ('子窗口胜', 'subwindow_wins'),
+                                ('随机组最大', 'random_group_max'),
+                                ('Δ随机组最大', 'delta_vs_random_max')):
+                if safe_dig(_art, f'criteria.{_l}.{_path}') is not None:
+                    A.append((P9DOC, _ti, _l, _col,
+                              ('j', _art, f'criteria.{_l}.{_path}')))
+            if safe_dig(_art, f'criteria.{_l}.criteria') is not None:
+                A.append((P9DOC, _ti, _l, '通过判据数', ('p9npass', _art, _l)))
     return A
 
 
@@ -813,6 +869,28 @@ def resolve(spec):
         # neut25 - base25（指定字段）
         return (dig(ART[spec[1]], f'results.neut25.{spec[2]}')
                 - dig(ART[spec[1]], f'results.base25.{spec[2]}'))
+    if spec[0] == 'p9delta':
+        # P9：某臂组合夏普相对基线臂（base_label）的差
+        art, lab = spec[1], spec[2]
+        base = ART[art]['base_label']
+        return (dig(ART[art], f'results.{lab}.combined_sharpe')
+                - dig(ART[art], f'results.{base}.combined_sharpe'))
+    if spec[0] == 'p9randdelta':
+        # P9：随机臂组合夏普相对它对标的规则臂的差
+        art, lab = spec[1], spec[2]
+        rule = ART[art]['random_controls'][lab]['matched_rule']
+        return (dig(ART[art], f'results.{lab}.combined_sharpe')
+                - dig(ART[art], f'results.{rule}.combined_sharpe'))
+    if spec[0] == 'p9npass':
+        # P9：通过的预注册判据数（(f) 结构性缺失恒 False，不计入）
+        art, lab = spec[1], spec[2]
+        k = dig(ART[art], f'criteria.{lab}.criteria')
+        keys = ('a_ashare_sharpe_gt_base',
+                'b_main_combined_ge_base_plus_0.05',
+                'c_oos_combined_ge_base_minus_0.02',
+                'd_subwindow_majority_ge_3',
+                'e_beats_same_freq_random_max')
+        return sum(1 for key in keys if k.get(key) is True)
     if spec[0] == 'p4delta':
         # P4 组合夏普相对 base_equal 的差
         art, key = spec[1], spec[2]
