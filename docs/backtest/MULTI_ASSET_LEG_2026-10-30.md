@@ -4,6 +4,10 @@
 > 脚本：`backend/scripts/etf_data_pipeline.py`、`multi_asset_leg_experiment.py`、`multi_asset_robustness.py`、`multi_asset_oos_validation.py`、`multi_asset_controls.py`
 > 产物：`data/backtest/multi_asset_leg.json`、`multi_asset_robustness.json`、`multi_asset_leg_oos.json`、`multi_asset_oos_validation.json`、`multi_asset_controls.json`
 > 窗口：推导 2023-05-08 → 2026-05-08；**样本外 2021-05-11 → 2023-05-08**
+>
+> ⚠️ **2026-10-30 晚间更新**：本文件的推荐配置已被 `L3_MOMENTUM_2026-10-30.md` 升级为
+> **「top3 每月再平衡」**（样本外夏普 0.8946 → 1.0435）。本文件的数字是
+> **买入持有口径**的历史记录，仍然有效，但不再是最终推荐。
 
 ---
 
@@ -13,8 +17,12 @@
 
 这是 `CONCLUSION_2026-10-27.md` 判定为"框架内上限"（0.88~1.03）的**第一次真实突破** —— 因为突破点不在选股层，而在 beta 层。
 
-**推荐配置**：A 股腿 50% + 黄金/债券/商品 各 16.67%。
+**推荐配置（买入持有口径）**：A 股腿 50% + 黄金/债券/商品 各 16.67%。
 **关键机制**：起作用的是**与 A 股腿低相关**的资产，不是"多资产"本身。加入高相关的宽基 ETF（沪深300 相关 0.70）反而让夏普暴跌 20%~95%。
+
+> **后续升级**：加上**每月再平衡**（零 alpha、不改选标、换手 1.9 倍/3年）后，
+> 样本外夏普 0.8946 → **1.0435（+45.2%）**，与 gold 相关 0.663 → 0.573。
+> 详见 `L3_MOMENTUM_2026-10-30.md`。
 
 ---
 
