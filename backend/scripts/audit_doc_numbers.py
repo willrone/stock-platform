@@ -56,6 +56,10 @@ ART = {
     'xc': J('multi_asset_xclass.json'),
     'xco': J('multi_asset_xclass_oos.json'),
     'xclh': J('multi_asset_xclass_long_history.json'),
+    'p2m': J('multi_asset_p2_main.json'),
+    'p2o': J('multi_asset_p2_oos.json'),
+    'p2l': J('multi_asset_p2_long.json'),
+    'p2a': J('multi_asset_p2_attrib.json'),
 }
 
 
@@ -163,6 +167,91 @@ def build_anchors():
         ('L3_MOMENTUM', 13, 'top3 双周再平衡', '两窗口下界', ('j', 'l3o', 'results.static_top3_rebal_biweekly.combined_sharpe')),
         ('L3_MOMENTUM', 13, 'top1 每月再平衡', '两窗口下界', ('j', 'l3o', 'results.static_top1_rebal_monthly.combined_sharpe')),
     ]
+    # ── P2_CLASS_WEIGHT 表1: 每个类与 A 股腿的 ρ（机制核心）──
+    for _w, _wn in (('main', '推导'), ('oos', '样本外')):
+        for _c in ('gold', 'bond', 'commodity'):
+            A += [
+                ('P2_CLASS_WEIGHT', 1, f'{_wn} {_c}', '年化波动',
+                 ('j', 'p2a', f'{_w}.classes.{_c}.sleeve_vol')),
+                ('P2_CLASS_WEIGHT', 1, f'{_wn} {_c}', '夏普',
+                 ('j', 'p2a', f'{_w}.classes.{_c}.sleeve_sharpe')),
+                ('P2_CLASS_WEIGHT', 1, f'{_wn} {_c}', 'ρ(类, A 股腿)',
+                 ('j', 'p2a', f'{_w}.classes.{_c}.corr_with_a_share')),
+            ]
+    # ── P2_CLASS_WEIGHT 表2: P2a 商品类内 ──
+    for _disp, _k in (
+        ('top1（流动性第 1）', 'com_top1'),
+        ('top2', 'com_top2'),
+        ('top3（定稿现状）', 'com_top3'),
+        ('全部 4 只', 'com_all'),
+        ('单只 159985（豆粕）', 'com_single_159985'),
+        ('单只 159981（能源化工）', 'com_single_159981'),
+        ('单只 159980（有色）', 'com_single_159980'),
+        ('单只 510170', 'com_single_510170'),
+        ('top2 + 510170', 'com_top2_plus_last'),
+        ('top3 去掉第 1 + 510170', 'com_top3_minus_first'),
+    ):
+        A += [
+            ('P2_CLASS_WEIGHT', 2, _disp, '推导', ('j', 'p2m', f'results.{_k}.combined_sharpe')),
+            ('P2_CLASS_WEIGHT', 2, _disp, '样本外', ('j', 'p2o', f'results.{_k}.combined_sharpe')),
+            ('P2_CLASS_WEIGHT', 2, _disp, '较差窗口',
+             ('jmin', 'p2m', f'results.{_k}.combined_sharpe', 'p2o', f'results.{_k}.combined_sharpe')),
+        ]
+    # ── P2_CLASS_WEIGHT 表3: P2b 组合口径 ──
+    for _disp, _k in (
+        ('等权（定稿）', 'cls_equal'),
+        ('逆波动率 L60（无 cap）', 'cls_rvol60'),
+        ('逆波动率 L120（无 cap）', 'cls_rvol120'),
+        ('逆波动率 L250（无 cap）', 'cls_rvol250'),
+        ('逆波动率 L60 + cap', 'cls_rvol60_cap'),
+        ('逆波动率 L120 + cap', 'cls_rvol120_cap'),
+        ('逆波动率 L250 + cap', 'cls_rvol250_cap'),
+    ):
+        A += [
+            ('P2_CLASS_WEIGHT', 4, _disp, '推导', ('j', 'p2m', f'results.{_k}.combined_sharpe')),
+            ('P2_CLASS_WEIGHT', 4, _disp, '样本外', ('j', 'p2o', f'results.{_k}.combined_sharpe')),
+            ('P2_CLASS_WEIGHT', 4, _disp, '袖套波动(推导)', ('j', 'p2m', f'results.{_k}.sleeve_vol')),
+            ('P2_CLASS_WEIGHT', 4, _disp, 'ρ(袖套,A)(推导)', ('j', 'p2m', f'results.{_k}.corr_sleeve_ashare')),
+        ]
+    # ── P2_CLASS_WEIGHT 表4: P2b 长历史 ──
+    for _disp, _k in (
+        ('等权', 'cls_equal'),
+        ('逆波动率 L60（无 cap）', 'cls_rvol60'),
+        ('逆波动率 L120（无 cap）', 'cls_rvol120'),
+        ('逆波动率 L250（无 cap）', 'cls_rvol250'),
+        ('逆波动率 L60 + cap', 'cls_rvol60_cap'),
+        ('逆波动率 L120 + cap', 'cls_rvol120_cap'),
+        ('逆波动率 L250 + cap', 'cls_rvol250_cap'),
+    ):
+        A += [
+            ('P2_CLASS_WEIGHT', 5, _disp, '长历史袖套夏普', ('j', 'p2l', f'results.{_k}.sleeve_sharpe')),
+        ]
+        if _k != 'cls_equal':
+            A += [
+                ('P2_CLASS_WEIGHT', 5, _disp, 'Δ vs 等权',
+                 ('j', 'p2l', f'results.{_k}.delta_sharpe_vs_base')),
+                ('P2_CLASS_WEIGHT', 5, _disp, '滚动 504 日夏普胜率',
+                 ('j', 'p2l', f'results.{_k}.rolling_sharpe_504d.sharpe_win_rate')),
+            ]
+    # ── P2_CLASS_WEIGHT 表6: 随机对照均值 ──
+    for _disp, _pre in (('cls_rand（每期重抽）', 'cls_rand_s'),
+                        ('cls_randstatic（固定配置）', 'cls_randstatic_s')):
+        A += [
+            ('P2_CLASS_WEIGHT', 6, _disp, '推导均值',
+             ('globmean', 'p2m', _pre, 'combined_sharpe')),
+            ('P2_CLASS_WEIGHT', 6, _disp, '样本外均值',
+             ('globmean', 'p2o', _pre, 'combined_sharpe')),
+            ('P2_CLASS_WEIGHT', 6, _disp, '长历史均值',
+             ('globmean', 'p2l', _pre, 'sleeve_sharpe')),
+        ]
+    # ── P2_CLASS_WEIGHT 表7: 随机固定配置逐个结果 ──
+    for _s in (20261030, 7, 99, 1234, 555, 8888):
+        A += [
+            ('P2_CLASS_WEIGHT', 7, f'cls_randstatic_s{_s}', '推导',
+             ('j', 'p2m', f'results.cls_randstatic_s{_s}.combined_sharpe')),
+            ('P2_CLASS_WEIGHT', 7, f'cls_randstatic_s{_s}', '样本外',
+             ('j', 'p2o', f'results.cls_randstatic_s{_s}.combined_sharpe')),
+        ]
     # ── XCLASS_MOMENTUM 表0/1/2: P1 跨类动量 ──
     A += [
         ('XCLASS_MOMENTUM', 0, 'momentum 族均值（24 配置）', 'main', ('l3fam_mean', 'l3', 'mom')),
@@ -306,6 +395,15 @@ def resolve(spec):
         art, grp = spec[1], spec[2]
         vals = [dig(ART[art], f'results.xclass_rand_{grp}_s{s}.combined_sharpe') for s in SEEDS]
         return sum(vals) / len(vals)
+    if spec[0] == 'globmean':
+        # 产物 results 里所有以 prefix 开头的键，某字段的均值
+        art, pre, field = spec[1], spec[2], spec[3]
+        vals = [dig(ART[art], f'results.{k}.{field}')
+                for k in ART[art]['results'] if k.startswith(pre)]
+        return sum(vals) / len(vals)
+    if spec[0] == 'jmin':
+        # 两个产物值取小者
+        return min(dig(ART[spec[1]], spec[2]), dig(ART[spec[3]], spec[4]))
     return dig(ART[spec[1]], spec[2])
 
 
