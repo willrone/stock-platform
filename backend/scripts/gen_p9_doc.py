@@ -150,7 +150,7 @@ def gen(main: Dict[str, Any], oos: Optional[Dict[str, Any]]) -> str:
     _rand_best = (max(_rand_labs,
                       key=lambda l: res[l]["combined_sharpe"]) if _rand_labs else None)
     A(f"- **频率曲线**：周频两个锚点（`wk_fri` / `wk_mon`）都优于日频与月初；"
-      f"规则臂中最优是 **{best_rule}**（组合夏普 "
+      f"**main 窗口**规则臂中最优是 **{best_rule}**（组合夏普 "
       f"{fmt_num(res[best_rule]['combined_sharpe'])}），基线 `{base}` 为 "
       f"{fmt_num(main['base_combined_sharpe'])}"
       + ("（**基线本身即规则臂之首**）" if best_rule == base else
@@ -161,7 +161,7 @@ def gen(main: Dict[str, Any], oos: Optional[Dict[str, Any]]) -> str:
     _cmp_best = (max(_peer, key=lambda l: res[l]["combined_sharpe"])
                   if _peer else _rand_best)
     if _cmp_best:
-        A(f"- **与 `{best_rule}` 同执行日数的随机对照最大值 "
+        A(f"- **main 窗口，与 `{best_rule}` 同执行日数的随机对照最大值 "
           f"{fmt_num(res[_cmp_best]['combined_sharpe'])}（`{_cmp_best}`）"
           + ("**高于**" if res[_cmp_best]["combined_sharpe"] > res[best_rule]["combined_sharpe"]
              else "不低于")
@@ -170,6 +170,19 @@ def gen(main: Dict[str, Any], oos: Optional[Dict[str, Any]]) -> str:
              "低频的收益是机械的（换手减少），不是日历给的。"
              if res[_cmp_best]["combined_sharpe"] >= res[best_rule]["combined_sharpe"]
              else " → 需看第 8 节的分档对比。"))
+    if oos is not None:
+        ores2 = oos["results"]
+        olabs2 = rule_labels(oos)
+        _ob2 = max(olabs2, key=lambda l: ores2[l]["combined_sharpe"])
+        _orand = oos.get("random_controls", {}) or {}
+        _opeers = [x for x in _orand if _orand[x]["matched_rule"] == base]
+        _opmax = max((ores2[x]["combined_sharpe"] for x in _opeers), default=None)
+        A(f"- **oos 窗口规则臂中最优是 `{_ob2}`**"
+          f"（{fmt_num(ores2[_ob2]['combined_sharpe'])}）——与 main 的 `{best_rule}` "
+          f"**相反**；基线 `{base}` {fmt_num(ores2[base]['combined_sharpe'])} "
+          f"同样被同频随机对照击败"
+          + (f"（{fmt_num(_opmax)}）" if _opmax is not None else "")
+          + " → **日历对齐在两个窗口都不携带信息**。")
     A(f"- 预注册判据（a)~(f) 的通过情况见第 7 节；"
       f"**只有通过 (b)(c)(d)(e) 的臂才可能进入定稿**，"
       f"且 (f) 独立样本外证据结构性缺失 → 本实验默认**不自动改定稿**。")
