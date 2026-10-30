@@ -93,7 +93,7 @@ VOL_FLOOR = 0.08        # 单类权重下限
 ANN = 244               # 年化因子
 SEEDS = (20261030, 7, 99, 1234, 555, 8888)
 BOND_FINAL = ["511260", "511010", "511020"]
-EXPECT_BASE = {"main": 1.4092, "oos": 1.0685}
+EXPECT_BASE = {}   # 运行时从 P3 产物读取（见 expected_base_from）
 LONG_START = datetime(2019, 1, 1)
 LONG_END = datetime(2026, 10, 30)
 
@@ -484,7 +484,16 @@ def run_window(args) -> None:
     print(f"\n[p4] === 类间配权（{window}）===", flush=True)
     run_cfg("base_equal", "equal", {"note": "类间等权 = P3 定稿基线"})
 
-    # ── 基线复现门 ──
+    # ── 基线复现门（期望值读 P3 产物，不硬编码）──
+    _p3p = os.path.join(ROOT, "data", "backtest", f"multi_asset_p3_{window}.json")
+    if not os.path.exists(_p3p):
+        raise SystemExit(f"[p4] ❌ 找不到 P3 产物 {_p3p}，无法建立基线门")
+    with open(_p3p, encoding="utf-8") as fh:
+        _p3d = json.load(fh)
+    _p3res = _p3d.get("results", {})
+    _p3key = ("bond_lowrho3_noliq" if "bond_lowrho3_noliq" in _p3res
+              else "bond_lowrho3")
+    EXPECT_BASE[window] = float(_p3res[_p3key]["combined_sharpe"])
     got = results["base_equal"]["combined_sharpe"]
     if abs(got - EXPECT_BASE[window]) > 5e-4:
         raise SystemExit(f"[p4] ❌ 基线未复现：{got} ≠ P3 定稿 {EXPECT_BASE[window]}，退出")
@@ -676,6 +685,28 @@ def run_long(args) -> None:
     with open(out_path, "w", encoding="utf-8") as fh:
         json.dump(out, fh, ensure_ascii=False, indent=1)
     print(f"\n[p4] ✓ 已写入 {out_path}", flush=True)
+
+
+
+def expected_base_from(upstream_file: str, window: str, label: str) -> float:
+    """基线期望值**读上游产物**，不硬编码数字。
+
+    为什么：模拟引擎修 bug（如 L3.simulate 的现金约束顺序敏感性）后，
+    所有下游数字都会变，硬编码的期望值会立刻把整条链卡死 —— 而它本来的作用
+    是"防漂移"，不是"防数字变化"。改成读上游产物后，漂移照样能查出来
+    （上游产物与本次结果不一致就报错），但数字更新不需要人肉同步 6 处。
+
+    ⚠️ 调用方必须保证上游产物是**同一版引擎**跑出来的（重跑顺序要对）。
+    """
+    p = os.path.join(ROOT, "data", "backtest", upstream_file)
+    if not os.path.exists(p):
+        raise SystemExit(f"[gate] ❌ 找不到上游产物 {p}，无法建立基线门")
+    with open(p, encoding="utf-8") as fh:
+        d = json.load(fh)
+    try:
+        return float(d["results"]["base"]["combined_sharpe"])
+    except (KeyError, TypeError):
+        raise SystemExit(f"[gate] ❌ 上游产物 {upstream_file} 结构异常，无法取 base 组合夏普")
 
 
 def main() -> None:

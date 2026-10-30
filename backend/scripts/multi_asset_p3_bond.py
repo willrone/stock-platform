@@ -117,6 +117,30 @@ PARQUET_DIR = os.path.join(ETF_DIR, "parquet")
 # ───────────────────────── 候选池 ─────────────────────────
 
 
+
+def expected_base_from(upstream_file: str, window: str, label: str,
+                        key: str = "base") -> float:
+    """基线期望值**读上游产物**，不硬编码数字。
+
+    为什么：模拟引擎修 bug（如 L3.simulate 的现金约束顺序敏感性）后，
+    所有下游数字都会变，硬编码的期望值会立刻把整条链卡死 —— 而它本来的作用
+    是"防漂移"，不是"防数字变化"。改成读上游产物后，漂移照样能查出来
+    （上游产物与本次结果不一致就报错），但数字更新不需要人肉同步 6 处。
+
+    ⚠️ 调用方必须保证上游产物是**同一版引擎**跑出来的（重跑顺序要对）。
+    """
+    p = os.path.join(ROOT, "data", "backtest", upstream_file)
+    if not os.path.exists(p):
+        raise SystemExit(f"[gate] ❌ 找不到上游产物 {p}，无法建立基线门")
+    with open(p, encoding="utf-8") as fh:
+        d = json.load(fh)
+    try:
+        return float(d["results"][key]["combined_sharpe"])
+    except (KeyError, TypeError):
+        raise SystemExit(f"[gate] ❌ 上游产物 {upstream_file} 里没有 results.{key}.combined_sharpe，"
+                         f"结构异常（现有键：{sorted(d.get('results', {}))[:8]}）")
+
+
 def _load_code(code: str):
     import pandas as pd
     path = os.path.join(PARQUET_DIR, f"{code}.parquet")
@@ -555,7 +579,11 @@ def main() -> None:
 
     run_cfg("base", held, CLASSES, {"note": "定稿现状"})
     # ── 基线复现门：base 必须逐位复现 P2 定稿的组合夏普，否则全部配置不可比 ──
-    EXPECT_BASE = {"main": 1.3767, "oos": 1.0382}
+    # 上游 P2 的"定稿现状"配置键是 com_top3（商品类 top-3），不是 base
+    EXPECT_BASE = {"main": expected_base_from(f"multi_asset_p2_{args.window}.json",
+                                               args.window, "P3", key="com_top3"),
+                   "oos": expected_base_from("multi_asset_p2_oos.json", "oos", "P3",
+                                             key="com_top3")}
     if abs(results["base"]["combined_sharpe"] - EXPECT_BASE[args.window]) > 5e-4:
         raise SystemExit(
             f"[p3] ❌ 基线未复现：base {results['base']['combined_sharpe']} "

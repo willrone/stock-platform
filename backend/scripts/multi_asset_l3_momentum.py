@@ -340,27 +340,40 @@ def simulate(
                 total_turnover += proceeds
                 del shares[code]
             # 3) 买（按目标权重）
+            # ⚠️ 现金约束下必须**按比例缩放全部买入额**，不能"先到先得"。
+            #    旧实现逐笔判断 `if cash < amount + cost: amount = cash - cost`，
+            #    于是**遍历顺序决定谁被削减** → 同一目标权重表、仅持仓列表顺序不同，
+            #    就得到不同净值。P6 实测：目标权重表逐位相同，袖套夏普差 0.0099、
+            #    w=0.50 组合夏普差 0.0055（1.4092 vs 1.4147），
+            #    且首次建仓永远削减"最后一只" → "每月恢复类间等权"其实没真正做到。
+            #    改为 pro-rata 缩放后结果与遍历顺序无关。
+            buys: List[Tuple[str, float]] = []
             for code, w in tgt.items():
                 if w <= 0:
                     continue
                 p = px(code, d, "open")
                 if p is None:
                     continue
-                buy_px = p * (1 + SLIPPAGE)
                 want = val * w
                 cur = shares.get(code, 0) * p
                 if cur >= want:
                     continue
-                amount = want - cur
-                cost = amount * COMMISSION
-                if cash < amount + cost:
-                    amount = max(0.0, cash - cost)
-                if amount <= 0:
-                    continue
-                cash -= amount + cost
-                total_cost += cost
-                total_turnover += amount
-                shares[code] = shares.get(code, 0) + amount / buy_px
+                buys.append((code, want - cur))
+            if buys:
+                need = sum(a for _, a in buys)
+                scale = 1.0
+                if need > 0 and cash < need * (1 + COMMISSION):
+                    scale = cash / (need * (1 + COMMISSION))
+                for code, amount in buys:
+                    if amount <= 0:
+                        continue
+                    amount *= scale
+                    cost = amount * COMMISSION
+                    cash -= amount + cost
+                    total_cost += cost
+                    total_turnover += amount
+                    buy_px = px(code, d, "open") * (1 + SLIPPAGE)
+                    shares[code] = shares.get(code, 0) + amount / buy_px
             # 4) 权重再平衡到精确目标（卖出超配的部分）
             for code in list(shares.keys()):
                 if code not in tgt:

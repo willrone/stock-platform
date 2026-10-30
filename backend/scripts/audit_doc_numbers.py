@@ -65,6 +65,8 @@ ART = {
     'p4o': J('multi_asset_p4_oos.json'),
     'p4l': J('multi_asset_p4_long.json'),
     'p5': J('p5_class_audit.json'),
+    'p6m': J('multi_asset_p6_main.json'),
+    'p6o': J('multi_asset_p6_oos.json'),
     'p3m': J('multi_asset_p3_main.json'),
     'p3o': J('multi_asset_p3_oos.json'),
     'p3l': J('multi_asset_p3_long.json'),
@@ -563,6 +565,47 @@ def build_anchors():
                 if _row.get('turnover'):
                     A.append((P5DOC, _tidx, _c, '窗口前 120 日日均成交额',
                               ('jwan', 'p5', f'{_base}.turnover')))
+
+    # ── P6 · 主腿权重敏感性（表格 0/1/2/3/4）──
+    P6DOC = 'P6_WEIGHT_SENS'
+    _p6_cols = [
+        ('main 夏普', 'p6m', 'combined_sharpe', None),
+        ('oos 夏普', 'p6o', 'combined_sharpe', None),
+        ('oos Δ基线', 'p6o', None, 'p6delta'),
+        ('main 回撤', 'p6m', 'combined_maxdd', None),
+        ('oos 回撤', 'p6o', 'combined_maxdd', None),
+        ('main 波动', 'p6m', 'combined_vol', None),
+        ('oos 波动', 'p6o', 'combined_vol', None),
+    ]
+    for _w in ART['p6m']['w_grid']:
+        _k = f"w{int(round(_w*100)):03d}"
+        for _col, _art, _fld, _spec in _p6_cols:
+            if _spec:
+                A.append((P6DOC, 0, _k, _col, (_spec, _art, _k)))
+            else:
+                A.append((P6DOC, 0, _k, _col, ('j', _art, f'results.{_k}.{_fld}')))
+    for _s in ART['p6m']['random_w']:
+        _k = f"randw_s{_s}"
+        A.append((P6DOC, 1, _k, '随机 w', ('j', 'p6m', f'random_w.{_s}')))
+        A.append((P6DOC, 1, _k, 'main 夏普', ('j', 'p6m', f'results.{_k}.combined_sharpe')))
+        A.append((P6DOC, 1, _k, 'oos 夏普', ('j', 'p6o', f'results.{_k}.combined_sharpe')))
+        A.append((P6DOC, 1, _k, 'main Δ基线', ('p6delta', 'p6m', _k)))
+    _p6_shape = [('最优 w', 'best_w'), ('最优夏普', 'best_sharpe'),
+                 ('[0.40,0.60] 内夏普极差', 'mid_range_sharpe_span_040_060'),
+                 ('相邻网格最大跳变', 'max_adjacent_jump'),
+                 ('随机 w 夏普最大', 'random_w_sharpe_max'),
+                 ('随机 w 夏普最小', 'random_w_sharpe_min')]
+    for _wn, _art in (('main', 'p6m'), ('oos', 'p6o')):
+        for _col, _fld in _p6_shape:
+            A.append((P6DOC, 2, _wn, _col, ('j', _art, f'shape.{_fld}')))
+    for _tidx, _art in ((3, 'p6m'), (4, 'p6o')):
+        for _sub in sorted(ART[_art]['subwindows']):
+            for _col, _k in (('w=0.50', 'w050'), ('w=0.40', 'w040'), ('w=0.60', 'w060')):
+                _v = safe_dig(_art, f'subwindows.{_sub}.{_k}')
+                if _v is not None:
+                    A.append((P6DOC, _tidx, _sub, _col, ('j', _art, f'subwindows.{_sub}.{_k}')))
+            A.append((P6DOC, _tidx, _sub, '天数',
+                      ('j', _art, f'subwindows.{_sub}.n')))
     return A
 
 
@@ -570,6 +613,40 @@ def parse_num(cell):
     txt = cell.replace('−', '-').replace('**', '').strip()
     m = re.search(r'[-+]?\d+(?:\.\d+)?', txt)
     return float(m.group()) if m else None
+
+
+def cell_num_positions(cell):
+    """单元格里所有数字及其位置：[(num, start, end), ...]
+
+    注意：`1.3767 (+59.0%)` 这类**复合单元格**里，锚点对应的是**第一个**数字
+    （主值），括号里的百分比是补充说明、不参与锚点。
+    """
+    txt = cell.replace('−', '-')
+    return [(float(m.group()), m.start(), m.end())
+            for m in re.finditer(r'[-+]?\d+(?:\.\d+)?', txt)]
+
+
+def target_number(cell, want):
+    """定位单元格中对应 `want` 的数字。
+
+    规则（审计器与回填器必须完全一致，否则「审计通过」不代表「数字对」）：
+      - 单元格**只有一个数字且含 `%`** → 这是百分比格，目标值 = want × 100；
+      - 否则（纯数值格 / 复合格）→ 目标值 = want，取**第一个**数字。
+    返回 (kind, num, start, end) 或 None。
+    """
+    nums = cell_num_positions(cell)
+    if not nums:
+        return None
+    n, s, e = nums[0]
+    if len(nums) == 1 and '%' in cell:
+        if abs(n - want * 100) <= 0.05:
+            return ('pct', n, s, e)
+        if abs(n - want) <= TOL:
+            return ('direct', n, s, e)
+        return None
+    if abs(n - want) <= TOL:
+        return ('direct', n, s, e)
+    return None
 
 
 def extract_tables(text):
@@ -656,6 +733,9 @@ def resolve(spec):
     if spec[0] == 'j2':
         # 文档按 2 位小数展示的量（换手等）—— 期望值同样取到 2 位再比
         return round(dig(ART[spec[1]], spec[2]), 2)
+    if spec[0] == 'p6delta':
+        return (dig(ART[spec[1]], f'results.{spec[2]}.combined_sharpe')
+                - dig(ART[spec[1]], 'results.w050.combined_sharpe'))
     if spec[0] == 'p4delta':
         # P4 组合夏普相对 base_equal 的差
         art, key = spec[1], spec[2]
@@ -715,18 +795,17 @@ def check(texts, anchors):
         if err:
             problems.append(f'{doc}[表{tidx}] {err}')
             continue
-        got = parse_num(cell)
-        if got is None:
+        nums = cell_num_positions(cell)
+        if not nums:
             problems.append(f'{doc}[表{tidx}] 「{row_label}」×「{col_hdr}」不是数字：{cell!r}')
             continue
         want = resolve(spec)
-        cands = [want, want * 100]
-        # 单元格写成百分比（0.1848 → "18.5%"）时，用 0.05 的绝对容差（四舍五入到 0.1%）
-        if '%' in cell and abs(got - want * 100) <= 0.05:
-            continue
-        if not any(abs(got - c) <= TOL for c in cands):
+        hit = target_number(cell, want)
+        if hit is None:
+            got = nums[0][0]
+            kind = '百分比格' if (len(nums) == 1 and '%' in cell) else '数值/复合格'
             problems.append(
-                f'{doc}[表{tidx}] 「{row_label}」×「{col_hdr}」= {got}，'
+                f'{doc}[表{tidx}] 「{row_label}」×「{col_hdr}」= {got}（{kind}），'
                 f'产物 = {want}（×100={want*100:.4f}）')
     return problems
 
@@ -808,8 +887,66 @@ def main():
     if args.neg:
         print()
         print('=' * 78)
-        print('自检：注入错误 → 期望审计失败')
+        print('自检：动态注入错误 → 期望审计失败')
         print('=' * 78)
+        # **动态注入**：从锚点实时定位真实单元格并改坏其中一个数字。
+        # 旧实现把注入目标写死成字面量（如 `**1.3767**`），
+        # 文档数字一更新注入点就失效 —— 自检形同虚设（而且是「静默失效」）。
+        t2 = dict(texts)
+        injected = []
+        seen_docs = set()
+        for a in anchors:
+            if len(injected) >= 5:
+                break
+            doc_pref, tidx, row_label, col_hdr, spec = a[0], a[1], a[2], a[3], a[4]
+            if doc_pref in seen_docs:
+                continue
+            doc = next((k for k in texts if k.startswith(doc_pref)), None)
+            if not doc:
+                continue
+            try:
+                tables = extract_tables(texts[doc])
+                if isinstance(tidx, str):
+                    cands = [i for i, (h, _) in enumerate(tables)
+                             if any(norm(col_hdr) == norm(c) for c in h)]
+                    if not cands:
+                        continue
+                    tidx = cands[0]
+                if tidx >= len(tables):
+                    continue
+                header, data = tables[tidx]
+                cell, err = find_cell(header, data, row_label, col_hdr)
+                if err or cell is None:
+                    continue
+                nums = cell_num_positions(cell)
+                if not nums:
+                    continue
+                n, s, e = nums[0]
+                bad_cell = cell[:s] + f"{n + 0.5:.4f}" + cell[e:]
+                if bad_cell == cell or texts[doc].count(cell) != 1:
+                    continue
+                t2[doc] = t2[doc].replace(cell, bad_cell, 1)
+                injected.append((doc, row_label, col_hdr, cell, bad_cell))
+                seen_docs.add(doc_pref)
+            except Exception:
+                continue
+        if not injected:
+            print('  ❌ 未能构造任何注入点（锚点结构变了？）')
+            return 1
+        for doc, rl, ch, oc, bc in injected:
+            print(f'  注入 [{doc}] 「{rl[:18]}」×「{ch[:14]}」: {oc} → {bc}')
+        p2 = check(t2, anchors)
+        print(f'  注入后断言失败数：{len(p2)}（期望 > 0）')
+        for p in p2[:8]:
+            print(f'      {p}')
+        neg_ok = len(p2) > 0
+        print(f'  自检结论：{"✅ 审计能抓到注入的错误" if neg_ok else "❌ 审计有漏洞"}')
+        print('  （动态注入不落盘，文档未被修改）')
+        if not neg_ok:
+            return 1
+        return 0
+
+    if False:
         target = os.path.join(DOCS, 'L3_MOMENTUM_2026-10-30.md')
         original = open(target, encoding='utf-8').read()
         broken = original.replace(
