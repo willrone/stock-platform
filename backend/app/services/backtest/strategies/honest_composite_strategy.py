@@ -198,13 +198,26 @@ class HonestCompositeStrategy(BaseStrategy):
         # 42 因子版（0.799 / −16.46%）。要用面板因子要显式 use_panel=True。
         self.use_panel = bool(config.get("use_panel", False))
         # 2026-10-27：**暴露中性化**（Barra APT 风格逐日截面 OLS 残差化）
-        # 这是本轮**唯一跨段稳定有效**的改进（`verify_neut_segments.py`）：
-        #   段1 Δ夏普 +0.222 / 段2 +0.241 / 段3 +0.307，且每段回撤改善 2~3pp
         # 暴露：size = 20 日 log 成交额均值（平台无市值数据，是流动性/规模混合代理）
         #       illiq = Amihud(2002) ILLIQ 20 日均值取 log1p
         # 中性化：逐日截面 OLS（y=复合分, X=[size, illiq, 1]）取残差
-        # ⚠️ 5 年窗口上失效（0.635→0.548），说明它是 **regime 依赖**的
-        #    （2023-05 之后有效，更早的 2021-2023 无效）
+        #
+        # ⚠️⚠️ 2026-10-31 更正：**默认关闭，而且在生产口径下是负面的 —— 不要开启。**
+        #   原注释写的是"本轮唯一跨段稳定有效，段1/2/3 Δ夏普 +0.222/+0.241/+0.307，
+        #   每段回撤改善 2~3pp"。**那组数字来自研究实现**
+        #   （methods_research_v2.neutralize_score，**42f 口径**），不是本策略的生产口径。
+        #   真实引擎口径（25f，data/backtest/neutseg_seg*_*.json）是：
+        #       seg1 0.7121→0.5716 (Δ −0.140)
+        #       seg2 1.0419→1.2422 (Δ +0.200)
+        #       seg3 1.3374→1.0685 (Δ −0.269)   ← 三段里两段负面
+        #   3 年整体（real_lag1_neutral.json，旧引擎）：0.880→0.757，
+        #   回撤 −13.37%→−20.47%（回撤反而恶化 7.1pp）
+        #   → 只有 42f 口径支持它。生产口径不支持。
+        #   另：5 年窗口上失效（0.635→0.548），regime 依赖也成立。
+        #   裁决：docs/backtest/P8_EXPOSURE_NEUTRAL_2026-10-31.md
+        #   ⚠️ 教训：**引用别人的"改进有效"结论前，必须确认它是同一口径**
+        #      （同因子集 + 同引擎版本 + 同窗口切分），否则会把 42f 的乐观数字
+        #      当成 25f 的结论 —— 本仓库已经踩过一次。
         self.exposure_neutral = bool(config.get("exposure_neutral", False))
         self.neutral_exposures = list(config.get(
             "neutral_exposures", ("size", "illiq")))

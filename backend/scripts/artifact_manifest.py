@@ -56,6 +56,10 @@ TRACKED = [
     "multi_asset_p6_main.json",           # P6 主腿权重敏感性
     "multi_asset_p6_oos.json",
     "p6_order_diag.json",                 # 顺序不变性回归测试
+    "multi_asset_p7_main.json",           # P7 主腿因子消融
+    "multi_asset_p7_oos.json",
+    "multi_asset_p8_main.json",           # P8 暴露中性化复裁
+    "multi_asset_p8_oos.json",
     # ↓ 以下为 audit_doc_numbers.py 的 ART 字典里其余产物
     "multi_asset_final_robustness.json",  # FR 稳健性（main）
     "multi_asset_final_robustness_oos.json",
@@ -93,6 +97,10 @@ AUDITED = [
     "multi_asset_p3_long.json",
     "p3_bond_recon.json",
     "ALL_real_lag1_v2.json",
+    "multi_asset_p7_main.json",
+    "multi_asset_p7_oos.json",
+    "multi_asset_p8_main.json",
+    "multi_asset_p8_oos.json",
 ]
 
 

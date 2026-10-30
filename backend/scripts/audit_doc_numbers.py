@@ -71,6 +71,10 @@ ART = {
     'p3o': J('multi_asset_p3_oos.json'),
     'p3l': J('multi_asset_p3_long.json'),
     'p3br': J('p3_bond_recon.json'),
+    'p7m': J('multi_asset_p7_main.json'),
+    'p7o': J('multi_asset_p7_oos.json'),
+    'p8m': J('multi_asset_p8_main.json'),
+    'p8o': J('multi_asset_p8_oos.json'),
 }
 
 
@@ -606,6 +610,67 @@ def build_anchors():
                     A.append((P6DOC, _tidx, _sub, _col, ('j', _art, f'subwindows.{_sub}.{_k}')))
             A.append((P6DOC, _tidx, _sub, '天数',
                       ('j', _art, f'subwindows.{_sub}.n')))
+
+    # ── P7 · 因子消融（表 2=main 排名, 3=随机对照, 5=oos, 6=子窗口）──
+    P7DOC = 'P7_FACTOR_ABLATION'
+    _p7_main_cols = [
+        ('因子数', 'n_factors'), ('A腿夏普', 'a_share_sharpe'),
+        ('组合夏普', 'combined_sharpe'),
+        ('组合收益', 'combined_return'), ('组合回撤', 'combined_maxdd'),
+        ('交易笔数', 'a_share_trades'),
+    ]
+    for _l in ART['p7m']['ranking']:
+        for _col, _fld in _p7_main_cols:
+            A.append((P7DOC, 2, _l, _col, ('j', 'p7m', f'results.{_l}.{_fld}')))
+        A.append((P7DOC, 2, _l, 'Δ组合', ('p7delta', 'p7m', _l)))
+    # 随机对照分组（表 3）：行标签 = keep 数
+    for _keep, _g in ART['p7m']['random_groups'].items():
+        _labs = _g['labels']
+        A.append((P7DOC, 3, _keep, '组合夏普最大',
+                  ('p7rand_max', 'p7m', _keep)))
+        A.append((P7DOC, 3, _keep, '组合夏普最小',
+                  ('p7rand_min', 'p7m', _keep)))
+        for _i, _lab in enumerate(_labs[:3]):
+            A.append((P7DOC, 3, _keep, f'随机臂 {_i + 1}',
+                      ('j', 'p7m', f'results.{_lab}.combined_sharpe')))
+    # oos 表（表 5）
+    _p7_oos_cols = [
+        ('因子数', 'n_factors'), ('A腿夏普', 'a_share_sharpe'),
+        ('组合夏普', 'combined_sharpe'),
+        ('组合收益', 'combined_return'), ('组合回撤', 'combined_maxdd'),
+    ]
+    for _l in ART['p7o']['results']:
+        for _col, _fld in _p7_oos_cols:
+            A.append((P7DOC, 5, _l, _col, ('j', 'p7o', f'results.{_l}.{_fld}')))
+        A.append((P7DOC, 5, _l, 'Δ组合', ('p7delta', 'p7o', _l)))
+    # 子窗口（表 6）：main base25 + oos base25
+    for _sub in sorted(ART['p7m']['subwindows']):
+        A.append((P7DOC, 6, _sub, 'base25',
+                  ('j', 'p7m', f'subwindows.{_sub}.base25')))
+        A.append((P7DOC, 6, _sub, '天数',
+                  ('j', 'p7m', f'subwindows.{_sub}.n')))
+
+    # ── P8 · 暴露中性化（表 1=主结果, 3=子窗口）──
+    P8DOC = 'P8_EXPOSURE_NEUTRAL'
+    _p8_cols = [
+        ('A腿夏普(关)', 'base25', 'a_share_sharpe'),
+        ('A腿夏普(开)', 'neut25', 'a_share_sharpe'),
+        ('组合夏普(关)', 'base25', 'combined_sharpe'),
+        ('组合夏普(开)', 'neut25', 'combined_sharpe'),
+        ('组合回撤(关)', 'base25', 'combined_maxdd'),
+        ('组合回撤(开)', 'neut25', 'combined_maxdd'),
+    ]
+    for _w, _art in (('main', 'p8m'), ('oos', 'p8o')):
+        for _col, _arm, _fld in _p8_cols:
+            A.append((P8DOC, 1, _w, _col, ('j', _art, f'results.{_arm}.{_fld}')))
+        A.append((P8DOC, 1, _w, 'ΔA腿', ('p8delta', _art, 'a_share_sharpe')))
+        A.append((P8DOC, 1, _w, 'Δ组合', ('p8delta', _art, 'combined_sharpe')))
+    for _w, _art in (('main', 'p8m'), ('oos', 'p8o')):
+        for _i, _sub in enumerate(sorted(ART[_art]['subwindows'])):
+            A.append((P8DOC, 3, f"{_w}/{_sub}", 'base25(关)',
+                      ('j', _art, f'subwindows.{_sub}.base25')))
+            A.append((P8DOC, 3, f"{_w}/{_sub}", 'neut25(开)',
+                      ('j', _art, f'subwindows.{_sub}.neut25')))
     return A
 
 
@@ -736,6 +801,18 @@ def resolve(spec):
     if spec[0] == 'p6delta':
         return (dig(ART[spec[1]], f'results.{spec[2]}.combined_sharpe')
                 - dig(ART[spec[1]], 'results.w050.combined_sharpe'))
+    if spec[0] == 'p7delta':
+        # 该臂组合夏普 - 同窗口 base25 组合夏普
+        return (dig(ART[spec[1]], f'results.{spec[2]}.combined_sharpe')
+                - dig(ART[spec[1]], 'results.base25.combined_sharpe'))
+    if spec[0] == 'p7rand_max':
+        return dig(ART[spec[1]], f'random_groups.{spec[2]}.max')
+    if spec[0] == 'p7rand_min':
+        return dig(ART[spec[1]], f'random_groups.{spec[2]}.min')
+    if spec[0] == 'p8delta':
+        # neut25 - base25（指定字段）
+        return (dig(ART[spec[1]], f'results.neut25.{spec[2]}')
+                - dig(ART[spec[1]], f'results.base25.{spec[2]}'))
     if spec[0] == 'p4delta':
         # P4 组合夏普相对 base_equal 的差
         art, key = spec[1], spec[2]
@@ -896,7 +973,7 @@ def main():
         injected = []
         seen_docs = set()
         for a in anchors:
-            if len(injected) >= 5:
+            if len(injected) >= 12:
                 break
             doc_pref, tidx, row_label, col_hdr, spec = a[0], a[1], a[2], a[3], a[4]
             if doc_pref in seen_docs:
