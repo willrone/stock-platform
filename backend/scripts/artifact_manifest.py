@@ -139,7 +139,40 @@ AUDITED = [
 ]
 
 
+# ── 指纹规范化 ──────────────────────────────────────────────
+# 产物 JSON 里含 wall_s（墙钟耗时）。同一实验重跑时**所有策略结果字段逐位相同**，
+# 只有耗时不同 → 整文件 sha256 天然不稳定 → 指纹门会对任何重跑误报「产物被覆盖」。
+#
+# 实证（本项目）：P7 同一臂连续跑两次，114 个字段中**仅** wall_s 不同（92.9 vs 92.6），
+# 其余全部逐位一致 → 引擎数值是确定性的，不稳定源只有耗时。
+#
+# 因此：JSON 产物先剔除易变字段再算规范化 sha256；非 JSON 走整文件字节。
+# 易变字段白名单必须**最窄** —— 扫过全部 49 个产物，只有 wall_s 命中，
+# `duration`/`seconds`/`timestamp` 等没有命中（避免误剔业务字段，如交易日数）。
+VOLATILE_KEYS = ("wall_s",)
+SHA256_MODE = "normalized-json-v1"
+
+
+def _strip_volatile(obj: Any) -> Any:
+    if isinstance(obj, dict):
+        return {k: _strip_volatile(v) for k, v in obj.items() if k not in VOLATILE_KEYS}
+    if isinstance(obj, list):
+        return [_strip_volatile(x) for x in obj]
+    return obj
+
+
 def sha256(path: str) -> str:
+    """产物指纹。JSON 走规范化（剔易变字段 + 统一序列化），其余走整文件字节。"""
+    if path.endswith(".json"):
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                obj = json.load(fh)
+        except (ValueError, OSError):
+            obj = None
+        if obj is not None:
+            canon = json.dumps(_strip_volatile(obj), ensure_ascii=False,
+                               sort_keys=True, indent=2)
+            return hashlib.sha256(canon.encode("utf-8")).hexdigest()
     h = hashlib.sha256()
     with open(path, "rb") as fh:
         for chunk in iter(lambda: fh.read(1 << 20), b""):
@@ -178,6 +211,8 @@ def build() -> int:
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "git_commit": git_commit(),
         "data_dir": os.path.relpath(DATA_DIR, ROOT),
+        "sha256_mode": SHA256_MODE,
+        "sha256_excludes": list(VOLATILE_KEYS),
         "files": entries,
         "missing": missing,
         "uncovered_audited": uncovered,
@@ -198,6 +233,11 @@ def verify() -> int:
     with open(MANIFEST, encoding="utf-8") as fh:
         manifest = json.load(fh)
     bad: List[str] = []
+    # 算法版本闸门：旧清单（整文件 sha256）不能冒充新算法 → 防止"换了算法却用旧清单"
+    mode = manifest.get("sha256_mode")
+    if mode != SHA256_MODE:
+        bad.append(f"清单指纹算法版本不符：清单 {mode!r} ≠ 当前 {SHA256_MODE!r}"
+                   f"（需重新 build；旧算法会把含 wall_s 的产物一律误报为被覆盖）")
     # 覆盖完整性：清单必须覆盖审计器依赖的全部产物
     for n in manifest.get("uncovered_audited", []):
         bad.append(f"{n}: 审计依赖但未纳入指纹清单")
