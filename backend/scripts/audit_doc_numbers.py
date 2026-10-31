@@ -100,13 +100,6 @@ ART = {
     'p10s': J('multi_asset_p10_stats.json'),
     'p11': J('multi_asset_p11_alpha.json'),
     'p11s': J('multi_asset_p11_stats.json'),
-    'p12m': J('multi_asset_p12_main.json'),
-    'p12o': J('multi_asset_p12_oos.json'),
-    'p12md': J('multi_asset_p12_main_degraded.json'),
-    'p12od': J('multi_asset_p12_oos_degraded.json'),
-    'p12l': J('multi_asset_p12_long.json'),
-    'p12lw': J('multi_asset_p12_longw.json'),
-    'p12d': J('multi_asset_p12_diag.json'),
 }
 
 
@@ -1645,6 +1638,30 @@ def prose_value(spec):
         return min(_ew_alpha_vals())
     if kind == 'ew_alpha_max':
         return max(_ew_alpha_vals())
+    if kind == 'p3_final':
+        # P3 定稿（剔除可转债后）某窗口的组合夏普
+        d = dig(ART[f'p3{"m" if spec[1] == "main" else "o"}'],
+                ['results', 'bond_lowrho3_noliq'
+                 if 'bond_lowrho3_noliq' in dig(
+                     ART[f'p3{"m" if spec[1] == "main" else "o"}'], ['results'])
+                 else 'bond_lowrho3'])
+        return d['combined_sharpe']
+    if kind == 'p3_base':
+        # P3 base（含可转债污染的旧现状）某窗口的组合夏普
+        d = dig(ART[f'p3{"m" if spec[1] == "main" else "o"}'],
+                ['results', 'base'])
+        return d['combined_sharpe']
+    if kind == 'p3_final_dd':
+        d = dig(ART[f'p3{"m" if spec[1] == "main" else "o"}'],
+                ['results', 'bond_lowrho3_noliq'
+                 if 'bond_lowrho3_noliq' in dig(
+                     ART[f'p3{"m" if spec[1] == "main" else "o"}'], ['results'])
+                 else 'bond_lowrho3'])
+        return abs(d['combined_maxdd']) * 100
+    if kind == 'p3_base_dd':
+        d = dig(ART[f'p3{"m" if spec[1] == "main" else "o"}'],
+                ['results', 'base'])
+        return abs(d['combined_maxdd']) * 100
     if kind == 'comb_min':
         return min(_w050('p12m', 'combined_sharpe'),
                    _w050('p12o', 'combined_sharpe'))
@@ -1767,6 +1784,21 @@ def build_prose_anchors():
         ('multi', ('long_sum', 'min'), ('long_sum', 'max')))
     add(r'组合 β 仅 (?P<g1>-?\d+(?:\.\d+)?)~(?P<g2>-?\d+(?:\.\d+)?)（对国证A指/等权持有），ρ (?P<g3>-?\d+(?:\.\d+)?)~(?P<g4>-?\d+(?:\.\d+)?)',
         ('multi', ('beta_min',), ('beta_max',), ('corr_min',), ('corr_max',)))
+
+    # ── P4 / P5：定稿基线数字（曾因硬编码而与产物脱节）──
+    P4 = 'P4_CLASS_WEIGHT'
+    A.append((P4, r'组合夏普 \*\*main (?P<g1>-?\d+(?:\.\d+)?) / oos (?P<g2>-?\d+(?:\.\d+)?)\*\*，回撤 \*\*−(?P<g3>\d+(?:\.\d+)?)%\*\*',
+              ('multi', ('p3_final', 'main'), ('p3_final', 'oos'),
+               ('p3_final_dd', 'main'))))
+    P5 = 'P5_CLASS_AUDIT'
+    A.append((P5, r'剔除后组合夏普 main (?P<g1>-?\d+(?:\.\d+)?) → \*\*(?P<g2>-?\d+(?:\.\d+)?)\*\*、',
+              ('multi', ('p3_base', 'main'), ('p3_final', 'main'))))
+    A.append((P5, r'oos (?P<g1>-?\d+(?:\.\d+)?) → \*\*(?P<g2>-?\d+(?:\.\d+)?)\*\*，回撤 −(?P<g3>\d+(?:\.\d+)?)% → \*\*−(?P<g4>\d+(?:\.\d+)?)%\*\*',
+              ('multi', ('p3_base', 'oos'), ('p3_final', 'oos'),
+               ('p3_base_dd', 'main'), ('p3_final_dd', 'main'))))
+    A.append((P5, r'一位都不变\*\*（main (?P<g1>-?\d+(?:\.\d+)?) / oos (?P<g2>-?\d+(?:\.\d+)?) / 回撤 −(?P<g3>\d+(?:\.\d+)?)%）',
+              ('multi', ('p3_final', 'main'), ('p3_final', 'oos'),
+               ('p3_final_dd', 'main'))))
     return A
 
 
@@ -1832,6 +1864,33 @@ STALE = {
     '−9.11%': '旧 oos 回撤',
 }
 
+# ── 按文档限定的旧值扫描 ─────────────────────────────────
+# 为什么要有「限定范围」：STALE 是全局扫描，同一个数字在不同文档里
+# 含义可能完全不同 —— 1.3767 在 FINAL_ROBUSTNESS 里是**合法的历史对照**
+# （「修复前 1.3581 → 修复后 1.3767」），但在 P4/P5 里是**陈旧的当前状态**
+# （引擎顺序修复后早已不是 1.3767）。全局白名单只能选一个，两头都不对。
+#
+# 引擎顺序不变性修复（948f6c55）前后的组合基线：
+#   含可转债 base：main 1.3767→1.3786 / oos 1.0382→1.0391
+#   剔除后定稿：  main 1.4092→1.4114 / oos 1.0685→1.0691
+# 这些值曾硬编码在 gen_p4/gen_p5_doc.py 里，引擎修 bug 后没跟着变，
+# 且旧值在任何当前产物里都不存在 → 文档与产物脱节而审计器抓不到。
+SCOPED_STALE = {
+    'P4_CLASS_WEIGHT_2026-10-31': {
+        '1.4092': '旧（顺序修复前）组合基线 main',
+        '1.0685': '旧（顺序修复前）组合基线 oos',
+        '−7.95%': '旧（顺序修复前）定稿回撤',
+    },
+    'P5_CLASS_AUDIT_2026-10-31': {
+        '1.4092': '旧（顺序修复前）组合基线 main',
+        '1.0685': '旧（顺序修复前）组合基线 oos',
+        '1.3767': '旧（顺序修复前）含可转债 base main',
+        '1.0382': '旧（顺序修复前）含可转债 base oos',
+        '−7.95%': '旧（顺序修复前）定稿回撤',
+        '−8.70%': '旧（顺序修复前）含可转债回撤',
+    },
+}
+
 
 def scan_stale(texts):
     hits = []
@@ -1840,6 +1899,14 @@ def scan_stale(texts):
             for m in re.finditer(re.escape(old), body):
                 ctx = body[max(0, m.start() - 70):m.start() + 50].replace('\n', '⏎')
                 hits.append((doc, old, why, ctx))
+        # 限定文档范围的旧值（同一数字在不同文档含义不同，见 SCOPED_STALE 注释）
+        for pref, table in SCOPED_STALE.items():
+            if not doc.startswith(pref):
+                continue
+            for old, why in table.items():
+                for m in re.finditer(re.escape(old), body):
+                    ctx = body[max(0, m.start() - 70):m.start() + 50].replace('\n', '⏎')
+                    hits.append((doc, old, why + f'（{pref} 限定）', ctx))
     return hits
 
 

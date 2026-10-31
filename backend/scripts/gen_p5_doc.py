@@ -34,9 +34,28 @@ def fmt(v, pct=False, dash="—"):
     return f"{v:.4f}"
 
 
+def _p3_pair(window: str):
+    """返回 (剔除可转债前 base, 剔除后定稿) 两个组合的夏普/回撤。
+
+    **从 P3 产物读**，不硬编码 —— 引擎修 bug 后数字会变，
+    硬编码会让文档与产物脱节（P4/P5 曾出现 1.4092/1.0685 这种
+    「在任何当前产物里都不存在」的旧值）。
+    """
+    d = load(f"multi_asset_p3_{window}.json")["results"]
+    key = "bond_lowrho3_noliq" if "bond_lowrho3_noliq" in d else "bond_lowrho3"
+    return d["base"], d[key]
+
+
 def main() -> None:
     p5 = load("p5_class_audit.json")
     win = p5["windows"]
+
+    _bm, _fm = _p3_pair("main")
+    _bo, _fo = _p3_pair("oos")
+    BASE_M, BASE_O = _bm["combined_sharpe"], _bo["combined_sharpe"]
+    FINAL_M, FINAL_O = _fm["combined_sharpe"], _fo["combined_sharpe"]
+    BASE_DD_M = _bm["combined_maxdd"]
+    FINAL_DD_M = _fm["combined_maxdd"]
 
     L: List[str] = []
     a = L.append
@@ -58,8 +77,8 @@ def main() -> None:
     a("")
     a("P3 的唯一收获是**分类纠错**：bond 类混进了博时可转债 ETF `511380`")
     a("（ρ 与 A 股代理 **+0.7643 / +0.7976**），本质是「带债底的股票」——")
-    a("**这不是参数问题，是资产性质不一致**。剔除后组合夏普 main 1.3767 → **1.4092**、")
-    a("oos 1.0382 → **1.0685**，回撤 −8.70% → **−7.95%**。")
+    a(f"**这不是参数问题，是资产性质不一致**。剔除后组合夏普 main {BASE_M:.4f} → **{FINAL_M:.4f}**、")
+    a(f"oos {BASE_O:.4f} → **{FINAL_O:.4f}**，回撤 −{abs(BASE_DD_M) * 100:.2f}% → **−{abs(FINAL_DD_M) * 100:.2f}%**。")
     a("")
     a("既然一个类能被污染，另外两个类也可能。P5 把同一把尺子量到 gold / commodity 上：")
     a("")
@@ -165,7 +184,8 @@ def main() -> None:
     a(f"| bond | `{'`、`'.join(FINAL_HELD['bond'])}` | P3 已定（剔除可转债） |")
     a("")
     a("**关键：数值不变。** main 与 oos 两个窗口的「流动性 top-3」恰好就等于上面这三组，")
-    a("所以固化后组合夏普、回撤、相关性**一位都不变**（main 1.4092 / oos 1.0685 / 回撤 −7.95%）。")
+    a(f"所以固化后组合夏普、回撤、相关性**一位都不变**"
+      f"（main {FINAL_M:.4f} / oos {FINAL_O:.4f} / 回撤 −{abs(FINAL_DD_M) * 100:.2f}%）。")
     a("变的只是**规则**：从「每次按排名重算」变成「写死持仓集 + 季度复核流动性」。")
     a("")
     a("复核触发条件（写死）：任一标的近 120 交易日日均成交额跌破 **5000 万元**，")

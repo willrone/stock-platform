@@ -39,10 +39,28 @@ def pct(v, dash="—"):
     return dash if v is None else f"{v:.2%}"
 
 
+def _p3_final(window: str):
+    """定稿基线**从 P3 产物读**，不硬编码。
+
+    为什么：引擎修 bug（如撮合器顺序敏感性）后所有下游数字都会变，
+    硬编码的期望值不会跟着变 —— 文档就会与产物脱节却不报错
+    （曾出现：P4/P5 写 1.4092/1.0685，产物早已是 1.4114/1.0691，
+    且这两个旧值在任何当前产物里都不存在，审计器也抓不到）。
+    """
+    d = load(f"multi_asset_p3_{window}.json")["results"]
+    key = "bond_lowrho3_noliq" if "bond_lowrho3_noliq" in d else "bond_lowrho3"
+    return d[key]
+
+
 def main() -> None:
     m = load("multi_asset_p4_main.json")
     o = load("multi_asset_p4_oos.json")
     lg = load("multi_asset_p4_long.json")
+
+    _fm, _fo = _p3_final("main"), _p3_final("oos")
+    FINAL_M = _fm["combined_sharpe"]
+    FINAL_O = _fo["combined_sharpe"]
+    FINAL_DD_M = _fm["combined_maxdd"]
 
     L: List[str] = []
     a = L.append
@@ -63,7 +81,8 @@ def main() -> None:
     a("")
     a("> **定稿不变**：A 股腿 50% + gold / bond / commodity 各 16.67%，类内等权，")
     a("> 每月再平衡回类间等权；bond 类 = 固定 `{511260, 511010, 511020}`。")
-    a("> 组合夏普 **main 1.4092 / oos 1.0685**，回撤 **−7.95%**。")
+    a(f"> 组合夏普 **main {FINAL_M:.4f} / oos {FINAL_O:.4f}**，"
+      f"回撤 **−{abs(FINAL_DD_M) * 100:.2f}%**。")
     a("> 见 `P3_BOND_CLASS_2026-10-31.md` §7。")
     a("")
     a("---")
