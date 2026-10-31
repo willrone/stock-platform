@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-11-01T04:07:56",
-  "git_commit": "1b71401c",
+  "generated_at": "2026-11-01T04:19:58",
+  "git_commit": "59c42d26",
   "data_dir": "data/backtest",
   "sha256_mode": "normalized-json-v1",
   "sha256_excludes": [
@@ -283,9 +283,9 @@
       "mtime": "2026-11-01T03:31:41"
     },
     "trial_budget.json": {
-      "sha256": "5f53f0a8669c3c5bef44d141bdb3217af5af3ebcf8bd8f5dfbd0f06207699410",
-      "bytes": 1255,
-      "mtime": "2026-11-01T04:07:56"
+      "sha256": "2814b92524c954033882a27f5bf809ec80ce9b6c2b0cccc4df55b04eb65517f8",
+      "bytes": 1676,
+      "mtime": "2026-11-01T04:19:58"
     }
   },
   "missing": [],

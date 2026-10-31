@@ -275,28 +275,36 @@ def cmd_register(args: argparse.Namespace) -> int:
     after = before + trials
     if after < before:
         raise SystemExit("[trial_budget] n_trials 不可减少")
-    if args.override:
-        # 允许「用本实验自身的试验数」覆盖全局口径 —— 仅当本实验搜索空间被先验压缩。
-        after = trials
-        if not args.note:
-            raise SystemExit("[trial_budget] --override 必须给 --note 说明理由")
-        ledger["n_trials_total"] = after
-    else:
-        ledger["n_trials_total"] = after
-    ledger.setdefault("entries", []).append({
+    if args.override and not args.note:
+        raise SystemExit("[trial_budget] --override 必须给 --note 说明理由")
+    # ⚠️ 全局 n_trials_total **一律累加**（门槛只升不降）。
+    #    --override 只额外记录「本实验自身的 DSR 口径」——
+    #    绝不能改全局，否则一次 override 就能把整个项目的显著性门槛永久拉低。
+    ledger["n_trials_total"] = before + trials
+    entry = {
         "date": datetime.date.today().isoformat(),
         "label": args.register,
         "trials": trials,
         "note": args.note or "",
         "override": bool(args.override),
         "n_trials_total_after": after,
-    })
+    }
+    if args.override:
+        # 本实验自己的口径（用于 DSR 判定）；全局口径仍然累加
+        entry["experiment_trials"] = trials
+        entry["experiment_dsr95_threshold"] = round(
+            sharpe_needed_for_dsr95(trials), 4)
+    ledger.setdefault("entries", []).append(entry)
     save_ledger(ledger)
     _rebuild_manifest()
     print(f"[trial_budget] 已登记「{args.register}」+{trials} 次试验"
-          f"{'（override）' if args.override else ''}；n_trials {before} → {after}")
-    print(f"[trial_budget] 新 n_trials = {after}；"
-          f"要让 DSR ≥ 0.95，实际夏普需 ≥ {sharpe_needed_for_dsr95(after):.4f}")
+          f"{'（override）' if args.override else ''}；"
+          f"全局 n_trials {before} → {after}")
+    print(f"[trial_budget] 全局口径：要 DSR ≥ 0.95，实际夏普需 ≥ "
+          f"{sharpe_needed_for_dsr95(after):.4f}")
+    if args.override:
+        print(f"[trial_budget] 本实验口径（n_trials={trials}）：要 DSR ≥ 0.95，"
+              f"实际夏普需 ≥ {sharpe_needed_for_dsr95(trials):.4f}")
     return 0
 
 
