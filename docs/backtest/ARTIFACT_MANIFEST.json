@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-11-01T03:04:47",
-  "git_commit": "667474fa",
+  "generated_at": "2026-11-01T03:35:43",
+  "git_commit": "9ce7fcd7",
   "data_dir": "data/backtest",
   "sha256_mode": "normalized-json-v1",
   "sha256_excludes": [
@@ -105,12 +105,12 @@
     "multi_asset_p7_main.json": {
       "sha256": "6ba44a6d294752fe563ebaaab7adc41e5c6a9197b051dd44c70a0b7cb761e7eb",
       "bytes": 30236,
-      "mtime": "2026-11-01T03:02:26"
+      "mtime": "2026-11-01T03:05:07"
     },
     "multi_asset_p7_oos.json": {
       "sha256": "6826ae5a24cc7a9f331ec13d68728cd42739c35dd341b990b5bcd2cc9a5417ac",
-      "bytes": 9145,
-      "mtime": "2026-10-31T05:15:18"
+      "bytes": 9140,
+      "mtime": "2026-11-01T03:17:09"
     },
     "multi_asset_p8_main.json": {
       "sha256": "99fc822930ac07e5c25af75d412a16c8e2f634e828fd4b4ada8d7820f824bef5",
@@ -251,6 +251,36 @@
       "sha256": "113d4f37ba5663b0097972bb0fcdf24eb089e1aeb01328d17b3fa623c0da2672",
       "bytes": 4156,
       "mtime": "2026-10-31T23:02:56"
+    },
+    "multi_asset_p17_single_main.json": {
+      "sha256": "55e83a97c7cae78d8be5539859a080c84121f3faf44002f34d0d3b1b4cf68e63",
+      "bytes": 183982,
+      "mtime": "2026-11-01T03:29:20"
+    },
+    "multi_asset_p17_single_oos.json": {
+      "sha256": "04bd1260560cbfd71ea8a3639f9c874578694ddfcd421799e6025896d6ac3084",
+      "bytes": 164397,
+      "mtime": "2026-11-01T03:29:23"
+    },
+    "multi_asset_p17_verify_main.json": {
+      "sha256": "b55a1b32fbd2bac8f6cf316ef89e43e06a13018ab676ea526749bac9d71a768c",
+      "bytes": 9809,
+      "mtime": "2026-11-01T03:30:24"
+    },
+    "multi_asset_p17_verify_oos.json": {
+      "sha256": "07d50ba6cdf8dd13a42e6b73ac5c0a4846f06aa402537700b078900c82091fc8",
+      "bytes": 9811,
+      "mtime": "2026-11-01T03:30:27"
+    },
+    "multi_asset_p17_freq_main.json": {
+      "sha256": "8873f571dd196d3b0b095aa2f8c03a23ce5b982c0df9ccd73a7d5c6fad925ff7",
+      "bytes": 2116,
+      "mtime": "2026-11-01T03:31:38"
+    },
+    "multi_asset_p17_freq_oos.json": {
+      "sha256": "2590fe11d383e420db8405abf8b104b584da018e48d634ede0d0600813401944",
+      "bytes": 2113,
+      "mtime": "2026-11-01T03:31:41"
     }
   },
   "missing": [],

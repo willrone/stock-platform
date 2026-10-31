@@ -1833,7 +1833,7 @@ def build_prose_anchors():
     # ── P17：类内选标的 oracle 上界 + 袖套调仓频率 ──
     # 用**正文正则**而非表序号定位 —— 表序号定位在插表后会全乱。
     P17 = 'P17_CLASS_SELECT'
-    A.append((P17, r'组合夏普上界只有 \*\*main \+(?P<g1>\d+(?:\.\d+)?) / \*\*oos \+(?P<g2>\d+(?:\.\d+)?)\*\*',
+    A.append((P17, r'组合夏普上界只有 \*\*main \+(?P<g1>\d+(?:\.\d+)?)\*\* / \*\*oos \+(?P<g2>\d+(?:\.\d+)?)\*\*',
               ('multi', ('p17_gain', 'main'), ('p17_gain', 'oos'))))
     A.append((P17, r'oos 上随便随机选一组就能拿到 \+(?P<g1>\d+(?:\.\d+)?)',
               ('multi', ('p17_rmax', 'oos'))))
