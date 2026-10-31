@@ -601,7 +601,10 @@ def main() -> None:
                 ((r["combined_sharpe"] - base_cs) >= 0.05) if args.window == "main" else None,
             "c_oos_combined_ge_base_minus_0.02":
                 ((r["combined_sharpe"] - base_cs) >= -0.02) if args.window == "oos" else None,
-            "c_beats_placebo": (min(plc) > r["combined_sharpe"]) if plc else None,
+            # ⚠️ 语义必须与预注册 §10.2 一致：「随机必须被击败」= 规则臂夏普
+            #    **高于所有**同参数 placebo（严格口径，取 max 而非 mean）。
+            #    曾经的实现是 (min(plc) > 规则臂) —— 语义完全相反（规则臂越好越不通过）。
+            "c_beats_placebo": (r["combined_sharpe"] > max(plc)) if plc else None,
             "placebo_max": max(plc) if plc else None,
             "placebo_mean": round(float(np.mean(plc)), 4) if plc else None,
             "placebo_n": len(plc),
@@ -710,6 +713,15 @@ def main() -> None:
             "corr_veto": CORR_VETO,
             "gbm_cfg": GBM_CFG,
             "fusion": "截面 z-score 后线性加权",
+            "criteria_semantics": {
+                "a": "main 组合夏普 ≥ 基线 + 0.05",
+                "b": "oos 组合夏普 ≥ 基线 − 0.02",
+                "c": "规则臂组合夏普 > 同参数 placebo 的**最大值**（随机必须被击败）",
+                "d": "滚动 504 日夏普胜率 ≥ 60%",
+                "e": "DSR ≥ 0.95 —— **降级为报告项**（n_trials=5 的门槛 2.1964 "
+                     "高于任何可达夏普，作否决条件等于恒假）",
+                "f": "oos 最优权重在 main 的规则臂排名中不得最差",
+            },
             "source": "docs/backtest/MULTI_ASSET_LEDGER_2026-10-31.md §十",
         },
         "methodology": {
@@ -732,6 +744,9 @@ def main() -> None:
         "veto_triggered": veto,
         "base_combined_sharpe": base_cs,
         "results": results,
+        # 净值序列入库 → 以后修判据口径只需**重算**，不必重跑回测
+        "navs": {lab: [[d, round(v, 10)] for d, v in navs[lab]]
+                 for lab in navs},
         "criteria": criteria,
         "verdict": verdict,
         "ranking": ranking,
