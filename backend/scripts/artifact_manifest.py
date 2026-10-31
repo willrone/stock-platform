@@ -75,6 +75,13 @@ TRACKED = [
     "multi_asset_p10_stats.json",       # P10 跨窗口统计（派生）
     "multi_asset_p11_alpha.json",       # P11 A 股腿 alpha/beta 分解（4 基准口径）
     "multi_asset_p11_stats.json",       # P11 跨窗口统计（派生）
+    "multi_asset_p12_main.json",        # P12 α 夏普口径重评 w（main）
+    "multi_asset_p12_oos.json",         # P12 α 夏普口径重评 w（oos）
+    "multi_asset_p12_main_degraded.json",  # P12 配置敏感性（降级袖套, main）
+    "multi_asset_p12_oos_degraded.json",   # P12 配置敏感性（降级袖套, oos）
+    "multi_asset_p12_long.json",        # P12 长历史 3 窗口组合分解
+    "multi_asset_p12_longw.json",       # P12 长历史 3 窗口 w 曲线 + 5 窗口汇总
+    "multi_asset_p12_diag.json",        # P12 E1~E6 根因诊断
 ]
 
 # 审计器读取的产物文件 —— 必须与 TRACKED 一一对应（漏一个 = 该产物可被静默覆盖）
@@ -115,6 +122,13 @@ AUDITED = [
     "multi_asset_p10_stats.json",
     "multi_asset_p11_alpha.json",
     "multi_asset_p11_stats.json",
+    "multi_asset_p12_main.json",
+    "multi_asset_p12_oos.json",
+    "multi_asset_p12_main_degraded.json",
+    "multi_asset_p12_oos_degraded.json",
+    "multi_asset_p12_long.json",
+    "multi_asset_p12_longw.json",
+    "multi_asset_p12_diag.json",
 ]
 
 

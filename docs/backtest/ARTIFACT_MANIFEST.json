@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-31T12:09:21",
-  "git_commit": "45ee4cd5",
+  "generated_at": "2026-10-31T17:42:31",
+  "git_commit": "76643ebd",
   "data_dir": "data/backtest",
   "files": {
     "ALL_real_lag1_v2.json": {
@@ -187,6 +187,41 @@
       "sha256": "c7b38eb2ad172053d0f608064a2d07de53ed59a72acf17b0780c7cb561efb993",
       "bytes": 993,
       "mtime": "2026-10-31T12:09:21"
+    },
+    "multi_asset_p12_main.json": {
+      "sha256": "2f06f7e5591892780e47628702dcd58e5c07ac39884cb22b9997236d16583ff0",
+      "bytes": 31472,
+      "mtime": "2026-10-31T13:01:30"
+    },
+    "multi_asset_p12_oos.json": {
+      "sha256": "8fb77dcac266736a88487c7daa444d969be935c1b89c66cc524b49fe93a4230d",
+      "bytes": 30646,
+      "mtime": "2026-10-31T13:01:50"
+    },
+    "multi_asset_p12_main_degraded.json": {
+      "sha256": "3609baab4ebfa889e90309ef0524cad6730bf77d6975f35ddba0add8c1ca48a6",
+      "bytes": 31358,
+      "mtime": "2026-10-31T13:57:07"
+    },
+    "multi_asset_p12_oos_degraded.json": {
+      "sha256": "878a4f2adbbb5a656dac93bc91330a4d31b332455477e102536a0275b5780305",
+      "bytes": 30560,
+      "mtime": "2026-10-31T13:57:28"
+    },
+    "multi_asset_p12_long.json": {
+      "sha256": "eb7ab90e33a12b40cad3302bd42ec7fc9265899a3086898b80652b2e4501a11a",
+      "bytes": 8871,
+      "mtime": "2026-10-31T13:01:29"
+    },
+    "multi_asset_p12_longw.json": {
+      "sha256": "9d128780e23a2277220cebfd0395564a1ed41807e9780178dad125ef6d0cb9a5",
+      "bytes": 64421,
+      "mtime": "2026-10-31T13:35:34"
+    },
+    "multi_asset_p12_diag.json": {
+      "sha256": "1e61090287e07b339a1d70c8916d7ca89134af3477ad640b1977f98a67fe51e5",
+      "bytes": 51298,
+      "mtime": "2026-10-31T16:28:36"
     }
   },
   "missing": [],

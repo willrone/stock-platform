@@ -41,8 +41,19 @@ def J(name):
 
 
 def dig(obj, path):
+    """按路径取值。
+
+    路径用 '.' 分隔；但键名里本身含小数点（如 'n_in_0.40_0.60'）会被误切，
+    所以额外支持 '/' 分隔（'/' 优先，不做正则拆分，键名可原样带入）。
+    """
+    if isinstance(path, (list, tuple)):
+        parts = list(path)
+    elif '/' in path:
+        parts = path.split('/')
+    else:
+        parts = re.findall(r'[^.\[\]]+|\[\d+\]', path)
     cur = obj
-    for part in re.findall(r'[^.\[\]]+|\[\d+\]', path):
+    for part in parts:
         cur = cur[int(part[1:-1])] if part.startswith('[') else cur[part]
     return cur
 
@@ -67,6 +78,13 @@ ART = {
     'p5': J('p5_class_audit.json'),
     'p6m': J('multi_asset_p6_main.json'),
     'p6o': J('multi_asset_p6_oos.json'),
+    'p12m': J('multi_asset_p12_main.json'),
+    'p12o': J('multi_asset_p12_oos.json'),
+    'p12md': J('multi_asset_p12_main_degraded.json'),
+    'p12od': J('multi_asset_p12_oos_degraded.json'),
+    'p12l': J('multi_asset_p12_long.json'),
+    'p12lw': J('multi_asset_p12_longw.json'),
+    'p12d': J('multi_asset_p12_diag.json'),
     'p3m': J('multi_asset_p3_main.json'),
     'p3o': J('multi_asset_p3_oos.json'),
     'p3l': J('multi_asset_p3_long.json'),
@@ -82,6 +100,13 @@ ART = {
     'p10s': J('multi_asset_p10_stats.json'),
     'p11': J('multi_asset_p11_alpha.json'),
     'p11s': J('multi_asset_p11_stats.json'),
+    'p12m': J('multi_asset_p12_main.json'),
+    'p12o': J('multi_asset_p12_oos.json'),
+    'p12md': J('multi_asset_p12_main_degraded.json'),
+    'p12od': J('multi_asset_p12_oos_degraded.json'),
+    'p12l': J('multi_asset_p12_long.json'),
+    'p12lw': J('multi_asset_p12_longw.json'),
+    'p12d': J('multi_asset_p12_diag.json'),
 }
 
 
@@ -773,6 +798,122 @@ def build_anchors():
                        ('标准差', 'stdev_sharpe')):
         A.append((P10DOC, '值', _row, '值', ('j', 'p10s', _fld)))
 
+    # ── P12 · α 夏普口径重评 w 曲线 ──
+    # 文档：P12_ALPHA_WEIGHT_2026-10-31.md
+    # 表号：0 问题表 / 1 main 分解 / 2 oos 分解 / 3 长历史 / 4 main w 曲线
+    #       5 oos w 曲线 / 6 5 窗口 / 7 配置敏感性 / 8 E1 / 9 E2 / 10 E5
+    #       11 E3 / 12 E4 / 13 判据汇总 / 14 产物清单
+    P12 = 'P12_ALPHA_WEIGHT'
+    _MET = [('绝对夏普', 'abs_sharpe'),
+            ('α 夏普（国证A指）', 'alpha_gz'),
+            ('α 夏普（等权持有）', 'alpha_ew'),
+            ('α 夏普（沪深300）', 'alpha_hs300')]
+    _WIN = ['main', 'oos', 'w2013', 'w2016', 'w2019']
+
+    # T1/T2 组合层分解（main / oos）
+    # 行标签必须与文档原文逐字一致（normalize 只去空白/**/反引号，
+    # 括号里的 n=5031 是文档的一部分，不能省）。
+    for _t, _art, _rows in (
+            (1, 'p12m', (('equal_weight_buyhold', '等权**买入持有**（n=5031）'),
+                         ('equal_weight_rebalance', '等权日频再平衡（反例口径）'),
+                         ('IDX_000300', '沪深300'),
+                         ('IDX_399317', '国证A指'))),
+            (2, 'p12o', (('equal_weight_buyhold', '等权买入持有（n=4184）'),
+                         ('equal_weight_rebalance', '等权日频再平衡'),
+                         ('IDX_000300', '沪深300'),
+                         ('IDX_399317', '国证A指')))):
+        for _bk, _bn in _rows:
+            for _col, _fld in (('组合夏普', 'leg_sharpe'),
+                               ('基准夏普', 'bench_sharpe'),
+                               ('超额夏普', 'excess_sharpe'),
+                               ('α 夏普', 'alpha_sharpe'),
+                               ('β', 'beta'),
+                               ('ρ', 'corr')):
+                A.append((P12, _t, _bn, _col, ('p12decomp', _art, _bk, _fld)))
+
+    # T3 长历史 3 窗口分解（行标签含窗口区间）
+    for _w, _wl in (('w2013', 'w2013 (2013-05~2016-05)'),
+                    ('w2016', 'w2016 (2016-05~2019-05)'),
+                    ('w2019', 'w2019 (2019-05~2021-05)')):
+        for _col, _fld in (('A 股腿夏普', 'a_share_sharpe'),
+                           ('袖套夏普', 'sleeve_sharpe'),
+                           ('组合夏普', 'combo_sharpe')):
+            A.append((P12, 3, _wl, _col, ('p12long', 'p12l', _w, _fld)))
+        for _col, _fld in (('α 夏普（等权持有）', 'alpha_sharpe'),
+                           ('β', 'beta'), ('ρ', 'corr')):
+            A.append((P12, 3, _wl, _col,
+                      ('p12long', 'p12l', _w, f'decomp_ew_buyhold.{_fld}')))
+
+    # T4/T5 w 曲线（main / oos）
+    for _t, _art in ((4, 'p12m'), (5, 'p12o')):
+        for _mn, _mk in _MET:
+            for _col, _fld in (('最优 w', 'best_w'),
+                               ('最优值', 'best_value'),
+                               ('随机 w 最大', 'random_max')):
+                A.append((P12, _t, _mn, _col, ('p12curve', _art, _mk, _fld)))
+            # 子窗口众数格「0.15 (1/4)」：第 1 位=众数 w，第 2 位=计数，第 3 位=总数
+            A.append((P12, _t, _mn, '子窗口众数',
+                      ('p12curve', _art, _mk, 'subwindow_argmax_mode')))
+            A.append((P12, _t, _mn, '子窗口众数',
+                      ('p12curve', _art, _mk, 'subwindow_mode_count'), 1))
+            A.append((P12, _t, _mn, '子窗口众数',
+                      ('p12curve', _art, _mk, 'subwindow_n'), 2))
+
+    # T6 5 窗口汇总
+    for _mn, _mk in _MET:
+        for _w in _WIN:
+            A.append((P12, 6, _mn, _w, ('p12cw', _mk, ('per_window', _w, 'best_w'))))
+        A.append((P12, 6, _mn, '落 [0.40,0.60]', ('p12cw', _mk, ('n_in_0.40_0.60',))))
+        A.append((P12, 6, _mn, '众数', ('p12cw', _mk, ('mode_best_w',))))
+        A.append((P12, 6, _mn, '众数', ('p12cw', _mk, ('mode_count',)), 1))
+        A.append((P12, 6, _mn, '跨度', ('p12cw', _mk, ('spread',))))
+
+    # T7 配置敏感性（定稿 vs 降级袖套）
+    for _mn, _mk in _MET:
+        for _col, _art in (('main（定稿）', 'p12m'), ('main（降级）', 'p12md'),
+                           ('oos（定稿）', 'p12o'), ('oos（降级）', 'p12od')):
+            A.append((P12, 7, _mn, _col, ('p12curve', _art, _mk, 'best_w')))
+
+    # T8 E1 Spearman
+    for _mn, _mk in _MET:
+        A.append((P12, 8, _mn, 'ρ(最优w,A腿夏普)',
+                  ('p12diag', f'E1_peak_vs_leg_strength.{_mk}.spearman_bestw_vs_aleg_sharpe')))
+        A.append((P12, 8, _mn, 'ρ(最优w,A腿−袖套)',
+                  ('p12diag', f'E1_peak_vs_leg_strength.{_mk}.spearman_bestw_vs_aleg_minus_sleeve')))
+
+    # T9 E2 统一 w（组列有重复值 → 用两列行键）
+    for _grp, _pre in (('A', 'A_定稿三类配置'), ('B', 'B_降级gold+bond')):
+        for _mn, _mk in _MET:
+            A.append((P12, 9, (_grp, _mn), '统一最优 w',
+                      ('p12e2', f'{_pre}|{_mk}', 'uniform_best_w')))
+            A.append((P12, 9, (_grp, _mn), '平均值',
+                      ('p12e2', f'{_pre}|{_mk}', 'uniform_best_mean')))
+            # 逐窗口 argmax：「0.20 / 0.25」第 0/1 位
+            _wins = ['main', 'oos'] if _grp == 'A' else ['w2013', 'w2016', 'w2019']
+            for _i, _w in enumerate(_wins):
+                A.append((P12, 9, (_grp, _mn), '逐窗口 argmax',
+                          ('p12e2', f'{_pre}|{_mk}', f'per_window_argmax.{_w}'), _i))
+
+    # T10 E5 跨窗口迁移命中率「10/20 = 50.0%」：第 0/1/2 位
+    for _mn, _mk in _MET:
+        A.append((P12, 10, _mn, '迁移命中率',
+                  ('p12diag', f'E5_cross_window_transfer.{_mk}.src_w_beats_w050')))
+        A.append((P12, 10, _mn, '迁移命中率',
+                  ('p12diag', f'E5_cross_window_transfer.{_mk}.n_pairs'), 1))
+        A.append((P12, 10, _mn, '迁移命中率',
+                  ('p12e5pct', _mk), 2))
+
+    # T11 E3 定稿 w=0.50 排名「11/21」
+    for _mn, _mk in _MET:
+        for _w in _WIN:
+            A.append((P12, 11, _mn, _w, ('p12e3rank', _mk, _w)))
+            A.append((P12, 11, _mn, _w, ('p12e3grid', _mk, _w), 1))
+
+    # T12 E4 相对随机 w 的优势
+    for _mn, _mk in _MET:
+        for _w in _WIN:
+            A.append((P12, 12, _mn, _w, ('p12e4gap', _mk, _w)))
+
     # ── P11 · A 股腿 alpha/beta 分解 ──
     P11DOC = 'P11_ALPHA_BETA'
     _p11_order = ['w2013', 'w2016', 'w2019', 'oos', 'main']
@@ -845,7 +986,7 @@ def build_text_anchors():
     """文本格断言：(doc, table_idx, row_label, col_header, expect_spec)
 
     数字格断言覆盖不到「持仓集」这类**字符串**单元格
-    （P4 §6.1 长历史持仓集披露）。
+    （P4 §6.1 长历史持仓集披露），也覆盖不到 ✅/❌/— 判据符号。
     """
     A = []
     P4DOC = 'P4_CLASS_WEIGHT'
@@ -856,11 +997,75 @@ def build_text_anchors():
     return A
 
 
+# ── 判据符号断言（✅ / ❌ / —）──────────────────────────────────
+# P12 §七 判据汇总表：每一格是符号而不是数字。P6 的同款表也有。
+# spec = ('p12crit', window, 判据键)
+P12_CRIT = [
+    ('a0_curve_has_interior_max_not_edge', '(a0) 曲线有内部极大（非端点）'),
+    ('a_best_w_outside_0.40_0.60', '(a) 最优 w 落在 [0.40,0.60] **之外**'),
+    ('b_alpha_sharpe_ge_base_plus_0.05', '(b) 最优值 ≥ w=0.50 基线 + 0.05'),
+    ('c_oos_alpha_sharpe_ge_base_minus_0.02', '(c) oos 不劣于基线 − 0.02'),
+    ('d_subwindow_majority_same_w', '(d) 子窗口众数 ≥ 3/4'),
+    ('e_beats_all_random_w', '(e) 优于所有随机 w'),
+    ('f_independent_oos_evidence', '(f) 独立样本外证据'),
+]
+
+
+def build_crit_anchors():
+    """判据符号断言：(doc, table_idx, row_label, col_header, expect_spec)
+
+    产物：P12 的 `diagnostics.F_final_criteria.table[window][crit_key]`
+          （True→✅ / False→❌ / None→—）。
+    """
+    A = []
+    for _key, _lab in P12_CRIT:
+        A.append(('P12_ALPHA_WEIGHT', 13, _lab, 'main', ('p12crit', 'main', _key)))
+        A.append(('P12_ALPHA_WEIGHT', 13, _lab, 'oos', ('p12crit', 'oos', _key)))
+    return A
+
+
 def resolve_text(spec):
     if spec[0] == 'p4held':
         art, cls = spec[1], spec[2]
         return '/'.join(sorted(dig(ART[art], f'results.base_equal.held.{cls}')))
     raise KeyError(spec)
+
+
+def resolve_crit(spec):
+    """判据符号：产物 True→✅ / False→❌ / None→—"""
+    v = dig(ART['p12d'], ['diagnostics', 'F_final_criteria', 'table', spec[1], spec[2]])
+    return '✅' if v is True else ('—' if v is None else '❌')
+
+
+def check_crit_cells(texts, anchors):
+    """判据符号核对：单元格必须**恰好**等于产物给出的符号。
+
+    用「包含」语义会误判（'❌' 与 '❌❌'、'✅' 被 '—' 包含等），
+    所以这里要求归一化后**完全相等**。
+    """
+    problems = []
+    for a in anchors:
+        doc_pref, tidx, row_label, col_hdr, spec = a
+        doc = next((k for k in texts if k.startswith(doc_pref)), None)
+        if not doc:
+            problems.append(f'{doc_pref}: 文档不存在')
+            continue
+        tables = extract_tables(texts[doc])
+        if tidx >= len(tables):
+            problems.append(f'{doc}: 表序号 {tidx} 越界（共 {len(tables)} 张表）')
+            continue
+        header, data = tables[tidx]
+        cell, err = find_cell(header, data, row_label, col_hdr)
+        if err or cell is None:
+            problems.append(f'{doc}[表{tidx}] {err or "单元格为空"}')
+            continue
+        want = resolve_crit(spec)
+        got = norm(cell)
+        if got != want:
+            problems.append(
+                f'{doc}[表{tidx}] 「{row_label}」×「{col_hdr}」= {got!r}，'
+                f'产物 = {want!r}')
+    return problems
 
 
 def check_text_cells(texts, anchors):
@@ -908,18 +1113,20 @@ def cell_num_positions(cell):
             for m in re.finditer(r'[-+]?\d+(?:\.\d+)?', txt)]
 
 
-def target_number(cell, want):
+def target_number(cell, want, idx=0):
     """定位单元格中对应 `want` 的数字。
 
     规则（审计器与回填器必须完全一致，否则「审计通过」不代表「数字对」）：
       - 单元格**只有一个数字且含 `%`** → 这是百分比格，目标值 = want × 100；
-      - 否则（纯数值格 / 复合格）→ 目标值 = want，取**第一个**数字。
+      - 否则（纯数值格 / 复合格）→ 目标值 = want，取第 `idx` 个数字（默认第一个）。
     返回 (kind, num, start, end) 或 None。
     """
     nums = cell_num_positions(cell)
     if not nums:
         return None
-    n, s, e = nums[0]
+    if idx >= len(nums):
+        return None
+    n, s, e = nums[idx]
     if len(nums) == 1 and '%' in cell:
         if abs(n - want * 100) <= 0.05:
             return ('pct', n, s, e)
@@ -961,10 +1168,30 @@ def find_cell(header_cells, data_cells, row_label, col_header):
     if want_col not in hdr:
         return None, f'表头里没有列「{col_header}」，现有列：{hdr}'
     ci = hdr.index(want_col)
-    want_row = norm(row_label)
+    # 行键可以是字符串（匹配第 0 列），也可以是元组（依次匹配前 N 列）——
+    # 有些表（如 P12 §六 E2）第一列有重复值，单列定位会歧义。
+    is_key = isinstance(row_label, (tuple, list))
+    if is_key:
+        want_cols = [norm(x) for x in row_label]
+        n_key = len(want_cols)
+    else:
+        want_cols = [norm(row_label)]
+        n_key = 1
     hit = None
     for r in data_cells:
-        if r and norm(r[0]) == want_row:
+        if not r or len(r) < n_key:
+            continue
+        if is_key:
+            # 元组行键：首元素按**前缀**匹配 —— 文档里分组列的首行常写全称
+            # （如 'A（定稿三类，main+oos）'），后续行只写 'A'。
+            if not norm(r[0]).startswith(want_cols[0]):
+                continue
+            if all(norm(r[i]) == want_cols[i] for i in range(1, n_key)):
+                if hit is not None:
+                    return None, f'行键「{row_label}」出现多次'
+                hit = r
+        elif norm(r[0]) == want_cols[0]:
+            # 普通行键：精确匹配（前缀匹配会误伤 'top2' vs 'top20'）
             if hit is not None:
                 return None, f'行标签「{row_label}」出现多次'
             hit = r
@@ -1091,6 +1318,117 @@ def resolve(spec):
     if spec[0] == 'jmin':
         # 两个产物值取小者
         return min(dig(ART[spec[1]], spec[2]), dig(ART[spec[3]], spec[4]))
+    if spec[0] == 'p12curve':
+        # P12 w 曲线：art, metric, field（best_w/best_value/random_max/...）
+        return dig(ART[spec[1]], f'curves.{spec[2]}.{spec[3]}')
+    if spec[0] == 'p12decomp':
+        # P12 组合层分解：art, 基准键, 字段（leg_sharpe/bench_sharpe/...）
+        return dig(ART[spec[1]],
+                   ['combo_decomposition_w050', spec[2], 'decomp', spec[3]])
+    if spec[0] == 'p12long':
+        # P12 长历史：art, window, path（'.' 分隔）
+        return dig(ART[spec[1]], ['results', spec[2]] + spec[3].split('.'))
+    if spec[0] == 'p12cw':
+        # P12 5 窗口汇总：metric, 键名（键名可能含小数点 → 逐段显式传）
+        return dig(ART['p12lw'], ['cross_window', spec[1]] + list(spec[2]))
+    if spec[0] == 'p12e2':
+        # P12 E2 统一 w：组前缀|口径 → uniform_best_w / uniform_best_mean
+        return dig(ART['p12d'],
+                   ['diagnostics', 'E2_uniform_w_across_windows', spec[1]]
+                   + spec[2].split('.'))
+    if spec[0] == 'p12diag':
+        # P12 诊断：diagnostics 下的任意路径（'.' 分隔）
+        return dig(ART['p12d'], ['diagnostics'] + spec[1].split('.'))
+    if spec[0] == 'p12e5pct':
+        # E5 迁移命中率（百分数形式）
+        return dig(ART['p12d'],
+                   f'diagnostics.E5_cross_window_transfer.{spec[1]}.hit_rate') * 100
+    if spec[0] == 'p12e3rank':
+        # E3：某口径某窗口下 w=0.50 的排名（1 起）
+        rows = dig(ART['p12d'], f'diagnostics.E3_w050_risk_disclosure.{spec[1]}')
+        return next(r['rank_of_w050'] for r in rows if r['window'] == spec[2])
+    if spec[0] == 'p12e3grid':
+        # E3：网格点数
+        rows = dig(ART['p12d'], f'diagnostics.E3_w050_risk_disclosure.{spec[1]}')
+        return next(r['n_grid'] for r in rows if r['window'] == spec[2])
+    if spec[0] == 'p12e4gap':
+        # E4：某口径某窗口下 argmax 相对随机 w 的优势
+        rows = dig(ART['p12d'], f'diagnostics.E4_argmax_vs_random.{spec[1]}')
+        return next(r['gap'] for r in rows if r['window'] == spec[2])
+    if spec[0] == 'p12bestgap':
+        # 最优点与 w=0.50 基线的差（该窗口主口径）
+        art = 'p12m' if spec[1] == 'main' else 'p12o'
+        return (dig(ART[art], 'curves.alpha_gz.best_value')
+                - dig(ART[art], 'results.w050.alpha_sharpe_IDX_399317'))
+    if spec[0] == 'p12e5range':
+        # E5 迁移命中率区间：4 个口径的最小/最大（文档写 25%~50%）
+        vals = []
+        for _m in ('abs_sharpe', 'alpha_gz', 'alpha_ew', 'alpha_hs300'):
+            vals.append(dig(ART['p12d'],
+                            ['diagnostics', 'E5_cross_window_transfer', _m, 'hit_rate']) * 100)
+        return min(vals)
+    if spec[0] == 'p12e6same':
+        # E6 同组迁移命中率
+        return dig(ART['p12d'],
+                   ['diagnostics', 'E6_within_group_transfer', spec[1],
+                    'same_group_hit_rate']) * 100
+    if spec[0] == 'p12longsum':
+        # 长历史 α 夏普汇总统计
+        return dig(ART['p12l'], ['summary', 'decomp_ew_buyhold', spec[1]])
+    if spec[0] == 'p12lossrange':
+        # E3 某窗口跨 4 口径的 w=0.50 损失区间（min/max）
+        vals = []
+        for _m in ('abs_sharpe', 'alpha_gz', 'alpha_ew', 'alpha_hs300'):
+            rows = dig(ART['p12d'],
+                       ['diagnostics', 'E3_w050_risk_disclosure', _m])
+            vals.append(next(r['loss_vs_best'] for r in rows
+                             if r['window'] == spec[1]))
+        return min(vals) if spec[2] == 'min' else max(vals)
+    if spec[0] == 'p12spreadrange':
+        # 5 窗口跨 4 口径的最优 w 跨度区间（min/max）
+        vals = [dig(ART['p12lw'], ['cross_window', _m, 'spread'])
+                for _m in ('abs_sharpe', 'alpha_gz', 'alpha_ew', 'alpha_hs300')]
+        return min(vals)
+    if spec[0] == 'p12spreadmax':
+        vals = [dig(ART['p12lw'], ['cross_window', _m, 'spread'])
+                for _m in ('abs_sharpe', 'alpha_gz', 'alpha_ew', 'alpha_hs300')]
+        return max(vals)
+    if spec[0] == 'p12spread':
+        # 某口径 5 窗口最优 w 的最小值
+        cw = dig(ART['p12lw'], ['cross_window', spec[1]])
+        return min(v['best_w'] for v in cw['per_window'].values())
+    if spec[0] == 'p12betarange':
+        # 组合 β 区间：main/oos × (国证A指/等权持有)
+        vals = []
+        for _art in ('p12m', 'p12o'):
+            for _b in ('IDX_399317', 'equal_weight_buyhold'):
+                vals.append(dig(ART[_art],
+                                ['combo_decomposition_w050', _b, 'decomp', 'beta']))
+        return min(vals)
+    if spec[0] == 'p12corrhange':
+        # 组合 ρ 区间（国证A指/等权持有，main/oos）
+        vals = []
+        for _art in ('p12m', 'p12o'):
+            for _b in ('IDX_399317', 'equal_weight_buyhold'):
+                vals.append(dig(ART[_art],
+                                ['combo_decomposition_w050', _b, 'decomp', 'corr']))
+        return min(vals)
+    if spec[0] == 'p12ann':
+        # 年化收益（% 展示）
+        return dig(ART[spec[1]], ['combo_decomposition_w050',
+                                  'equal_weight_buyhold', 'decomp', spec[2]]) * 100
+    if spec[0] == 'p12configshift':
+        # 配置敏感性：最优 w 的移动幅度（定稿 vs 降级）
+        vals = []
+        for _m in ('abs_sharpe', 'alpha_gz', 'alpha_ew', 'alpha_hs300'):
+            for _a1, _a2 in (('p12m', 'p12md'), ('p12o', 'p12od')):
+                vals.append(abs(dig(ART[_a1], ['curves', _m, 'best_w'])
+                                - dig(ART[_a2], ['curves', _m, 'best_w'])))
+        return min(vals)
+    if spec[0] == 'p12alpharange':
+        # 定稿三类下 α 夏普（国证A指）main/oos 的值
+        art = 'p12m' if spec[1] == 'main' else 'p12o'
+        return dig(ART[art], ['results', 'w050', 'alpha_sharpe_IDX_399317'])
     return dig(ART[spec[1]], spec[2])
 
 
@@ -1127,13 +1465,350 @@ def check(texts, anchors):
             problems.append(f'{doc}[表{tidx}] 「{row_label}」×「{col_hdr}」不是数字：{cell!r}')
             continue
         want = resolve(spec)
-        hit = target_number(cell, want)
+        # 锚点可带第 6 位：复合格里要核对**第 N 个**数字（默认第 0 个）
+        idx = a[5] if len(a) > 5 else 0
+        hit = target_number(cell, want, idx)
         if hit is None:
             got = nums[0][0]
             kind = '百分比格' if (len(nums) == 1 and '%' in cell) else '数值/复合格'
             problems.append(
                 f'{doc}[表{tidx}] 「{row_label}」×「{col_hdr}」= {got}（{kind}），'
                 f'产物 = {want}（×100={want*100:.4f}）')
+    return problems
+
+
+# ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
+# 正文数字断言：表格断言只管表格里的数字；正文散落的
+# 区间 / 比例 / 结论里的具体值同样要机器核对。
+#
+# 机制：正则里用 (?P<gN>...) 捕获**待核对的数字**，捕获文本自身
+# 决定比对精度（文档写 0.21 → 拿产物值 round 到 2 位再比）。
+# 这样既不会因为文档做了合理舍入而误报，也不会漏掉「值写错了」
+# 这类真错误（旧实现取「匹配文本里第一个数字」，会把
+# 'main 0.20' 里的 20 当成被核对的值）。
+# ─────────────────────────────────────────────────────────────
+
+_BENCH3 = ('equal_weight_buyhold', 'IDX_000300', 'IDX_399317')
+_METRICS4 = ('abs_sharpe', 'alpha_gz', 'alpha_ew', 'alpha_hs300')
+_WINDOWS5 = ('main', 'oos', 'w2013', 'w2016', 'w2019')
+
+
+def _decomp(art, bench, field):
+    return ART[art]['combo_decomposition_w050'][bench]['decomp'][field]
+
+
+def _beta_corr(field):
+    """组合层 β / ρ 的区间：3 个基准（剔除「等权日频再平衡」反例口径）
+    × 2 个窗口（main/oos）。"""
+    vals = []
+    for _art in ('p12m', 'p12o'):
+        for _b in _BENCH3:
+            vals.append(_decomp(_art, _b, field))
+    return vals
+
+
+def _e3_rows(metric):
+    return dig(ART['p12d'], ['diagnostics', 'E3_w050_risk_disclosure', metric])
+
+
+def _e4_rows(metric):
+    return dig(ART['p12d'], ['diagnostics', 'E4_argmax_vs_random', metric])
+
+
+def _cw(metric):
+    return dig(ART['p12lw'], ['cross_window', metric])
+
+
+def _curve(art, metric, field):
+    return dig(ART[art], ['curves', metric, field])
+
+
+def _w050(art, field):
+    return dig(ART[art], ['results', 'w050', field])
+
+
+def _config_shifts():
+    """配置敏感性：定稿三类 → 降级两类，最优 w 的移动幅度。"""
+    out = []
+    for _m in _METRICS4:
+        for _a1, _a2 in (('p12m', 'p12md'), ('p12o', 'p12od')):
+            out.append(abs(_curve(_a1, _m, 'best_w') - _curve(_a2, _m, 'best_w')))
+    return out
+
+
+def _e2b(metric):
+    return dig(ART['p12d'], ['diagnostics', 'E2_uniform_w_across_windows',
+                             f'B_降级gold+bond|{metric}'])
+
+
+def _e5_hits():
+    return [dig(ART['p12d'], ['diagnostics', 'E5_cross_window_transfer', m,
+                              'hit_rate']) for m in _METRICS4]
+
+
+def _ew_alpha_vals():
+    """定稿三类下、相对「等权买入持有」的 α 夏普（main + oos）。"""
+    return [_w050('p12m', 'alpha_sharpe_equal_weight_buyhold'),
+            _w050('p12o', 'alpha_sharpe_equal_weight_buyhold')]
+
+
+def prose_value(spec):
+    """把断言 spec 解析成期望值（float）。"""
+    kind = spec[0]
+    if kind == 'j':
+        return dig(ART[spec[1]], spec[2])
+    if kind == 'gate':
+        return dig(ART[spec[1]], ['baseline_gate', 'w050_abs_sharpe'])
+    if kind == 'decomp':
+        return _decomp(spec[1], spec[2], spec[3])
+    if kind == 'w050':
+        return _w050(spec[1], spec[2])
+    if kind == 'curve':
+        return _curve(spec[1], spec[2], spec[3])
+    if kind == 'randmax':
+        return _curve(spec[1], spec[2], 'random_max')
+    if kind == 'bestgap':
+        # 最优点 − w=0.50 基线（主口径 α 夏普 / 国证A指）
+        return (_curve(spec[1], 'alpha_gz', 'best_value')
+                - _w050(spec[1], 'alpha_sharpe_IDX_399317'))
+    if kind == 'beta_min':
+        return min(_beta_corr('beta'))
+    if kind == 'beta_max':
+        return max(_beta_corr('beta'))
+    if kind == 'corr_min':
+        return min(_beta_corr('corr'))
+    if kind == 'corr_max':
+        return max(_beta_corr('corr'))
+    if kind == 'long_ash':
+        return dig(ART['p12l'], ['results', spec[1], 'a_share_sharpe'])
+    if kind == 'long_sum':
+        return dig(ART['p12l'], ['summary', 'decomp_ew_buyhold', spec[1]])
+    if kind == 'cw':
+        # 某口径某窗口的最优 w
+        return dig(ART['p12lw'], ['cross_window', spec[1], 'per_window',
+                                 spec[2], 'best_w'])
+    if kind == 'cw_spread':
+        return _cw(spec[1])['spread']
+    if kind == 'cw_bestw_min':
+        return min(v['best_w'] for v in _cw(spec[1])['per_window'].values())
+    if kind == 'cw_bestw_max':
+        return max(v['best_w'] for v in _cw(spec[1])['per_window'].values())
+    if kind == 'e4gap':
+        return next(r['gap'] for r in _e4_rows(spec[1])
+                    if r['window'] == spec[2])
+    if kind == 'e5_hit':
+        return dig(ART['p12d'], ['diagnostics', 'E5_cross_window_transfer',
+                                 spec[1], 'hit_rate'])
+    if kind == 'e5_min':
+        return min(_e5_hits())
+    if kind == 'e5_max':
+        return max(_e5_hits())
+    if kind == 'e6_same':
+        return dig(ART['p12d'], ['diagnostics', 'E6_within_group_transfer',
+                                 spec[1], 'same_group_hit_rate'])
+    if kind == 'e3_rank':
+        return next(r['rank_of_w050'] for r in _e3_rows(spec[1])
+                    if r['window'] == spec[2])
+    if kind == 'e3_loss_min':
+        # 某窗口跨 4 口径的 w=0.50 损失区间下界
+        vals = [r['loss_vs_best'] for r in _e3_rows(spec[1])
+                if r['window'] == spec[2]]
+        return min(vals)
+    if kind == 'e3_loss_max':
+        vals = [r['loss_vs_best'] for r in _e3_rows(spec[1])
+                if r['window'] == spec[2]]
+        return max(vals)
+    if kind == 'e3_loss_all_min':
+        vals = []
+        for _m in _METRICS4:
+            vals += [r['loss_vs_best'] for r in _e3_rows(_m)
+                     if r['window'] == spec[1]]
+        return min(vals)
+    if kind == 'e3_loss_all_max':
+        vals = []
+        for _m in _METRICS4:
+            vals += [r['loss_vs_best'] for r in _e3_rows(_m)
+                     if r['window'] == spec[1]]
+        return max(vals)
+    if kind == 'cfg_min':
+        vals = [v for v in _config_shifts() if v > 0]
+        return min(vals)
+    if kind == 'cfg_max':
+        return max(_config_shifts())
+    if kind == 'e2b_uniform':
+        return _e2b(spec[1])['uniform_best_w']
+    if kind == 'e2b_span':
+        vals = [_e2b(m)['uniform_best_w'] for m in _METRICS4]
+        return max(vals) - min(vals)
+    if kind == 'ew_alpha_min':
+        return min(_ew_alpha_vals())
+    if kind == 'ew_alpha_max':
+        return max(_ew_alpha_vals())
+    if kind == 'comb_min':
+        return min(_w050('p12m', 'combined_sharpe'),
+                   _w050('p12o', 'combined_sharpe'))
+    if kind == 'comb_max':
+        return max(_w050('p12m', 'combined_sharpe'),
+                   _w050('p12o', 'combined_sharpe'))
+    raise ValueError(f'未知 prose spec: {spec!r}')
+
+
+def build_prose_anchors():
+    """正文数字断言：(doc, 正则, spec)
+
+    正则必须带 (?P<gN>...) 捕获组，捕获顺序与 spec 返回的期望值顺序
+    一一对应。正则在文档中必须**恰好匹配一次**。
+    """
+    A = []
+    P12 = 'P12_ALPHA_WEIGHT'
+
+    def add(pattern, spec):
+        A.append((P12, pattern, spec))
+
+    # ── 摘要 ──
+    add(r'打架（(?P<g1>-?\d+(?:\.\d+)?) vs (?P<g2>-?\d+(?:\.\d+)?)）',
+        ('multi', ('curve', 'p12m', 'alpha_gz', 'best_w'),
+         ('curve', 'p12o', 'alpha_gz', 'best_w')))
+    add(r'5 窗口最优 w 跨度 (?P<g1>-?\d+(?:\.\d+)?)', ('cw_spread', 'alpha_gz'))
+    add(r'迁移命中率只有 (?P<g1>-?\d+(?:\.\d+)?)%~(?P<g2>-?\d+(?:\.\d+)?)%',
+        ('multi', ('e5_min', 'pct'), ('e5_max', 'pct')))
+
+    # ── §二 组合层分解 ──
+    add(r'基线复现门 ✅：w=0\.50 绝对夏普 \*\*(?P<g1>-?\d+(?:\.\d+)?)\*\*',
+        ('gate', 'p12m'))
+    add(r'基线复现门 ✅：\*\*(?P<g1>-?\d+(?:\.\d+)?)\*\*', ('gate', 'p12o'))
+    add(r'组合 β 只有 (?P<g1>-?\d+(?:\.\d+)?)~(?P<g2>-?\d+(?:\.\d+)?)',
+        ('multi', ('beta_min',), ('beta_max',)))
+    add(r'（等权买入持有 (?P<g1>-?\d+(?:\.\d+)?)、国证A指 (?P<g2>-?\d+(?:\.\d+)?)）',
+        ('multi', ('decomp', 'p12m', 'equal_weight_buyhold', 'excess_sharpe'),
+         ('decomp', 'p12m', 'IDX_399317', 'excess_sharpe')))
+    add(r'组合绝对收益 (?P<g1>-?\d+(?:\.\d+)?)%/年 < 等权买入持有 (?P<g2>-?\d+(?:\.\d+)?)%/年',
+        ('multi', ('decomp', 'p12m', 'equal_weight_buyhold', 'leg_return_ann', 'pct'),
+         ('decomp', 'p12m', 'equal_weight_buyhold', 'bench_return_ann', 'pct')))
+    add(r'ρ (?P<g1>-?\d+(?:\.\d+)?)~(?P<g2>-?\d+(?:\.\d+)?)\*\*（不是 0）',
+        ('multi', ('corr_min',), ('corr_max',)))
+
+    # ── §三 长历史 ──
+    add(r'（min (?P<g1>-?\d+(?:\.\d+)?) / max (?P<g2>-?\d+(?:\.\d+)?) / mean (?P<g3>-?\d+(?:\.\d+)?)）',
+        ('multi', ('long_sum', 'min'), ('long_sum', 'max'),
+         ('long_sum', 'mean')))
+
+    # ── §四 w 曲线 ──
+    add(r'绝对夏普口径\*\*（P6 原口径）：main (?P<g1>-?\d+(?:\.\d+)?) / oos (?P<g2>-?\d+(?:\.\d+)?)',
+        ('multi', ('curve', 'p12m', 'abs_sharpe', 'best_w'),
+         ('curve', 'p12o', 'abs_sharpe', 'best_w')))
+    add(r'α 夏普口径\*\*（P11 §8\.2 指定口径）：main \*\*(?P<g1>-?\d+(?:\.\d+)?)\*\* / oos \*\*(?P<g2>-?\d+(?:\.\d+)?)\*\*',
+        ('multi', ('curve', 'p12m', 'alpha_gz', 'best_w'),
+         ('curve', 'p12o', 'alpha_gz', 'best_w')))
+    add(r'0\.50 只差 (?P<g1>-?\d+(?:\.\d+)?)', ('bestgap', 'p12o'))
+    add(r'差 (?P<g1>-?\d+(?:\.\d+)?)，比随机 w 最大值（(?P<g2>-?\d+(?:\.\d+)?)）只高 (?P<g3>-?\d+(?:\.\d+)?)',
+        ('multi', ('bestgap', 'p12o'), ('randmax', 'p12o', 'alpha_gz'),
+         ('e4gap', 'alpha_gz', 'oos')))
+    add(r'最优值 \*\*(?P<g1>-?\d+(?:\.\d+)?) < 随机最大 (?P<g2>-?\d+(?:\.\d+)?)\*\*',
+        ('multi', ('curve', 'p12o', 'alpha_ew', 'best_value'),
+         ('randmax', 'p12o', 'alpha_ew')))
+
+    # ── §五 5 窗口 + 配置敏感性 ──
+    add(r'跨度 (?P<g1>-?\d+(?:\.\d+)?)~(?P<g2>-?\d+(?:\.\d+)?) 意味着',
+        ('multi', ('cw_spread', 'abs_sharpe'), ('cw_spread', 'alpha_hs300')))
+    add(r'最优 w 就移 (?P<g1>-?\d+(?:\.\d+)?)~(?P<g2>-?\d+(?:\.\d+)?)',
+        ('multi', ('cfg_min',), ('cfg_max',)))
+
+    # ── §六 诊断 ──
+    add(r'A 股腿夏普 (?P<g1>-?\d+(?:\.\d+)?) 的熊市', ('long_ash', 'w2016'))
+    add(r'A 股腿夏普 (?P<g1>-?\d+(?:\.\d+)?) 的牛市', ('long_ash', 'w2019'))
+    add(r'最优 w = (?P<g1>-?\d+(?:\.\d+)?)~(?P<g2>-?\d+(?:\.\d+)?)（全仓 A 股腿）',
+        ('multi', ('cw', 'abs_sharpe', 'w2019'), ('cw', 'alpha_gz', 'w2019')))
+    add(r'B 组：(?P<g1>-?\d+(?:\.\d+)?) / (?P<g2>-?\d+(?:\.\d+)?) / (?P<g3>-?\d+(?:\.\d+)?) / (?P<g4>-?\d+(?:\.\d+)?)，跨度 (?P<g5>-?\d+(?:\.\d+)?)',
+        ('multi', ('e2b_uniform', 'alpha_gz'), ('e2b_uniform', 'alpha_hs300'),
+         ('e2b_uniform', 'abs_sharpe'), ('e2b_uniform', 'alpha_ew'),
+         ('e2b_span',)))
+    add(r'同组内迁移命中率\*\*：绝对夏普 (?P<g1>-?\d+(?:\.\d+)?)% / α_gz (?P<g2>-?\d+(?:\.\d+)?)% / α_ew (?P<g3>-?\d+(?:\.\d+)?)% / α_hs300 (?P<g4>-?\d+(?:\.\d+)?)%',
+        ('multi', ('e6_same', 'abs_sharpe', 'pct'), ('e6_same', 'alpha_gz', 'pct'),
+         ('e6_same', 'alpha_ew', 'pct'), ('e6_same', 'alpha_hs300', 'pct')))
+    add(r'在绝大多数窗口排 (?P<g1>-?\d+(?:\.\d+)?)/21（中游），在 oos 的 α 口径下排 (?P<g2>-?\d+(?:\.\d+)?)/21（上游）',
+        ('multi', ('e3_rank', 'alpha_gz', 'main'),
+         ('e3_rank', 'alpha_gz', 'oos')))
+    add(r'main (?P<g1>-?\d+(?:\.\d+)?)~(?P<g2>-?\d+(?:\.\d+)?)、oos (?P<g3>-?\d+(?:\.\d+)?)~(?P<g4>-?\d+(?:\.\d+)?)、\s*'
+        r'w2013 (?P<g5>-?\d+(?:\.\d+)?)~(?P<g6>-?\d+(?:\.\d+)?)、w2016 (?P<g7>-?\d+(?:\.\d+)?)~(?P<g8>-?\d+(?:\.\d+)?)、\s*'
+        r'w2019 (?P<g9>-?\d+(?:\.\d+)?)~(?P<g10>-?\d+(?:\.\d+)?)',
+        ('multi', ('e3_loss_all_min', 'main'),
+         ('e3_loss_all_max', 'main'),
+         ('e3_loss_all_min', 'oos'),
+         ('e3_loss_all_max', 'oos'),
+         ('e3_loss_all_min', 'w2013'),
+         ('e3_loss_all_max', 'w2013'),
+         ('e3_loss_all_min', 'w2016'),
+         ('e3_loss_all_max', 'w2016'),
+         ('e3_loss_all_min', 'w2019'),
+         ('e3_loss_all_max', 'w2019')))
+    add(r'优势只有 (?P<g1>-?\d+(?:\.\d+)?) / (?P<g2>−0\.0007)',
+        ('multi', ('e4gap', 'alpha_gz', 'oos'),
+         ('e4gap', 'alpha_ew', 'oos')))
+
+    # ── §八 结论 ──
+    add(r'4 个评价口径给出 4 个不同的最优 w（跨度最大 (?P<g1>-?\d+(?:\.\d+)?)）',
+        ('cw_spread', 'alpha_hs300'))
+    add(r'5 个窗口给出跨度 (?P<g1>-?\d+(?:\.\d+)?) 的最优 w', ('cw_spread', 'alpha_gz'))
+    add(r'拿到别的窗口，命中率 (?P<g1>-?\d+(?:\.\d+)?)%~(?P<g2>-?\d+(?:\.\d+)?)%，低于抛硬币',
+        ('multi', ('e5_min', 'pct'), ('e5_max', 'pct')))
+    add(r'只强 (?P<g1>-?\d+(?:\.\d+)?)（α_ew 甚至为负）', ('e4gap', 'alpha_gz', 'oos'))
+    add(r'最优 w 照样散开（(?P<g1>-?\d+(?:\.\d+)?)~(?P<g2>-?\d+(?:\.\d+)?)）',
+        ('multi', ('cw_bestw_min', 'alpha_gz'),
+         ('cw_bestw_max', 'alpha_gz')))
+    add(r'w2016 夏普 (?P<g1>-?\d+(?:\.\d+)?) / w2019 夏普 \+?(?P<g2>-?\d+(?:\.\d+)?)',
+        ('multi', ('long_ash', 'w2016'), ('long_ash', 'w2019')))
+    add(r'组合绝对夏普 (?P<g1>-?\d+(?:\.\d+)?)~(?P<g2>-?\d+(?:\.\d+)?)（定稿配置）',
+        ('multi', ('comb_min',), ('comb_max',)))
+    add(r'α 夏普 (?P<g1>-?\d+(?:\.\d+)?)~(?P<g2>-?\d+(?:\.\d+)?)（main/oos，定稿三类）',
+        ('multi', ('ew_alpha_min',), ('ew_alpha_max',)))
+    add(r'(?P<g1>-?\d+(?:\.\d+)?)~(?P<g2>-?\d+(?:\.\d+)?)（长历史 3 窗口，降级两类）',
+        ('multi', ('long_sum', 'min'), ('long_sum', 'max')))
+    add(r'组合 β 仅 (?P<g1>-?\d+(?:\.\d+)?)~(?P<g2>-?\d+(?:\.\d+)?)（对国证A指/等权持有），ρ (?P<g3>-?\d+(?:\.\d+)?)~(?P<g4>-?\d+(?:\.\d+)?)',
+        ('multi', ('beta_min',), ('beta_max',), ('corr_min',), ('corr_max',)))
+    return A
+
+
+def check_prose(texts, anchors):
+    """正文数字核对：捕获到的数字必须与产物一致（按捕获文本的小数位舍入）。"""
+    problems = []
+    for doc_pref, pattern, spec in anchors:
+        doc = next((k for k in texts if k.startswith(doc_pref)), None)
+        if not doc:
+            problems.append(f'{doc_pref}: 文档不存在')
+            continue
+        hits = list(re.finditer(pattern, texts[doc]))
+        if len(hits) != 1:
+            problems.append(
+                f'{doc_pref}: 正则 /{pattern}/ 匹配 {len(hits)} 次（要求恰好 1 次）')
+            continue
+        specs = spec[1:] if spec[0] == 'multi' else (spec,)
+        m = hits[0]
+        gnames = sorted((g for g in m.groupdict() if g.startswith('g')),
+                        key=lambda x: int(x[1:]))
+        if len(gnames) != len(specs):
+            problems.append(
+                f'{doc_pref}: /{pattern}/ 捕获组 {len(gnames)} 个 vs 期望 {len(specs)} 个')
+            continue
+        for gname, sp in zip(gnames, specs):
+            txt = m.group(gname).strip()
+            # 百分比单位：捕获组只含数字，单位由 spec 声明（'pct'）
+            pct = bool(sp[1:] and sp[-1] == 'pct')
+            raw = txt.replace('−', '-')
+            try:
+                got = float(raw)
+            except ValueError:
+                problems.append(f'{doc_pref}: 组 {gname} 不是数字：{txt!r}')
+                continue
+            want = prose_value(sp)
+            want = want * 100 if pct else want
+            dec = len(raw.split('.')[1]) if '.' in raw else 0
+            tol = 0.5 * (10 ** -dec) + 1e-9
+            if abs(got - want) > tol:
+                problems.append(
+                    f'{doc_pref}: /{pattern}/ 组 {gname} 正文 {got} vs 产物 {want}'
+                    f'（{dec} 位精度）')
     return problems
 
 
@@ -1192,6 +1867,8 @@ def main():
     texts = load_docs()
     anchors = build_anchors()
     text_anchors = build_text_anchors()
+    crit_anchors = build_crit_anchors()
+    prose_anchors = build_prose_anchors()
 
     print('=' * 78)
     print(f'表格语义核对：{len(anchors)} 条断言 × 逐格比对产物')
@@ -1211,6 +1888,26 @@ def main():
         print(f'  ❌ {p}')
     if not tproblems:
         print('  ✅ 全部文本断言通过')
+
+    print()
+    print('=' * 78)
+    print(f'判据符号核对：{len(crit_anchors)} 条断言 × ✅/❌/— 逐格比对产物')
+    print('=' * 78)
+    cproblems = check_crit_cells(texts, crit_anchors)
+    for p in cproblems:
+        print(f'  ❌ {p}')
+    if not cproblems:
+        print('  ✅ 全部判据符号通过')
+
+    print()
+    print('=' * 78)
+    print(f'正文数字核对：{len(prose_anchors)} 条断言 × 正则定位 + 产物比对')
+    print('=' * 78)
+    pproblems = check_prose(texts, prose_anchors)
+    for p in pproblems:
+        print(f'  ❌ {p}')
+    if not pproblems:
+        print('  ✅ 全部正文数字断言通过')
 
     print()
     print('=' * 78)
@@ -1282,13 +1979,16 @@ def main():
         neg_ok = len(p2) > 0
 
         # 文本格注入：破坏一个持仓集单元格（数字注入覆盖不到字符串格）
+        # 每类注入用**独立副本**，否则一处注入会污染后续注入的定位，
+        # 自检会互相掩盖（曾出现：正文注入改坏了判据符号 → 判据自检假绿）。
+        t3 = dict(texts)
         tinj = []
         for a in build_text_anchors():
             doc_pref, tidx, row_label, col_hdr, spec = a
             doc = next((k for k in texts if k.startswith(doc_pref)), None)
             if not doc:
                 continue
-            tables = extract_tables(t2[doc])
+            tables = extract_tables(t3[doc])
             if tidx >= len(tables):
                 continue
             header, data = tables[tidx]
@@ -1297,21 +1997,109 @@ def main():
                 continue
             bad = None
             for real in ('510170', '159981', '159985', '159980', '511260', '518880'):
-                if real in cell and t2[doc].count(cell) == 1:
+                if real in cell and t3[doc].count(cell) == 1:
                     bad = cell.replace(real, '999999')
                     break
             if not bad:
                 continue
-            t2[doc] = t2[doc].replace(cell, bad, 1)
+            t3[doc] = t3[doc].replace(cell, bad, 1)
             tinj.append((doc, row_label, col_hdr, cell, bad))
             break
         for doc, rl, ch, oc, bc in tinj:
             print(f'  文本注入 [{doc}] 「{rl}」×「{ch}」: {oc} → {bc}')
-        tp2 = check_text_cells(t2, build_text_anchors())
+        tp2 = check_text_cells(t3, build_text_anchors())
         print(f'  文本注入后断言失败数：{len(tp2)}（期望 > 0）')
         for p in tp2[:5]:
             print(f'      {p}')
         neg_ok = neg_ok and len(tp2) > 0
+
+        # 判据符号注入：把 ✅ 改成 ❌（数字注入覆盖不到符号格）。
+        # 注意符号格内容常重复（多个 ' ✅ '），**不能**用字符串唯一性判断，
+        # 否则会静默跳过注入 → 自检变盲区。这里改用「行+列」定位重建整行。
+        t4 = dict(texts)
+        cinj = []
+        for a in build_crit_anchors():
+            doc_pref, tidx, row_label, col_hdr, spec = a
+            doc = next((k for k in texts if k.startswith(doc_pref)), None)
+            if not doc:
+                continue
+            tables = extract_tables(t4[doc])
+            if tidx >= len(tables):
+                continue
+            header, data = tables[tidx]
+            cell, err = find_cell(header, data, row_label, col_hdr)
+            if err or not cell or '✅' not in cell:
+                continue
+            # 定位该格所在的 markdown 行：整行唯一 → 逐格替换
+            hi = [norm(c) for c in header]
+            ci = hi.index(norm(col_hdr))
+            want_cols = [norm(x) for x in row_label] if isinstance(row_label, (tuple, list)) \
+                else [norm(row_label)]
+            target_line = None
+            for line in t4[doc].splitlines():
+                if not line.strip().startswith('|'):
+                    continue
+                cells = line.split('|')[1:-1]
+                if len(cells) <= ci:
+                    continue
+                if not norm(cells[0]).startswith(want_cols[0]):
+                    continue
+                if all(norm(cells[i]) == want_cols[i] for i in range(1, len(want_cols))):
+                    target_line = (line, cells)
+                    break
+            if target_line is None:
+                continue
+            line, cells = target_line
+            bad_cell = cells[ci].replace('✅', '❌', 1)
+            if bad_cell == cells[ci]:
+                continue
+            new_cells = list(cells)
+            new_cells[ci] = bad_cell
+            new_line = '|' + '|'.join(new_cells) + '|'
+            t4[doc] = t4[doc].replace(line, new_line, 1)
+            cinj.append((doc, row_label, col_hdr, cells[ci], bad_cell))
+            break
+        for doc, rl, ch, oc, bc in cinj:
+            print(f'  判据注入 [{doc}] 「{rl[:18]}」×「{ch}」: {oc} → {bc}')
+        # 正文数字注入：把正文里某个数字改错（表格断言覆盖不到正文）
+        t5 = dict(texts)
+        pp2 = []
+        for doc_pref, pattern, spec in build_prose_anchors():
+            doc = next((k for k in texts if k.startswith(doc_pref)), None)
+            if not doc:
+                continue
+            m = re.search(pattern, texts[doc])
+            if not m:
+                continue
+            gname = sorted((g for g in m.groupdict() if g.startswith('g')),
+                           key=lambda x: int(x[1:]))[0]
+            orig = m.group(gname)
+            # 改最后一位数字
+            digits = '0123456789'
+            new_txt = None
+            for i in range(len(orig) - 1, -1, -1):
+                if orig[i] in digits:
+                    nd = digits[(int(orig[i]) + 1) % 10]
+                    new_txt = orig[:i] + nd + orig[i + 1:]
+                    break
+            if not new_txt or new_txt == orig:
+                continue
+            t5[doc] = texts[doc][:m.start(gname)] + new_txt + texts[doc][m.end(gname):]
+            pp2.append((doc, pattern, orig, new_txt))
+            break
+        for doc, pat, o, n in pp2:
+            print(f'  正文注入 [{doc}] /{pat}/: {o} → {n}')
+        rp2 = check_prose(t5, build_prose_anchors())
+        print(f'  正文注入后断言失败数：{len(rp2)}（期望 > 0）')
+        for p in rp2[:5]:
+            print(f'      {p}')
+        neg_ok = neg_ok and len(rp2) > 0
+
+        cp2 = check_crit_cells(t4, build_crit_anchors())
+        print(f'  判据注入后断言失败数：{len(cp2)}（期望 > 0）')
+        for p in cp2[:5]:
+            print(f'      {p}')
+        neg_ok = neg_ok and len(cp2) > 0
         print(f'  自检结论：{"✅ 审计能抓到注入的错误" if neg_ok else "❌ 审计有漏洞"}')
         print('  （动态注入不落盘，文档未被修改）')
         if not neg_ok:
@@ -1353,7 +2141,7 @@ def main():
         print(f'  自检结论：{"✅ 审计能抓到注入的错误" if neg_ok else "❌ 审计有漏洞"}')
         print('  已还原文档。')
 
-    return 1 if problems else 0
+    return 1 if (problems or tproblems or cproblems) else 0
 
 
 if __name__ == '__main__':
