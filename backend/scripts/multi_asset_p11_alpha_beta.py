@@ -84,6 +84,7 @@ import argparse
 import json
 import math
 import os
+import re
 import statistics
 import sys
 from datetime import datetime
@@ -424,14 +425,33 @@ def load_market_proxies() -> Dict[str, Any]:
         s = s[~s.index.duplicated(keep="last")].sort_index()
         out[name] = s
 
+    # 命名白名单：只有 IDX_<6位代码> / ETF_<6位代码> 形态的文件才算基准。
+    # 为什么需要白名单：loader 之前会把 data/benchmarks/ 下**任何** parquet 按文件名收进基准集，
+    # 于是临时脚本（如旧的 Tushare 抓取脚本 pull_idx2/pull_idx3/pull_fund，它们写的是
+    # `399317.SZ.parquet` / `ETF_510300.SH.parquet` 这种命名）一旦成功，就会
+    # **静默多出一个口径不明的基准**，而产物里只会多一个看不出所以然的 key。
+    # 现在不合规命名 → 跳过并**显式告警**，不再静默。
+    name_ok = re.compile(r"^(IDX|ETF)_[0-9]{6}$")
+
+    def _ingest_checked(name: str, df, src: str) -> None:
+        if not name_ok.match(name):
+            print(f"[p11] ⚠️ 跳过非基准文件（命名不合规）: {src}/{name}")
+            return
+        try:
+            _ingest(name, df)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[p11] ⚠️ 读取失败已跳过: {src}/{name}: {type(exc).__name__}: {str(exc)[:80]}")
+
     if os.path.isdir(BENCH_DIR):
         for fn in sorted(os.listdir(BENCH_DIR)):
             if not fn.endswith(".parquet"):
                 continue
             try:
-                _ingest(fn[:-len(".parquet")], pd.read_parquet(os.path.join(BENCH_DIR, fn)))
-            except Exception:
+                df = pd.read_parquet(os.path.join(BENCH_DIR, fn))
+            except Exception as exc:  # noqa: BLE001
+                print(f"[p11] ⚠️ 读取失败已跳过: {BENCH_DIR}/{fn}: {type(exc).__name__}: {str(exc)[:80]}")
                 continue
+            _ingest_checked(fn[:-len(".parquet")], df, BENCH_DIR)
     if os.path.isdir(FIXTURES_DIR):
         for fn in sorted(os.listdir(FIXTURES_DIR)):
             if not fn.endswith(".csv"):
@@ -440,9 +460,11 @@ def load_market_proxies() -> Dict[str, Any]:
             if key in out:
                 continue
             try:
-                _ingest(key, pd.read_csv(os.path.join(FIXTURES_DIR, fn)))
-            except Exception:
+                df = pd.read_csv(os.path.join(FIXTURES_DIR, fn))
+            except Exception as exc:  # noqa: BLE001
+                print(f"[p11] ⚠️ 读取失败已跳过: {FIXTURES_DIR}/{fn}: {type(exc).__name__}: {str(exc)[:80]}")
                 continue
+            _ingest_checked(key, df, FIXTURES_DIR)
     return out
 
 

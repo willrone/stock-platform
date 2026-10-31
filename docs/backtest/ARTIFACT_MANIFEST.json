@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-11-01T06:54:51",
-  "git_commit": "808cff31",
+  "generated_at": "2026-11-01T07:00:25",
+  "git_commit": "86874aa5",
   "data_dir": "data/backtest",
   "sha256_mode": "normalized-json-v1",
   "sha256_excludes": [
@@ -183,9 +183,9 @@
       "mtime": "2026-10-31T08:51:44"
     },
     "multi_asset_p11_alpha.json": {
-      "sha256": "7cc99ecdc5e4b2d82fca5c565bac3612b4a43bac45a8dca723f6d3eb8d06c89e",
-      "bytes": 542094,
-      "mtime": "2026-11-01T06:50:14"
+      "sha256": "239e750785faad3572b9626a81e250eaf1a3b4dd9e145d1ac3fc7adcace6daf1",
+      "bytes": 546209,
+      "mtime": "2026-11-01T06:59:19"
     },
     "multi_asset_p11_stats.json": {
       "sha256": "ce321f3fe10db2d315eafce3f095aeabdd4aaf0385d8846454c563507beef3b7",
