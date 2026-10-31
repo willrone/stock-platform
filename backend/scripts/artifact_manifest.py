@@ -88,6 +88,13 @@ TRACKED = [
     "multi_asset_p13_long.json",        # P13 长历史 3 窗口
     "multi_asset_p14_main.json",        # P14 Oracle 上界（main）
     "multi_asset_p14_oos.json",         # P14 Oracle 上界（oos）
+    # ── P17：类内选标的 oracle 上界 + 袖套调仓频率 ──
+    "multi_asset_p17_single_main.json",
+    "multi_asset_p17_single_oos.json",
+    "multi_asset_p17_verify_main.json",
+    "multi_asset_p17_verify_oos.json",
+    "multi_asset_p17_freq_main.json",
+    "multi_asset_p17_freq_oos.json",
 ]
 
 # 审计器读取的产物文件 —— 必须与 TRACKED 一一对应（漏一个 = 该产物可被静默覆盖）

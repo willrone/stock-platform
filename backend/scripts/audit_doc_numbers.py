@@ -100,6 +100,12 @@ ART = {
     'p10s': J('multi_asset_p10_stats.json'),
     'p11': J('multi_asset_p11_alpha.json'),
     'p11s': J('multi_asset_p11_stats.json'),
+    'p17sm': J('multi_asset_p17_single_main.json'),
+    'p17so': J('multi_asset_p17_single_oos.json'),
+    'p17vm': J('multi_asset_p17_verify_main.json'),
+    'p17vo': J('multi_asset_p17_verify_oos.json'),
+    'p17fm': J('multi_asset_p17_freq_main.json'),
+    'p17fo': J('multi_asset_p17_freq_oos.json'),
 }
 
 
@@ -1662,6 +1668,30 @@ def prose_value(spec):
         d = dig(ART[f'p3{"m" if spec[1] == "main" else "o"}'],
                 ['results', 'base'])
         return abs(d['combined_maxdd']) * 100
+    if kind == 'p17_oracle':
+        # P17 三类同时取优的 oracle 组合夏普
+        art = ART[f'p17v{"m" if spec[1] == "main" else "o"}']
+        return next(r['combined_sharpe'] for r in art['results']
+                    if r['label'] == 'all_three_oracles')
+    if kind == 'p17_base':
+        return ART[f'p17s{"m" if spec[1] == "main" else "o"}']['baseline']['combined_sharpe']
+    if kind == 'p17_gain':
+        art = ART[f'p17v{"m" if spec[1] == "main" else "o"}']
+        base = ART[f'p17s{"m" if spec[1] == "main" else "o"}']['baseline']['combined_sharpe']
+        orc = next(r['combined_sharpe'] for r in art['results']
+                   if r['label'] == 'all_three_oracles')
+        return orc - base
+    if kind == 'p17_rmax':
+        # 随机族最大 − 定稿基线
+        art = ART[f'p17v{"m" if spec[1] == "main" else "o"}']
+        base = ART[f'p17s{"m" if spec[1] == "main" else "o"}']['baseline']['combined_sharpe']
+        rnd = [r['combined_sharpe'] for r in art['results']
+               if r['label'].startswith('rand_')]
+        return max(rnd) - base
+    if kind == 'p17_freq':
+        art = ART[f'p17f{"m" if spec[1] == "main" else "o"}']
+        return next(r['combined_sharpe'] for r in art['results']
+                    if r['label'] == spec[2])
     if kind == 'comb_min':
         return min(_w050('p12m', 'combined_sharpe'),
                    _w050('p12o', 'combined_sharpe'))
@@ -1799,6 +1829,21 @@ def build_prose_anchors():
     A.append((P5, r'一位都不变\*\*（main (?P<g1>-?\d+(?:\.\d+)?) / oos (?P<g2>-?\d+(?:\.\d+)?) / 回撤 −(?P<g3>\d+(?:\.\d+)?)%）',
               ('multi', ('p3_final', 'main'), ('p3_final', 'oos'),
                ('p3_final_dd', 'main'))))
+
+    # ── P17：类内选标的 oracle 上界 + 袖套调仓频率 ──
+    # 用**正文正则**而非表序号定位 —— 表序号定位在插表后会全乱。
+    P17 = 'P17_CLASS_SELECT'
+    A.append((P17, r'组合夏普上界只有 \*\*main \+(?P<g1>\d+(?:\.\d+)?) / \*\*oos \+(?P<g2>\d+(?:\.\d+)?)\*\*',
+              ('multi', ('p17_gain', 'main'), ('p17_gain', 'oos'))))
+    A.append((P17, r'oos 上随便随机选一组就能拿到 \+(?P<g1>\d+(?:\.\d+)?)',
+              ('multi', ('p17_rmax', 'oos'))))
+    A.append((P17, r'\*\*上界极小\*\*：main \+(?P<g1>\d+(?:\.\d+)?) / oos \+(?P<g2>\d+(?:\.\d+)?)',
+              ('multi', ('p17_gain', 'main'), ('p17_gain', 'oos'))))
+    A.append((P17, r'最高 \+(?P<g1>\d+(?:\.\d+)?) —— \*\*oracle 上界',
+              ('multi', ('p17_rmax', 'oos'))))
+    A.append((P17, r'\*\*main 最优是双周（(?P<g1>\d+(?:\.\d+)?)），oos 最优是月度（(?P<g2>\d+(?:\.\d+)?)）',
+              ('multi', ('p17_freq', 'main', 'biweekly_10'),
+               ('p17_freq', 'oos', 'monthly_21'))))
     return A
 
 
