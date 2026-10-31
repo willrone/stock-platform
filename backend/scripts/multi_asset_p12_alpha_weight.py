@@ -426,33 +426,66 @@ def simulate_long(calendar: List[str],
                 total_cost += proceeds * COMMISSION
                 total_turnover += proceeds
                 del shares[code]
-            # pro-rata 缩放（顺序无关；L3 已修，P12-C 独立实现保持同口径）
-            need = 0.0
-            plan: List[Tuple[str, float]] = []
+            # 3) 买（按目标权重）—— ⚠️ 2026-10-31 对齐 L3.simulate：
+            #    原实现是「按目标金额买满」(amount = val * w)，与 L3 的
+            #    「pro-rata 买不足」(amount = want - cur) **不是同一件事**：
+            #    前者无视当前持仓，会把每个标的都加到满额；后者只补缺口。
+            #    两者叠加第 4 步（卖超配）后的净值不同（w2013 0.7780 vs 0.7727）。
+            #    现在按 L3 原样：只买不足，且现金不足时按比例缩放全部买入额
+            #    （不"先到先得"，保证与遍历顺序无关）。
+            buys: List[Tuple[str, float]] = []
             for code, w in tgt.items():
-                p = px(code, d, "open")
-                if p is None or w <= 0:
+                if w <= 0:
                     continue
-                amount = val * w
-                buy_px = p * (1 + SLIPPAGE)
-                need += amount / buy_px * buy_px
-                plan.append((code, amount))
-            if need > 0:
+                p = px(code, d, "open")
+                if p is None:
+                    continue
+                want = val * w
+                cur = shares.get(code, 0.0) * p
+                if cur >= want:
+                    continue
+                buys.append((code, want - cur))
+            if buys:
+                need = sum(a for _, a in buys)
                 scale = 1.0
-                if cash < need * (1 + COMMISSION):
+                if need > 0 and cash < need * (1 + COMMISSION):
                     scale = cash / (need * (1 + COMMISSION))
-                for code, amount in plan:
-                    p = px(code, d, "open")
-                    if p is None:
+                for code, amount in buys:
+                    if amount <= 0:
                         continue
-                    buy_px = p * (1 + SLIPPAGE)
-                    amt = amount * scale
-                    cost = amt * COMMISSION
+                    amount *= scale
+                    cost = amount * COMMISSION
+                    cash -= amount + cost
                     total_cost += cost
-                    total_turnover += amt
-                    sh = amt / buy_px
-                    shares[code] = shares.get(code, 0.0) + sh
-                    cash -= amt + cost
+                    total_turnover += amount
+                    p_open = px(code, d, "open")
+                    if p_open is None:
+                        continue
+                    buy_px = p_open * (1 + SLIPPAGE)
+                    shares[code] = shares.get(code, 0.0) + amount / buy_px
+            # 4) 权重再平衡到精确目标（卖出超配的部分）
+            #    ⚠️ 2026-10-31 补：原来缺这一步 → 买入段是「只加仓、从不减仓」，
+            #    目标权重永远达不到，「每月恢复类间等权」实际没发生（等价于买入持有）。
+            #    L3.simulate 有这一步（见 L3 第 377-395 行），长历史版之前没抄。
+            #    影响：w2013 -0.0297 / w2016 -0.0361 / w2019 +0.0288（组合夏普）。
+            for code in list(shares.keys()):
+                if code not in tgt:
+                    continue
+                p = px(code, d, "open")
+                if p is None:
+                    continue
+                cur = shares[code] * p
+                want = val * tgt[code]
+                if cur <= want:
+                    continue
+                sell_px = p * (1 - SLIPPAGE)
+                proceeds = min(shares[code] * sell_px, cur - want)
+                if proceeds <= 0:
+                    continue
+                cash += proceeds
+                total_cost += proceeds * COMMISSION
+                total_turnover += proceeds
+                shares[code] -= proceeds / sell_px
         # mark-to-market
         v = cash
         for code, sh in shares.items():

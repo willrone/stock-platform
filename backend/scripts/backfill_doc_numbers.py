@@ -151,14 +151,31 @@ def backfill_doc(doc_path: str, anchors: List[Any]) -> Tuple[str, int, int]:
             missed += 1
             continue
         ci = hdr.index(want_col)
-        want_row = AUD.norm(row_label)
+        # 行键可以是字符串（匹配第 0 列），也可以是元组（依次匹配前 N 列）——
+        # 与审计器 find_cell 同构。P12 §九 E2 那类表首列有重复值，单列定位会歧义。
+        is_key = isinstance(row_label, (tuple, list))
+        if is_key:
+            want_cols = [AUD.norm(x) for x in row_label]
+            n_key = len(want_cols)
+        else:
+            want_cols = [AUD.norm(row_label)]
+            n_key = 1
         hit = None
         for li, cells in data:
-            if cells and AUD.norm(cells[0]) == want_row:
-                if hit is not None:
-                    hit = None
-                    break
-                hit = (li, cells)
+            if not cells or len(cells) < n_key:
+                continue
+            if is_key:
+                if not AUD.norm(cells[0]).startswith(want_cols[0]):
+                    continue
+                if not all(AUD.norm(cells[i]) == want_cols[i] for i in range(1, n_key)):
+                    continue
+            else:
+                if AUD.norm(cells[0]) != want_cols[0]:
+                    continue
+            if hit is not None:
+                hit = None
+                break
+            hit = (li, cells)
         if hit is None or ci >= len(hit[1]):
             missed += 1
             continue
