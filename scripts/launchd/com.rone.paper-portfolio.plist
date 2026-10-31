@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.rone.paper-portfolio</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/rone/Projects/stock-platform/scripts/weekly_paper_portfolio.sh</string>
+  </array>
+  <!-- ⚠️ 时点：**周一 17:40**（不是周五）+ **周二 09:20**（兜底重试）。
+       纸面盘 2026-10-26 起是 **lag1 口径**：信号日 = 最后一个周五，
+       成交日 = 信号日之后的**下一个交易日**（周一），成交价 = 成交日收盘价。
+       → 要拿到周一的收盘价才能成交，所以必须**周一收盘后**跑。
+
+       旧配置是「周五 17:00」→ 周五跑的时候「下一个交易日」的数据还不存在 →
+       每次都 SystemExit("lag1 口径需要下一交易日才能成交") → 纸面盘从
+       2026-10-20 起整整停更（持仓文件 last_signal 停在 2026-10-16），
+       而 launchd 又是静默失败的，表面看不出来。
+       → 周五 17:00 跑只能拿到周五的信号却成交不了；周一收盘后跑才对。
+
+       为什么是 17:40：TDX 当日日线包实测 **17:30 左右**落地
+       （10-26~10-30 连续五天都是 17:30:19~17:31:06），
+       17:40 有 10 分钟余量；17:00 跑会**竞态**（数据还没到 → 脚本直接报错退出）。
+       为什么还要周二 09:20：TDX 包偶尔会晚到（实测 2026-10-23 的包直到
+       10-25 20:07 才落地），周一没跑成时周二早上补一次。
+       重复跑**安全**：纸面盘按**成交日**判重（`_trade_for_check <= last_used` 就跳过），
+       周二那次的成交日与周一相同 → 自动跳过，不会重复下单。
+       两次都不成 → 那周的成交日顺延（脚本会如实记录顺延后的成交日）。 -->
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict>
+      <key>Weekday</key><integer>1</integer>
+      <key>Hour</key><integer>17</integer>
+      <key>Minute</key><integer>40</integer>
+    </dict>
+    <dict>
+      <key>Weekday</key><integer>2</integer>
+      <key>Hour</key><integer>9</integer>
+      <key>Minute</key><integer>20</integer>
+    </dict>
+  </array>
+  <key>StandardOutPath</key>
+  <string>/Users/rone/Projects/stock-platform/runtime/logs/paper_portfolio_launchd.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/rone/Projects/stock-platform/runtime/logs/paper_portfolio_launchd.err.log</string>
+  <key>RunAtLoad</key>
+  <false/>
+</dict>
+</plist>

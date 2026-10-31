@@ -42,7 +42,7 @@ import json
 import os
 import sys
 from datetime import date, datetime
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -1084,6 +1084,18 @@ def run_multi_asset_line(
     a_capital = capital * MULTI_ASSET_A_WEIGHT
     s_capital = capital * MULTI_ASSET_SLEEVE_WEIGHT
 
+    # ── 成交日（信号日之后的下一个交易日，lag1）────────────────────────
+    # 先算成交日：A 腿要不要「复用」取决于它在这个成交日是否已经调过仓。
+    signal_day = pd.Timestamp(rebalance_day)
+    _after = master[master > signal_day]
+    if len(_after) == 0:
+        raise SystemExit(
+            f"❌ 多资产线：信号日 {signal_day.date()} 之后还没有交易日的行情数据"
+            f"（lag1 口径需要下一交易日成交）。"
+        )
+    trade_day = _after[0]
+    trade_idx = int(master.get_loc(trade_day))
+
     # ── A 腿：复用 honest_42f 的同一套打分 + 撮合实现 ──────────────────
     a_spec = {
         "score": score_42f, "topk": 60, "ndrop": 5,
@@ -1096,10 +1108,41 @@ def run_multi_asset_line(
         "lot_cover_max": 1.5,
         "desc": "多资产组合 · A股腿（42 因子 Top60 / n_drop 5，占 50%）",
     }
-    a_res = run_line(
-        MULTI_ASSET_A_KEY, a_spec, frames, panel, master, names,
-        a_capital, rebalance_day, extras=extras, adj_close=adj_close,
+    # 2026-11-01：**A 腿的幂等保护**。
+    #   场景：本周袖套（ETF 数据没到）失败 → A 腿已经成交并写了持仓/账本 →
+    #   下一周补跑同一成交日时，如果再跑一次 run_line，就会**重复撮合**：
+    #   同一天多出一批买卖记录、佣金重复扣、合并账本出现同日期两行。
+    #   规则：A 腿在这个成交日已经成交过 → 直接复用持仓文件 + 账本，
+    #   只补袖套腿，不重复下单。
+    _a_pre = load_holdings(MULTI_ASSET_A_KEY, a_capital)
+    _a_pre_trade = _a_pre.get("last_trade")
+    _a_done = (
+        bool(_a_pre_trade)
+        and str(pd.Timestamp(_a_pre_trade).date()) == str(trade_day.date())
     )
+    if _a_done:
+        print(f"  [A腿] 成交日 {trade_day.date()} 已调过仓 → 复用现有持仓，不重复撮合",
+              flush=True)
+        a_res = rebuild_line_from_files(MULTI_ASSET_A_KEY, a_capital)
+        # 复用时 a_res 的 buys/sells 来自 A 腿账本里**这个成交日**的成交记录。
+        # 什么时候该把它们当成本次明细报出去？
+        #   合并线还没覆盖这个成交日（_m_catching_up）→ 说明上周那次跑挂在袖套腿，
+        #   合并持仓文件根本没写 → **用户从没收到过这份信号** → 必须补报。
+        #   合并线已经覆盖这个成交日 → 上次已经报过 → 不重复报（否则重复推送）。
+        _m_pre = load_holdings("multi_asset_final", capital)
+        _m_pre_trade = _m_pre.get("last_trade")
+        _m_catching_up = not (
+            _m_pre_trade
+            and str(pd.Timestamp(_m_pre_trade).date()) == str(trade_day.date())
+        )
+        if not _m_catching_up:
+            a_res["buys"] = []
+            a_res["sells"] = []
+    else:
+        a_res = run_line(
+            MULTI_ASSET_A_KEY, a_spec, frames, panel, master, names,
+            a_capital, rebalance_day, extras=extras, adj_close=adj_close,
+        )
 
     # ── 袖套腿 ────────────────────────────────────────────────────────
     codes = _sleeve_codes()
@@ -1113,16 +1156,6 @@ def run_multi_asset_line(
             f"--codes {','.join(codes)}"
         )
     etf_bars = load_etf_bars(codes)
-
-    signal_day = pd.Timestamp(rebalance_day)
-    _after = master[master > signal_day]
-    if len(_after) == 0:
-        raise SystemExit(
-            f"❌ 多资产线：信号日 {signal_day.date()} 之后还没有交易日的行情数据"
-            f"（lag1 口径需要下一交易日成交）。"
-        )
-    trade_day = _after[0]
-    trade_idx = int(master.get_loc(trade_day))
 
     s_paper = load_holdings(MULTI_ASSET_SLEEVE_KEY, s_capital)
     s_positions = dict(s_paper.get("positions") or {})
@@ -1153,6 +1186,9 @@ def run_multi_asset_line(
         try:
             s_positions, s_cash, s_buys, s_sells = rebalance_sleeve(
                 s_positions, s_cash, etf_bars, trade_day, target,
+                # 产品侧严格：成交价必须是成交当日收盘价（研究侧允许容忍 3 天，
+                # 但那会让 ETF 数据晚到时拿上周五的价成交 → 净值失真）
+                require_exact_date=True,
             )
         except SleeveError as e:
             raise SystemExit(f"❌ 多资产线：{e}")
@@ -1279,6 +1315,12 @@ def run_multi_asset_line(
     save_holdings("multi_asset_final", m_paper)
     _write_multi_asset_ledger(str(trade_day.date()), merged_value)
 
+    # 袖套的买卖明细补上 ETF 名称（合并进总账本 / 推送时要显示名字，
+    # 否则前端只能显示 6 位代码）；A 腿的明细自带名称。
+    for b in s_buys:
+        b.setdefault("name", ETF_NAMES.get(str(b.get("code", "")), ""))
+    for s in s_sells:
+        s.setdefault("name", ETF_NAMES.get(str(s.get("code", "")), ""))
     buys = list(a_res.get("buys") or []) + s_buys
     sells = list(a_res.get("sells") or []) + s_sells
     for b in buys:
@@ -1478,47 +1520,59 @@ def main() -> None:
     # 用信号日比较 → 第二周开始就会被判成「重复调仓」而永远跳过。
     # 正确判据是**成交日**（last_trade）。
     # 老数据没有 last_trade 时回退到 last_signal。
-    existing_signals = []
+    #
+    # 2026-11-01 修正（关键）：原来用「所有线的 max(last_trade)」做**全局**判重
+    # —— 只要**任何一条**线在该成交日调过仓，其余线全部被跳过。
+    # 对多资产线这种「新上线、还没建仓」的线是致命的：
+    #   本周它因为袖套 ETF 数据没到而失败 → 其他 6 条线照常成交 →
+    #   下一次补跑时全局判重把它们全跳过 → **这条线永远建不上仓**，
+    #   而且每次补跑都被跳，连报错都没有。
+    # 现在改成**每条线各自判重**：已成交的线跳过，没成交的线照常跑。
+    line_last_used: Dict[str, Optional[pd.Timestamp]] = {}
     for s in args.strategies:
         h = load_holdings(s, args.capital)
         _lt = h.get("last_trade") or h.get("last_signal")
-        if _lt:
-            existing_signals.append(pd.Timestamp(_lt))
-    if existing_signals:
-        last_used = max(existing_signals)
-        # 用 `<=` 而不是 `<`：同一天重复跑（手动重跑 / cron 补跑）时
-        # 信号日会相等 —— 原来只挡「更早」，会**重复调仓**（同一周买两次）。
-        _trade_for_check = trade_day if trade_day is not None else rebalance_day
-        if _trade_for_check <= last_used and not args.force:
-            print(
-                f"跳过：成交日 {_trade_for_check.date()} 不晚于已成交的 "
-                f"{last_used.date()}（已调仓过，重复执行会重复下单）。"
-                f"如需重跑请加 --force。",
-                flush=True,
-            )
-            # 跳过也要更新 meta —— 否则推送脚本读不到 signal_date/trade_date，
-            # 标题会退回旧的「每日信号 X」格式，看不出该哪天操作。
-            _ppath = os.path.join(PAPER_DIR, "portfolio.json")
-            if os.path.exists(_ppath):
-                try:
-                    with open(_ppath) as _fh:
-                        _pd = json.load(_fh)
-                    _md = _pd.get("meta") or {}
-                    _md["signal_date"] = str(rebalance_day.date())
-                    _md["trade_date"] = (
-                        str(trade_day.date()) if trade_day is not None else None
-                    )
-                    _md["data_latest"] = str(latest_all.date())
-                    _md["last_run_at"] = datetime.now().isoformat()
-                    _pd["meta"] = _md
-                    with open(_ppath, "w") as _fh:
-                        json.dump(_pd, _fh, ensure_ascii=False, indent=1)
-                    print("  （已更新 portfolio.json 的 meta）", flush=True)
-                except Exception as e:  # noqa: BLE001
-                    print(f"  meta 更新失败（不影响）: {e}", flush=True)
-            # 不 return —— 继续往下走，让「从持仓文件重建所有线」的逻辑执行，
-            # 否则 portfolio.json 会停留在旧数据（前端展示的买卖价与实际成交对不上）
-            _skipped = True
+        line_last_used[s] = pd.Timestamp(_lt) if _lt else None
+    # 用 `<=` 而不是 `<`：同一天重复跑（手动重跑 / cron 补跑）时
+    # 成交日会相等 —— 原来只挡「更早」，会**重复调仓**（同一周买两次）。
+    _trade_for_check = trade_day if trade_day is not None else rebalance_day
+    skip_lines: List[str] = []
+    for s in args.strategies:
+        _lu = line_last_used[s]
+        if _lu is not None and _trade_for_check <= _lu and not args.force:
+            skip_lines.append(s)
+    if skip_lines:
+        _desc_parts: List[str] = []
+        for _s in skip_lines:
+            _lu = line_last_used.get(_s)
+            _desc_parts.append(f"{_s}(上次 {_lu.date()})" if _lu is not None else f"{_s}(无记录)")
+        _skipped_desc = ", ".join(_desc_parts)
+        print(
+            f"跳过（该成交日已调过仓，重复执行会重复下单）：{_skipped_desc}\n"
+            f"  成交日 {_trade_for_check.date()}\n"
+            f"  如需重跑请加 --force。",
+            flush=True,
+        )
+        # 跳过也要更新 meta —— 否则推送脚本读不到 signal_date/trade_date，
+        # 标题会退回旧的「每日信号 X」格式，看不出该哪天操作。
+        _ppath = os.path.join(PAPER_DIR, "portfolio.json")
+        if os.path.exists(_ppath):
+            try:
+                with open(_ppath) as _fh:
+                    _pd = json.load(_fh)
+                _md = _pd.get("meta") or {}
+                _md["signal_date"] = str(rebalance_day.date())
+                _md["trade_date"] = (
+                    str(trade_day.date()) if trade_day is not None else None
+                )
+                _md["data_latest"] = str(latest_all.date())
+                _md["last_run_at"] = datetime.now().isoformat()
+                _pd["meta"] = _md
+                with open(_ppath, "w") as _fh:
+                    json.dump(_pd, _fh, ensure_ascii=False, indent=1)
+                print("  （已更新 portfolio.json 的 meta）", flush=True)
+            except Exception as e:  # noqa: BLE001
+                print(f"  meta 更新失败（不影响）: {e}", flush=True)
     if not args.force:
         print(
             f"信号日（周五）= {rebalance_day.date()}"
@@ -1528,18 +1582,31 @@ def main() -> None:
         )
 
     results = []
-    if locals().get("_skipped"):
+    line_errors: List[Dict[str, str]] = []
+    todo = [s for s in args.strategies if s not in skip_lines]
+    if not todo:
         print("（本次未调仓，仅重建 portfolio.json）", flush=True)
-    for s in (args.strategies if not locals().get("_skipped") else []):
+    for s in todo:
         spec = STRATEGIES[s]
         print(f"\n{'='*60}\n[{s}] {spec['desc']}", flush=True)
-        if spec.get("multi_asset"):
-            r = run_multi_asset_line(frames, panel, master, names,
-                                     args.capital, rebalance_day,
-                                     extras=extras, adj_close=adj_close)
-        else:
-            r = run_line(s, spec, frames, panel, master, names, args.capital,
-                         rebalance_day, extras=extras, adj_close=adj_close)
+        # 2026-11-01：**单条线失败不许拖垮其他线**。
+        #   原来线里 raise SystemExit 会直接退出整个进程 → portfolio.json
+        #   停留在旧数据（前端展示的买卖价与实际成交对不上，2026-10-26 实测过），
+        #   而且其他线虽然已经成交、写了持仓文件，汇总文件却没更新。
+        #   现在：捕获 → 记账 → 继续跑其他线 → 最后仍以非 0 退出码报失败。
+        try:
+            if spec.get("multi_asset"):
+                r = run_multi_asset_line(frames, panel, master, names,
+                                         args.capital, rebalance_day,
+                                         extras=extras, adj_close=adj_close)
+            else:
+                r = run_line(s, spec, frames, panel, master, names, args.capital,
+                             rebalance_day, extras=extras, adj_close=adj_close)
+        except SystemExit as e:
+            msg = str(e)
+            print(f"❌ [{s}] 本次调仓失败：{msg}", flush=True)
+            line_errors.append({"strategy": s, "error": msg})
+            continue
         results.append(r)
         print(f"  组合总值 ¥{r['value']:,.0f} | 现金 ¥{r['cash']:,.0f} | "
               f"{r['n_positions']} 只 | 买 {len(r['buys'])} 卖 {len(r['sells'])}",
@@ -1600,6 +1667,9 @@ def main() -> None:
             ),
             "generated_at": datetime.now().isoformat(),
             "lines_updated": [r["strategy"] for r in results],
+            "lines_skipped": skip_lines,
+            # 本次失败的线（单条线失败不影响其他线，但必须留痕）
+            "errors": line_errors,
         },
         "lines": merged_lines,
     }
@@ -1618,6 +1688,16 @@ def main() -> None:
         print(f"{r['strategy']:<20}¥{r['value']:>13,.0f}¥{r['cash']:>11,.0f}"
               f"{r['n_positions']:>6}{len(r['buys']):>5}{len(r['sells']):>6}")
     print(f"\n[saved] {os.path.join(PAPER_DIR, 'portfolio.json')}", flush=True)
+
+    if line_errors:
+        # 有线失败 → 非 0 退出码（launchd / 定时任务会看到失败），
+        # 但 portfolio.json 已经写好了（其他线的成交结果不丢）。
+        print(
+            f"\n❌ {len(line_errors)} 条线本次失败："
+            + ", ".join(e["strategy"] for e in line_errors),
+            flush=True,
+        )
+        sys.exit(3)
 
 
 if __name__ == "__main__":

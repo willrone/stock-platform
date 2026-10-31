@@ -197,7 +197,11 @@ def build_line(key: str, portfolio: dict, names: dict) -> str | None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--strategy", default=DEFAULT_STRATEGY)
+    # 2026-11-01：支持**多条线**（--strategy honest_42f multi_asset_final）。
+    #   为什么：多资产线的 A 腿就是 42f 的 Top60（半仓），两条线都推 →
+    #   同一批股票出现两遍、股数不同 → 用户不知道该执行哪份。
+    #   → 一次推送里同时给两条线，并在开头写明「二选一」。
+    ap.add_argument("--strategy", nargs="+", default=[DEFAULT_STRATEGY])
     ap.add_argument("--all", action="store_true", help="推全部策略线")
     args = ap.parse_args()
 
@@ -219,7 +223,7 @@ def main() -> None:
         return
 
     names = name_map()
-    keys = list((portfolio.get("lines") or {}).keys()) if args.all else [args.strategy]
+    keys = list((portfolio.get("lines") or {}).keys()) if args.all else list(args.strategy)
     chunks = []
     for k in keys:
         c = build_line(k, portfolio, names)
@@ -237,6 +241,11 @@ def main() -> None:
                   f"   成交价用 {trade_date} 收盘价，涨停买不进、跌停卖不出")
     else:
         header = f"📊 每日信号 {sig_date}（{meta.get('data_latest', sig_date)} 数据）"
+    # 多资产线与 42f 线的 A 腿是同一批股票（多资产线是半仓 + 袖套）→
+    # 两条一起推时必须说清楚「二选一」，否则用户会重复下单。
+    if len(chunks) > 1 and "multi_asset_final" in keys and "honest_42f" in keys:
+        header += ("\n   ⚠️ 多资产线的 A 腿 = 42f 的 Top60（**一半仓位**）+ 9 只 ETF 袖套；"
+                   "两条线**二选一**，不要同时执行。")
     print(header)
     print("=" * 28)
     print("\n\n".join(chunks))

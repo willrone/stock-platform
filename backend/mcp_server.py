@@ -151,9 +151,13 @@ def paper_portfolio(strategy: str = "") -> str:
     """多策略纸面盘: 每条线独立 100 万, 返回各线汇总 + 明细。
 
     2026-10-25 起默认读多策略盘（data/paper/portfolio.json，由
-    backend/scripts/paper_portfolio.py 生成，4 条线：22f / honest_42f /
-    rsi_71421 / factor_ranking）。
+    backend/scripts/paper_portfolio.py 生成）。**当前 7 条线**：
+      22f / honest_42f / rsi_71421 / factor_ranking / gbm_voltgt /
+      honest_42f_neu / multi_asset_final（多资产组合：A 股腿 + 黄金/债券/商品袖套）。
     传 strategy=<名称> 只返回该条线的持仓明细。
+
+    注意：`multi_asset_final` 是**严格 lag1**（周五信号 → 下一交易日成交），
+    它的第一个净值点要等下一个交易日的收盘数据落地才出现。
     """
     import os as _os
 

@@ -131,13 +131,19 @@ class EtfBars:
         i = int(np.searchsorted(e["dates"], target, side="right")) - 1
         if i < 0:
             return None
-        if exact or e["dates"][i] != target:
-            if exact:
+        # 2026-11-01 修正（潜伏 bug）：原来写成
+        #     if exact or e["dates"][i] != target:
+        #         if exact: return None
+        #   → `exact=True` 时**无论当天有没有数据都返回 None**，
+        #   「必须当天有数据」这个语义从来没生效过（这条分支此前无人调用）。
+        # 现在按语义拆开：exact 只看当天；否则按 max_stale_days 卡陈旧度。
+        if exact:
+            if e["dates"][i] != target:
                 return None
-            if max_stale_days is not None:
-                stale_days = int((target - e["dates"][i]) / np.timedelta64(1, "D"))
-                if stale_days > max_stale_days:
-                    return None
+        elif max_stale_days is not None:
+            stale_days = int((target - e["dates"][i]) / np.timedelta64(1, "D"))
+            if stale_days > max_stale_days:
+                return None
         px = float(e[price_field][i]) if price_field in e else float(e["close"][i])
         vol = float(e["volume"][i])
         return {
@@ -371,12 +377,13 @@ def _iter_product(per_code: List[List[Any]]) -> Any:
 def rebalance_sleeve(
     positions: Dict[str, Dict[str, Any]],
     cash: float,
-    bars: Dict[str, pd.DataFrame],
+    bars: EtfBars,
     date: pd.Timestamp,
     target: Dict[str, float],
     price_field: str = "close",
     board_lot: int = ETF_BOARD_LOT,
     charge_sell_commission: bool = True,
+    require_exact_date: bool = False,
 ) -> Tuple[Dict[str, Dict[str, Any]], float, List[Dict[str, Any]], List[Dict[str, Any]]]:
     """把袖套调仓到目标权重。
 
@@ -397,6 +404,16 @@ def rebalance_sleeve(
         `total_cost`），属于研究侧的一处口径不一致，会让 3 年累计净值虚高
         约 2.8bp（卖方佣金 ≈ 0.925 倍换手 × 0.03%）。量级可忽略，
         但**验证时必须对齐**，否则会被误判成"实现不等价"。
+
+    `require_exact_date`：**产品（纸面盘）侧必须置 True**。
+      - True：成交价必须是**成交当日**的收盘价，缺当日 bar 直接抛错。
+      - False（研究侧默认）：允许前向填充，落后 ≤ `MAX_STALE_TRADE_DAYS` 个自然日。
+      为什么产品侧必须严格：`MAX_STALE_TRADE_DAYS = 3`（自然日）会**放过**
+      「周五 → 周一」这正好 3 天的缺口 —— ETF 数据晚一天到货时，
+      会拿**上周五的收盘价**当周一的成交价成交：账面上「成交了」，
+      实际成交价比回测口径晚 1~3 天，净值曲线直接失真。
+      研究侧不受影响：实测研究日历 35 个调仓日 × 9 只 = 315 个组合
+      **全部是当日价**，所以「严格」对研究侧结果零影响。
     """
     positions = {k: dict(v) for k, v in (positions or {}).items()}
     cash = float(cash)
@@ -417,6 +434,18 @@ def rebalance_sleeve(
             f"袖套调仓失败：目标标的缺少 {date.date()} 的可用行情 {missing}"
             f"（允许最多落后 {MAX_STALE_TRADE_DAYS} 个自然日）"
         )
+
+    # ── 产品侧严格口径：成交价必须是**成交当日**的收盘价 ────────────────
+    # 见函数 docstring 的 `require_exact_date` 说明：容忍 3 个自然日会放过
+    # 「周五 → 周一」的缺口 → ETF 数据晚到时拿上周五的收盘价成交（假成交）。
+    if require_exact_date:
+        not_exact = [c for c in target if bars.get(c, date, price_field, exact=True) is None]
+        if not_exact:
+            raise SleeveError(
+                f"袖套调仓失败：目标标的 {not_exact} 在 {date.date()} **没有当天的行情**"
+                f"（产品侧不允许用更早的收盘价成交）—— ETF 数据管道可能还没更新到成交日，"
+                f"等数据到货后重跑。"
+            )
 
     value = cash + sum(
         float(positions[c].get("shares", 0)) * px[c]
@@ -654,7 +683,7 @@ def rebalance_sleeve(
 
 def sleeve_positions_value(
     positions: Dict[str, Dict[str, Any]],
-    bars: Dict[str, pd.DataFrame],
+    bars: EtfBars,
     date: pd.Timestamp,
     price_field: str = "close",
 ) -> float:
@@ -675,7 +704,7 @@ def sleeve_positions_value(
 
 def sleeve_class_weights_now(
     positions: Dict[str, Dict[str, Any]],
-    bars: Dict[str, pd.DataFrame],
+    bars: EtfBars,
     date: pd.Timestamp,
 ) -> Dict[str, float]:
     """当前三类各占袖套的比例（用于校验「类间等权」是否被漂移破坏）。"""
