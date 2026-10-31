@@ -95,6 +95,9 @@ TRACKED = [
     "multi_asset_p17_verify_oos.json",
     "multi_asset_p17_freq_main.json",
     "multi_asset_p17_freq_oos.json",
+    # ── P18：42f 之上叠加 gbm 增量（分数级 z-score 融合）──
+    "multi_asset_p18_main.json",
+    "multi_asset_p18_oos.json",
     # ── 试验预算账本（只增不减；register 后由 trial_budget.py 自动重建清单）──
     "trial_budget.json",
 ]
@@ -145,6 +148,15 @@ AUDITED = [
     "multi_asset_p12_longw.json",
     "multi_asset_p12_diag.json",
     # ── P13 / P14（2026-10-31 补登：此前 P13 产物漏登记，等于没有指纹保护）──
+    "multi_asset_p17_single_main.json",
+    "multi_asset_p17_single_oos.json",
+    "multi_asset_p17_verify_main.json",
+    "multi_asset_p17_verify_oos.json",
+    "multi_asset_p17_freq_main.json",
+    "multi_asset_p17_freq_oos.json",
+    # ── P18：42f 之上叠加 gbm 增量（分数级 z-score 融合）──
+    "multi_asset_p18_main.json",
+    "multi_asset_p18_oos.json",
 ]
 
 
