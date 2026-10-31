@@ -506,6 +506,7 @@ def main() -> None:
                 arms.append({"label": f"plc_w{w:.2f}_s{s}", "w": w,
                              "placebo": s, "kind": "placebo"})
 
+    carry: Dict[str, Any] = {}
     if args.window == "oos":
         if not args.carry:
             raise SystemExit("[p18] ❌ oos 阶段必须给 --carry（main 产物）")
@@ -515,19 +516,15 @@ def main() -> None:
             raise SystemExit(f"[p18] ❌ carry 不存在 {carry_path}")
         with open(carry_path, encoding="utf-8") as fh:
             carry = json.load(fh)
+        # ⚠️ 4 个规则臂**全部**要在 oos 上跑：判据 (f)「oos 最优权重在 main
+        #    不得排最差」只有在多个候选臂时才存在（只跑 1 个 → 排名 1/1 → (f) 恒真）。
+        #    候选臂本身按**两阶段**定：main 选出 → oos 验证（绝不在 oos 上挑臂）。
         order = [l for l in carry.get("ranking", []) if l != "fuse_w0.00"]
-        keep = order[:2] if order else []
-        if not keep:
-            keep = [f"fuse_w{W_GBMS[0]:.2f}"]
-        arms = [a for a in arms
-                if a["kind"] in ("gate", "base") or a["label"] in keep]
-        for a in list(arms):
-            if a["kind"] == "rule" and a["label"] not in keep:
-                arms.append({**a, "label": a["label"].replace("fuse_", "plc_"),
-                             "kind": "placebo"})
-        print(f"[p18] Stage2 带入规则臂 {keep}", flush=True)
+        main_rule_rank = [l for l in order if l.startswith("fuse_w")]
+        main_best_rule = main_rule_rank[0] if main_rule_rank else None
+        print(f"[p18] Stage2 候选臂（main 选出）= {main_best_rule}；"
+              f"main 规则臂排名 {main_rule_rank}（oos 阶段跑全部规则臂）", flush=True)
 
-    carry: Dict[str, Any] = {}
     only = {x for x in args.only.split(",") if x}
     if only:
         # ⚠️ 基线臂与复现门臂**强制保留** —— 判据全部相对基线算，
@@ -628,6 +625,16 @@ def main() -> None:
     # ── 候选臂（两阶段：main 选出 → oos 验证）──
     rule_labels = [l for l in ranking if results[l]["kind"] == "rule"]
     candidate = rule_labels[0] if rule_labels else None
+    if args.window == "oos":
+        # ⚠️ 两阶段：候选臂**必须**在 main（选择窗口）上选定。
+        #    在 oos 上挑最优臂 = 用验证集选模型 = 过拟合，判据 (b)(c)(d) 会假阳性。
+        cand_main = carry.get("verdict", {}).get("candidate_main_best_rule_arm")
+        if not cand_main:
+            mr = [l for l in carry.get("ranking", []) if l.startswith("fuse_w")]
+            cand_main = mr[0] if mr else None
+        if cand_main and cand_main in criteria:
+            candidate = cand_main
+        print(f"[p18] 候选臂 = {candidate}（在 main 上选定，oos 不改选）", flush=True)
 
     # ── 总判定 ──
     # ⚠️ 判据 (e)「DSR ≥ 0.95」**不是判据，是恒假条件**：
@@ -643,8 +650,15 @@ def main() -> None:
     }
     if candidate:
         cc = criteria[candidate]
+        a_main = cc["a_main_combined_ge_base_plus_0.05"]
+        if a_main is None and args.window == "oos":
+            # ⚠️ (a) 是 main 窗口的判据 → oos 阶段必须从 main 产物读，
+            #    否则 a_main=None → bool(None)=False → all_pass 恒 False。
+            a_main = (carry.get("criteria", {}).get(candidate, {})
+                      .get("a_main_combined_ge_base_plus_0.05"))
         verdict.update({
-            "a_main_ge_base_plus_0.05": cc["a_main_combined_ge_base_plus_0.05"],
+            "a_main_ge_base_plus_0.05": a_main,
+            "candidate_selected_on": "main" if args.window == "oos" else "current",
             "c_beats_placebo": cc["c_beats_placebo"],
             "d_rolling_win_rate_ge_0.60": cc["d_rolling_win_rate_ge_0.60"],
             "dsr_report": cc["dsr"],
@@ -658,18 +672,19 @@ def main() -> None:
                 criteria[candidate]["c_oos_combined_ge_base_minus_0.02"]
         # (f) 跨窗口迁移：oos 最优臂在 main 的规则臂排名中不得最差
         carry_rank = carry.get("ranking", [])
-        main_rule_rank = [l for l in carry_rank
-                          if l.startswith("fuse_w") and l != "fuse_w0.00"]
-        if rule_labels and main_rule_rank:
+        main_rank_for_f = [l for l in carry_rank
+                           if l.startswith("fuse_w") and l != "fuse_w0.00"]
+        if rule_labels and main_rank_for_f:
             best_oos = rule_labels[0]
-            pos = (main_rule_rank.index(best_oos) + 1
-                   if best_oos in main_rule_rank else None)
+            pos = (main_rank_for_f.index(best_oos) + 1
+                   if best_oos in main_rank_for_f else None)
             verdict["f_cross_window"] = {
                 "best_oos_arm": best_oos,
                 "rank_in_main": pos,
-                "n_rule_arms_in_main": len(main_rule_rank),
+                "n_rule_arms_in_main": len(main_rank_for_f),
+                "n_rule_arms_in_oos": len(rule_labels),
                 "not_worst_in_main": bool(pos is not None
-                                          and pos < len(main_rule_rank)),
+                                          and pos < len(main_rank_for_f)),
             }
         verdict["all_pass"] = all(bool(x) for x in [
             verdict.get("a_main_ge_base_plus_0.05"),
