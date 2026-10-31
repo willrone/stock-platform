@@ -80,6 +80,8 @@ ART = {
     'p10g': J('multi_asset_p10_gate.json'),
     'p10l': J('multi_asset_p10_long.json'),
     'p10s': J('multi_asset_p10_stats.json'),
+    'p11': J('multi_asset_p11_alpha.json'),
+    'p11s': J('multi_asset_p11_stats.json'),
 }
 
 
@@ -770,6 +772,72 @@ def build_anchors():
                        ('最大值', 'max_sharpe'), ('极差', 'range_sharpe'),
                        ('标准差', 'stdev_sharpe')):
         A.append((P10DOC, '值', _row, '值', ('j', 'p10s', _fld)))
+
+    # ── P11 · A 股腿 alpha/beta 分解 ──
+    P11DOC = 'P11_ALPHA_BETA'
+    _p11_order = ['w2013', 'w2016', 'w2019', 'oos', 'main']
+    _p11_name = {
+        'w2013': 'w2013（2013-05~2016-05）',
+        'w2016': 'w2016（2016-05~2019-05）',
+        'w2019': 'w2019（2019-05~2021-05）',
+        'oos': 'oos（2021-05~2023-05）',
+        'main': 'main（2023-05~2026-05）',
+    }
+    # 表 A（§3 主分解，表头含「超额夏普」）：5 窗口 × 10 列
+    for _l in _p11_order:
+        if _l not in (ART['p11'].get('results') or {}):
+            continue
+        for _col, _fld in (('腿夏普', 'leg_sharpe'), ('基准夏普', 'bench_sharpe'),
+                           ('腿年化', 'leg_return_ann'), ('基准年化', 'bench_return_ann'),
+                           ('基准回撤', 'bench_maxdd'), ('超额夏普', 'excess_sharpe'),
+                           ('α夏普', 'alpha_sharpe'), ('β', 'beta'), ('ρ', 'corr'),
+                           ('IR', 'ir')):
+            A.append((P11DOC, '超额夏普', _p11_name[_l], _col,
+                      ('j', 'p11', f'results.{_l}.decomposition.{_fld}')))
+    # 表 B（§4 基准敏感性，表头含「国证A指」）
+    for _l in _p11_order:
+        if _l not in (ART['p11'].get('results') or {}):
+            continue
+        A.append((P11DOC, '国证A指', _p11_name[_l], '等权买入持有',
+                  ('j', 'p11', f'results.{_l}.decomposition.excess_sharpe')))
+        A.append((P11DOC, '国证A指', _p11_name[_l], '日频再平衡',
+                  ('j', 'p11', f'results.{_l}.alternatives.rebalance_benchmark.excess_sharpe')))
+        A.append((P11DOC, '国证A指', _p11_name[_l], '国证A指',
+                  ('j', 'p11', f'results.{_l}.alternatives.market_proxies.IDX_399317.excess_sharpe')))
+        A.append((P11DOC, '国证A指', _p11_name[_l], '沪深300',
+                  ('j', 'p11', f'results.{_l}.alternatives.market_proxies.IDX_000300.excess_sharpe')))
+    # 表 C（§5.2 幸存者偏差情景，表头含「窗口内退市」）
+    for _l in _p11_order:
+        if safe_dig('p11', f'results.{_l}.survivorship.ok') is not True:
+            continue
+        for _col, _fld in (('窗口内退市', 'n_delisted_in_window'),
+                           ('起点成分', 'n_members_start'), ('占比', 'share'),
+                           ('基准年化（观测）', 'bench_ann_observed'),
+                           ('基准年化（修正）', 'bench_ann_adjusted'),
+                           ('修正量', 'bench_ann_shift')):
+            A.append((P11DOC, '窗口内退市', _p11_name[_l], _col,
+                      ('j', 'p11', f'results.{_l}.survivorship.{_fld}')))
+    # 表 D（§6 随机子池，表头含「随机均值」）
+    for _l in _p11_order:
+        if _l not in (ART['p11'].get('results') or {}):
+            continue
+        A.append((P11DOC, '全市场超额夏普', _p11_name[_l], '全市场超额夏普',
+                  ('j', 'p11', f'results.{_l}.decomposition.excess_sharpe')))
+        for _sd in ('s7', 's99', 's1234'):
+            A.append((P11DOC, '全市场超额夏普', _p11_name[_l], f'随机500 {_sd}',
+                      ('j', 'p11', f'results.{_l}.alternatives.random500.{_sd}.excess_sharpe')))
+        A.append((P11DOC, '全市场超额夏普', _p11_name[_l], '随机均值',
+                  ('p11randmean', 'p11', _l)))
+    # 表 E（§3 跨窗口统计，表头含「统计量」）
+    for _row, _fld in (('窗口数', 'n_windows'), ('均值', 'mean_excess_sharpe'),
+                       ('中位数', 'median_excess_sharpe'), ('最小值', 'min_excess_sharpe'),
+                       ('最大值', 'max_excess_sharpe'), ('极差', 'range_excess_sharpe'),
+                       ('标准差', 'stdev_excess_sharpe')):
+        A.append((P11DOC, '统计量', _row, '超额夏普(等权买入持有)', ('j', 'p11s', _fld)))
+    for _row, _fld in (('窗口数', 'n_windows'), ('均值', 'mean_alpha_sharpe'),
+                       ('中位数', 'median_alpha_sharpe'), ('最小值', 'min_alpha_sharpe'),
+                       ('最大值', 'max_alpha_sharpe'), ('标准差', 'stdev_alpha_sharpe')):
+        A.append((P11DOC, '统计量', _row, 'α夏普(等权买入持有)', ('j', 'p11s', _fld)))
     return A
 
 
@@ -1014,6 +1082,12 @@ def resolve(spec):
         art, lab, which = spec[1], spec[2], spec[3]
         w = dig(ART[art], f'results.{lab}.window')
         return int(w[0 if which == 'start' else 1][:4])
+    if spec[0] == 'p11randmean':
+        # P11：某窗口 3 个随机 500 子池基准的超额夏普均值
+        art, lab = spec[1], spec[2]
+        rb = dig(ART[art], f'results.{lab}.alternatives.random500')
+        vals = [dig(rb, k)['excess_sharpe'] for k in sorted(rb)]
+        return sum(vals) / len(vals)
     if spec[0] == 'jmin':
         # 两个产物值取小者
         return min(dig(ART[spec[1]], spec[2]), dig(ART[spec[3]], spec[4]))
@@ -1160,7 +1234,9 @@ def main():
         injected = []
         seen_docs = set()
         for a in anchors:
-            if len(injected) >= 12:
+            # 每个文档注入一处（seen_docs 去重）—— 上限按文档数放开，
+            # 否则排在后面的新文档（如 P11）永远轮不到，自检变成盲区。
+            if len(injected) >= 100:
                 break
             doc_pref, tidx, row_label, col_hdr, spec = a[0], a[1], a[2], a[3], a[4]
             if doc_pref in seen_docs:

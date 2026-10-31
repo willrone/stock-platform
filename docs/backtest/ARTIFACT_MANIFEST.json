@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-31T08:53:08",
-  "git_commit": "bc2fd3ca",
+  "generated_at": "2026-10-31T12:09:21",
+  "git_commit": "45ee4cd5",
   "data_dir": "data/backtest",
   "files": {
     "ALL_real_lag1_v2.json": {
@@ -41,12 +41,12 @@
     "multi_asset_p3_main.json": {
       "sha256": "db42f17ea7991de288bd3a235f1400223aa7fd9345fbb0fc4b19c6098ea9e1c3",
       "bytes": 165068,
-      "mtime": "2026-10-31T04:04:22"
+      "mtime": "2026-10-31T09:48:39"
     },
     "multi_asset_p3_oos.json": {
       "sha256": "10e58529383503cd911b4304686696657a738aeff3213fcd774c62f98301918b",
       "bytes": 128876,
-      "mtime": "2026-10-31T04:04:26"
+      "mtime": "2026-10-31T09:48:43"
     },
     "multi_asset_p3_long.json": {
       "sha256": "2bd4506c60ff8b8cde74a3762764f9620ad1015c7d780b7c5264098da52235db",
@@ -66,17 +66,17 @@
     "multi_asset_p4_main.json": {
       "sha256": "8bf3d6f80e2eacd78a171c2142b0353a837f7cde503e1531b64b0336ea6dd15d",
       "bytes": 852886,
-      "mtime": "2026-10-31T04:04:31"
+      "mtime": "2026-10-31T09:48:48"
     },
     "multi_asset_p4_oos.json": {
       "sha256": "96732da41f3d50c2f41abfcb8c30753d49fceaf4966cc0860afb221e89c73ad7",
       "bytes": 575585,
-      "mtime": "2026-10-31T04:04:35"
+      "mtime": "2026-10-31T09:48:51"
     },
     "multi_asset_p4_long.json": {
       "sha256": "2cd435fadbe1dd82ea4e3f5447dfbd5802651a60a3055f6d44d608303444e2b4",
       "bytes": 2150943,
-      "mtime": "2026-10-31T03:57:12"
+      "mtime": "2026-10-31T09:48:55"
     },
     "p5_class_audit.json": {
       "sha256": "1bc65a41023d68405a18be3475a4cdfc59af916ea67ff5ce88e5801617ca1850",
@@ -177,6 +177,16 @@
       "sha256": "b90802f46333a7f225e2c5593387c289ab7b6fa623d4d79be23ca83b36d02979",
       "bytes": 297,
       "mtime": "2026-10-31T08:51:44"
+    },
+    "multi_asset_p11_alpha.json": {
+      "sha256": "c0ca9d2375e4358f7c813da81cea94e606f8bacc0160780dd501a6df089d2865",
+      "bytes": 540718,
+      "mtime": "2026-10-31T12:08:57"
+    },
+    "multi_asset_p11_stats.json": {
+      "sha256": "c7b38eb2ad172053d0f608064a2d07de53ed59a72acf17b0780c7cb561efb993",
+      "bytes": 993,
+      "mtime": "2026-10-31T12:09:21"
     }
   },
   "missing": [],
