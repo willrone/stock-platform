@@ -194,6 +194,61 @@ def main() -> None:
     a(f"| 动态权重 `randdyn_s*` | {len(lrd)} | {sum(lrd)/len(lrd):.4f} | "
       f"[{min(lrd):.4f}, {max(lrd):.4f}] |")
     a("")
+
+    # ── 6.1 口径披露 ──
+    def _held_str(doc, cls):
+        return "/".join(sorted(doc["results"]["base_equal"]["held"][cls]))
+
+    def _first_dates(codes):
+        import pandas as pd
+        out = []
+        for c in codes:
+            p = os.path.join(ROOT, "data", "etf", "parquet", f"{c}.parquet")
+            df = pd.read_parquet(p)
+            col = next(x for x in ("date", "datetime", "trade_date") if x in df.columns)
+            out.append((c, str(df[col].min())[:10]))
+        return sorted(out, key=lambda x: x[1])
+
+    a("### 6.1 ⚠️ 长历史窗口的持仓集与定稿**不可比**（口径披露，必须写清楚）")
+    a("")
+    a("长历史窗口的类内持仓按 **point-in-time 流动性 top-3** 在**窗口起点一次性选定**")
+    a("（窗口内不换仓）→ 长历史起点时本地数据还不存在的 ETF 根本进不来：")
+    a("")
+    a("| 类 | main 窗口 | oos 窗口 | 长历史窗口 |")
+    a("|---|---|---|---|")
+    for _cls in ("gold", "bond", "commodity"):
+        _n = len(lg["results"]["base_equal"]["held"][_cls])
+        _sfx = "（**单只**）⚠️" if _n == 1 else ""
+        a(f"| `{_cls}` | `{_held_str(m, _cls)}` | `{_held_str(o, _cls)}` | "
+          f"`{_held_str(lg, _cls)}`{_sfx} |")
+    a("")
+    a("**原因（各 ETF 本地数据的首个交易日）**：")
+    a("")
+    _comm = sorted(set(lg["results"]["base_equal"]["held"]["commodity"])
+                   | set(m["results"]["base_equal"]["held"]["commodity"]))
+    a("- " + "、".join(f"`{c}` {d}" for c, d in _first_dates(_comm)))
+    a(f"- 长历史起点 = **{lg['calendar']['start']}** → 那时商品类**只有 "
+      f"`{lg['results']['base_equal']['held']['commodity'][0]}` 有数据**")
+    a("")
+    a("**这条披露改变了长历史那节的证据强度，三点必须写清楚：**")
+    a("")
+    a("1. 长历史的「商品类」和定稿的「商品类」**不是同一个东西** → 长历史**不能**")
+    a("   交叉验证定稿的 commodity 类，只能验证 gold/bond 两类 + 一只商品 ETF。")
+    a("2. `510170` 恰恰是 P5 判定为**全池 ρ(A股代理) 最高**（0.5853 / 0.7008）、")
+    a("   最该被固定持仓集剔除的标的（见 `P5_CLASS_AUDIT_2026-10-31.md`）。")
+    a("   长历史里凡是「避开商品类」的配权方案天然占便宜：")
+    a(f"   `minvol` 给 commodity 的平均权重只有 "
+      f"**{R['minvol']['avg_class_weight']['commodity']:.4f}**、")
+    a(f"   `invvol_nocap` **{R['invvol_nocap']['avg_class_weight']['commodity']:.4f}**，")
+    a(f"   而基线 `base_equal` 是 **{R['base_equal']['avg_class_weight']['commodity']:.4f}**")
+    a("   → **长历史的臂间排序被系统性放大**（机制推断：压低与 A 股腿相关性最高的那只")
+    a("   商品 ETF，等于压低整个 sleeve 的 ρ）。")
+    a("3. 因此长历史只能作为「这些方案在另一个样本上**没崩**」的辅助证据，")
+    a("   **不能**作为「配权有效」的证据。")
+    a("")
+    a("**最终定位**：P4 的判决由判据 1~4（main / oos / random 对照 / 504 日胜率）作出，")
+    a("判据 5 从未起决定作用 —— 上表每个方案都已在判据 1 或 2 上不通过。")
+    a("")
     a("---")
     a("")
 
@@ -218,6 +273,10 @@ def main() -> None:
           f"{'**采纳**' if ok else '证伪'} |")
     a("")
     a("**没有一个方案通过全部 5 条。维持类间等权。**")
+    a("")
+    a("> 判据 5（长历史）的**口径限制见 §6.1**：长历史窗口的持仓集与定稿不可比")
+    a("> （商品类退化成单只 `510170`），且判据 5 从未起决定作用 ——")
+    a("> 上表每个方案都已在判据 1 或 2 上不通过。")
     a("")
     a("---")
     a("")

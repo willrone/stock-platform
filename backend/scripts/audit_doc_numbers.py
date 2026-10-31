@@ -557,13 +557,13 @@ def build_anchors():
     for _lbl, _k in (('类间等权', 'base_equal'), ('逆波动率', 'invvol'),
                      ('逆波动率 无 cap', 'invvol_nocap'),
                      ('100% 最低波动类', 'minvol')):
-        A.append((P4DOC, 9, _lbl, 'bond 平均权重',
+        A.append((P4DOC, 10, _lbl, 'bond 平均权重',
                   ('j', 'p4m', f'results.{_k}.avg_class_weight.bond')))
-        A.append((P4DOC, 9, _lbl, '袖套波动', ('j', 'p4m', f'results.{_k}.sleeve_vol')))
-        A.append((P4DOC, 9, _lbl, 'ρ(袖套,A股腿)',
+        A.append((P4DOC, 10, _lbl, '袖套波动', ('j', 'p4m', f'results.{_k}.sleeve_vol')))
+        A.append((P4DOC, 10, _lbl, 'ρ(袖套,A股腿)',
                   ('j', 'p4m', f'results.{_k}.corr_sleeve_ashare')))
-        A.append((P4DOC, 9, _lbl, '组合收益', ('j', 'p4m', f'results.{_k}.combined_return')))
-        A.append((P4DOC, 9, _lbl, '组合夏普', ('j', 'p4m', f'results.{_k}.combined_sharpe')))
+        A.append((P4DOC, 10, _lbl, '组合收益', ('j', 'p4m', f'results.{_k}.combined_return')))
+        A.append((P4DOC, 10, _lbl, '组合夏普', ('j', 'p4m', f'results.{_k}.combined_sharpe')))
 
     # ── P5 · 分类审计（gold 表 0/1/2，commodity 表 3/4/5）──
     P5DOC = 'P5_CLASS_AUDIT'
@@ -771,6 +771,56 @@ def build_anchors():
                        ('标准差', 'stdev_sharpe')):
         A.append((P10DOC, '值', _row, '值', ('j', 'p10s', _fld)))
     return A
+
+
+def build_text_anchors():
+    """文本格断言：(doc, table_idx, row_label, col_header, expect_spec)
+
+    数字格断言覆盖不到「持仓集」这类**字符串**单元格
+    （P4 §6.1 长历史持仓集披露）。
+    """
+    A = []
+    P4DOC = 'P4_CLASS_WEIGHT'
+    for _cls in ('gold', 'bond', 'commodity'):
+        A.append((P4DOC, 8, f'`{_cls}`', 'main 窗口', ('p4held', 'p4m', _cls)))
+        A.append((P4DOC, 8, f'`{_cls}`', 'oos 窗口', ('p4held', 'p4o', _cls)))
+        A.append((P4DOC, 8, f'`{_cls}`', '长历史窗口', ('p4held', 'p4l', _cls)))
+    return A
+
+
+def resolve_text(spec):
+    if spec[0] == 'p4held':
+        art, cls = spec[1], spec[2]
+        return '/'.join(sorted(dig(ART[art], f'results.base_equal.held.{cls}')))
+    raise KeyError(spec)
+
+
+def check_text_cells(texts, anchors):
+    """字符串单元格核对：单元格必须**包含**产物给出的代码串。"""
+    problems = []
+    for a in anchors:
+        doc_pref, tidx, row_label, col_hdr, spec = a
+        doc = next((k for k in texts if k.startswith(doc_pref)), None)
+        if not doc:
+            problems.append(f'{doc_pref}: 文档不存在')
+            continue
+        tables = extract_tables(texts[doc])
+        if tidx >= len(tables):
+            problems.append(f'{doc}: 表序号 {tidx} 越界（共 {len(tables)} 张表）')
+            continue
+        header, data = tables[tidx]
+        cell, err = find_cell(header, data, row_label, col_hdr)
+        if err or cell is None:
+            problems.append(f'{doc}[表{tidx}] {err or "单元格为空"}')
+            continue
+        want = resolve_text(spec)
+        norm_cell = cell.replace('`', '').replace(' ', '').replace('**', '')
+        norm_want = want.replace('`', '').replace(' ', '')
+        if norm_want not in norm_cell:
+            problems.append(
+                f'{doc}[表{tidx}] 「{row_label}」×「{col_hdr}」= {cell!r}，'
+                f'产物 = {want!r}')
+    return problems
 
 
 def parse_num(cell):
@@ -1067,6 +1117,7 @@ def main():
 
     texts = load_docs()
     anchors = build_anchors()
+    text_anchors = build_text_anchors()
 
     print('=' * 78)
     print(f'表格语义核对：{len(anchors)} 条断言 × 逐格比对产物')
@@ -1076,6 +1127,16 @@ def main():
         print(f'  ❌ {p}')
     if not problems:
         print('  ✅ 全部断言通过')
+
+    print()
+    print('=' * 78)
+    print(f'文本格核对：{len(text_anchors)} 条断言 × 持仓集字符串比对产物')
+    print('=' * 78)
+    tproblems = check_text_cells(texts, text_anchors)
+    for p in tproblems:
+        print(f'  ❌ {p}')
+    if not tproblems:
+        print('  ✅ 全部文本断言通过')
 
     print()
     print('=' * 78)
@@ -1143,6 +1204,38 @@ def main():
         for p in p2[:8]:
             print(f'      {p}')
         neg_ok = len(p2) > 0
+
+        # 文本格注入：破坏一个持仓集单元格（数字注入覆盖不到字符串格）
+        tinj = []
+        for a in build_text_anchors():
+            doc_pref, tidx, row_label, col_hdr, spec = a
+            doc = next((k for k in texts if k.startswith(doc_pref)), None)
+            if not doc:
+                continue
+            tables = extract_tables(t2[doc])
+            if tidx >= len(tables):
+                continue
+            header, data = tables[tidx]
+            cell, err = find_cell(header, data, row_label, col_hdr)
+            if err or not cell:
+                continue
+            bad = None
+            for real in ('510170', '159981', '159985', '159980', '511260', '518880'):
+                if real in cell and t2[doc].count(cell) == 1:
+                    bad = cell.replace(real, '999999')
+                    break
+            if not bad:
+                continue
+            t2[doc] = t2[doc].replace(cell, bad, 1)
+            tinj.append((doc, row_label, col_hdr, cell, bad))
+            break
+        for doc, rl, ch, oc, bc in tinj:
+            print(f'  文本注入 [{doc}] 「{rl}」×「{ch}」: {oc} → {bc}')
+        tp2 = check_text_cells(t2, build_text_anchors())
+        print(f'  文本注入后断言失败数：{len(tp2)}（期望 > 0）')
+        for p in tp2[:5]:
+            print(f'      {p}')
+        neg_ok = neg_ok and len(tp2) > 0
         print(f'  自检结论：{"✅ 审计能抓到注入的错误" if neg_ok else "❌ 审计有漏洞"}')
         print('  （动态注入不落盘，文档未被修改）')
         if not neg_ok:
