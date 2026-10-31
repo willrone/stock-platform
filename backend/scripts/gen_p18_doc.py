@@ -245,6 +245,10 @@ def build() -> str:
          "Δ波动", "真实收益", "placebo 收益", "Δ收益"], mrows))
     L.append("")
     all_neg = all(float(r[3]) < 0 for r in mrows) if mrows else False
+    base_sr = res_m.get("fuse_w0.00", {}).get("combined_sharpe", 0.0)
+    # ⚠️ 「相对基线全负」必须拿**真实臂夏普**和基线比，
+    #    不能用 Δ夏普（那是相对 placebo 的）—— 两者不是一回事。
+    below_base = [r for r in mrows if float(r[1]) < base_sr]
     pos_w = [r for r in mrows if float(r[3]) > 0]
     if pos_w:
         L.append(f"**gbm 的信息含量不为 0**：在 **{len(pos_w)}/{len(mrows)}** 个权重上，"
@@ -253,9 +257,10 @@ def build() -> str:
                  f"最大 **Δ夏普 {max(float(r[3]) for r in mrows):+.4f}**、"
                  f"最大 **Δ收益 {max(float(r[9].replace('pp', '')) for r in mrows):+.1f}pp**。")
         L.append("")
-    if all_neg:
-        L.append("**但相对「不加 gbm」的基线，所有权重都是负的** → "
-                 "**稀释 42f 排序的代价 > gbm 带来的信息增益**。")
+    if mrows and len(below_base) == len(mrows):
+        L.append(f"**但相对「不加 gbm」的基线（{n(base_sr)}），"
+                 f"{len(below_base)}/{len(mrows)} 个权重的真实臂夏普都更低** → "
+                 f"**稀释 42f 排序的代价 > gbm 带来的信息增益**。")
         L.append("")
         L.append("→ P18 证伪的是**融合方式**（分数级线性加权会稀释已有排序），"
                  "不是「gbm 有信息」这个命题本身。")
