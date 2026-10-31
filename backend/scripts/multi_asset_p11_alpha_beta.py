@@ -97,7 +97,15 @@ sys.path.insert(0, os.path.join(BACKEND_DIR, "scripts"))
 OUT_DIR = os.path.join(ROOT, "data", "backtest")
 FEATURES_FULL = os.path.join(ROOT, "data", "qlib_data", "features_full")
 STOCK_DATA = os.path.join(ROOT, "data", "parquet", "stock_data")
-ETF_PARQUET = os.path.join(ROOT, "data", "etf", "parquet")
+# ⚠️ 研究侧读**冻结快照**（data/etf/parquet_frozen）：ETF 行情是前复权序列，
+#    实盘周任务全量重拉会让历史价格随分红重锚 → 研究数字无法复现。
+#    实盘/产品读 data/etf/parquet（实时）。
+#: ETF 行情目录：**优先用冻结快照**（研究可复现），快照不存在时回落到实时目录。
+#: 快照由 `scripts/freeze_etf_snapshot.py` 生成（`data/` 被 git 忽略，所以
+#: 换机器后要先跑一次这个脚本，否则研究数字无法复现）。
+_ETF_FROZEN_DIR = os.path.join(ROOT, "data", "etf", "parquet_frozen")
+ETF_PARQUET = (_ETF_FROZEN_DIR if os.path.isdir(_ETF_FROZEN_DIR)
+                   else os.path.join(ROOT, "data", "etf", "parquet"))
 ANN = 244
 
 WINDOWS: List[Tuple[str, datetime, datetime]] = [

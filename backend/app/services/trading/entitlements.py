@@ -2,8 +2,8 @@
 
 把「按信号收费」落到代码上：
   free       1 条线（honest_42f），延迟 1 个交易日
-  pro        全部 4 条线，当日
-  enterprise 全部 4 条线 + 自定义策略线预留
+  pro        全部 7 条线，当日
+  enterprise 全部 7 条线 + 自定义策略线预留
 
 设计原则：
   - **后端强制**，前端只做展示 —— 改前端绕过限制没有意义
@@ -44,6 +44,7 @@ ALL_STRATEGIES: Set[str] = {
     "rsi_71421",
     "factor_ranking",
     "22f",
+    "multi_asset_final",
 }
 
 ENTITLEMENTS: Dict[str, SignalEntitlement] = {
@@ -54,7 +55,7 @@ ENTITLEMENTS: Dict[str, SignalEntitlement] = {
         delay_days=1,
         include_execution_detail=False,
         include_full_ledger=False,
-        upgrade_hint="升级信号版可解锁全部 4 条信号线、当日信号与完整执行清单",
+        upgrade_hint="升级信号版可解锁全部 7 条信号线、当日信号与完整执行清单",
     ),
     "pro": SignalEntitlement(
         tier="pro",

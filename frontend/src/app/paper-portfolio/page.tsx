@@ -184,11 +184,14 @@ type StrategyListResponse = {
 
 const LINE_COLORS: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'secondary'> = {
   '22f': 'info',
-  honest_42f: 'primary',
   rsi_71421: 'success',
   factor_ranking: 'warning',
   gbm_voltgt: 'secondary',
   honest_42f_neu: 'secondary',
+  // 旗舰线（2026-11-01）：多资产组合是平台唯一的跨资产信号线 → 用主色
+  multi_asset_final: 'primary',
+  // 免费档主力退到辅色：主色留给旗舰
+  honest_42f: 'secondary',
 };
 
 /** 数据超过这个天数就视为过期 */

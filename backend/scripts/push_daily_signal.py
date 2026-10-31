@@ -33,6 +33,9 @@ DISPLAY = {
     "gbm_voltgt": "LightGBM + 波动率目标",
     "factor_ranking": "动量/低波动/低振幅",
     "22f": "22 因子（对照）",
+    # 多资产组合线（2026-11-01）：平台旗舰线，A 股腿 + 黄金/债券/商品袖套。
+    # 默认推送仍走 honest_42f（主线），这条用 --strategy multi_asset_final 推。
+    "multi_asset_final": "多资产组合（A股+黄金/债券/商品）",
 }
 
 

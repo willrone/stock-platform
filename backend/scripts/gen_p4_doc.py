@@ -10,6 +10,13 @@ import os
 from typing import Any, Dict, List
 
 BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+_ETF_RESEARCH_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "data", "etf",
+    "parquet_frozen" if os.path.isdir(os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "data", "etf", "parquet_frozen"))
+    else "parquet")
 ROOT = os.path.abspath(os.path.join(BACKEND_DIR, ".."))
 DATA = os.path.join(ROOT, "data", "backtest")
 DOC = os.path.join(ROOT, "docs", "backtest", "P4_CLASS_WEIGHT_2026-10-31.md")
@@ -222,7 +229,7 @@ def main() -> None:
         import pandas as pd
         out = []
         for c in codes:
-            p = os.path.join(ROOT, "data", "etf", "parquet", f"{c}.parquet")
+            p = os.path.join(_ETF_RESEARCH_DIR, f"{c}.parquet")
             df = pd.read_parquet(p)
             col = next(x for x in ("date", "datetime", "trade_date") if x in df.columns)
             out.append((c, str(df[col].min())[:10]))

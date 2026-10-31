@@ -76,6 +76,23 @@ from scripts.market_data import (  # noqa: E402
     load_market_extras,
 )
 
+# 多资产组合线（2026-11-01）：A股腿 + ETF 袖套腿
+# 袖套的核心逻辑放在 app/services/trading/ 里（可被 API / MCP / 前端复用），
+# 这里只做「纸面盘接线」。
+from app.services.trading.multi_asset_service import (  # noqa: E402
+    SLEEVE_CLASSES,
+    SLEEVE_HELD,
+    SLEEVE_REB_EVERY,
+    SleeveError,
+    is_rebalance_day,
+    load_etf_bars,
+    missing_codes,
+    rebalance_sleeve,
+    sleeve_class_weights_now,
+    sleeve_positions_value,
+    sleeve_target_weights,
+)
+
 PAPER_DIR = os.path.join(ROOT, "data", "paper")
 RAW_DIR = os.path.join(ROOT, "data", "tdx_daily", "raw")
 
@@ -300,6 +317,14 @@ STRATEGIES: Dict[str, Dict[str, Any]] = {
     "honest_42f_neu": {
         "score": score_42f_neutral, "topk": 60, "ndrop": 5,
         "desc": "42 因子 + 行业中性（申万一级行业内选相对最强的）",
+    },
+    # 多资产组合线（2026-11-01）：A股腿 + ETF 袖套腿，静态 50/50 划分。
+    # 这是研究侧 P3 定稿口径（组合夏普 1.4114 / OOS 1.0691）的产品化实现，
+    # 也是唯一同时覆盖 A 股与黄金/债券/商品的差异化信号线。
+    "multi_asset_final": {
+        "score": None, "topk": 60, "ndrop": 5, "multi_asset": True,
+        "desc": ("多资产组合：A股 42 因子 Top60（50%）+ "
+                 "ETF 袖套 黄金/债券/商品 各 1/3（50%）"),
     },
 }
 
@@ -560,10 +585,26 @@ def run_line(
     top = list(rank.index[:topk])
 
     held = list(positions.keys())
-    total_value = cash + sum(
-        float(positions[c].get("shares", 0)) * float(close.get(c, np.nan))
-        for c in held
-    )
+
+    def _last_valid_close(code: str) -> float:
+        """成交日停牌/数据缺失 → 沿用**最近一个有效收盘价**。
+
+        为什么需要：停牌期间价格不变，沿用最后有效价是正确估值。
+        不做这个兜底 → 该股 close=NaN → total_value 变 NaN →
+        `int(budget/p/100)` 抛 ValueError，整条线当周直接崩。
+        （parity 回测 2023-05 起跑时抓到：持仓里有一只停牌股。）
+        """
+        s_ = close_mat.loc[:trade_day, code].dropna()
+        return float(s_.iloc[-1]) if len(s_) else float("nan")
+
+    _held_values: List[float] = []
+    for c in held:
+        v = close.get(c, np.nan)
+        v = float(v) if np.isfinite(v) else _last_valid_close(c)
+        if not np.isfinite(v):
+            continue  # 连历史都没有 → 无法估值，剔除（保守）
+        _held_values.append(float(positions[c].get("shares", 0)) * v)
+    total_value = cash + sum(_held_values)
     target_weight = (1.0 - CASH_RESERVE) / topk
 
     # ── 持仓估值（总回报口径）───────────────────────────────────────
@@ -656,34 +697,16 @@ def run_line(
     # 首次建仓（或组合被清空）→ 一次买满 topk；日常调仓 → 只换 ndrop 只
     max_buys = max(0, topk - len(positions)) if len(positions) < topk else ndrop
     buys = []
-    for c in new_in[:max_buys]:
-        p = px(c)
-        if not np.isfinite(p) or p <= 0:
-            continue
-        # ── 可成交性判定（统一规则引擎）──
-        tr = _tradability(c, latest, names, extras, close=close,
-                          open_price=open_price, high=high, low=low,
-                          volume=vol, close_prev=close_prev)
-        if not tr.can_buy:
-            blocked_buys.append({"code": c, "name": names.get(c, ""),
-                                 "reason": tr.blocked_reason or tr.reason})
-            continue
-        budget = min(
-            total_value * target_weight,
-            max(0.0, cash - total_value * CASH_RESERVE),
-        )
-        # 流动性上限：买入金额不能超过该股当日成交额的参与率
-        if tr.max_buy_amount is not None:
-            budget = min(budget, tr.max_buy_amount)
-        shares = int(budget / p / BOARD_LOT) * BOARD_LOT
-        if shares <= 0:
-            continue
+
+    def _record_buy(c: str, p: float, shares: int) -> None:
+        """记一笔买入（扣现金 + 写持仓 + 追加成交明细）。"""
+        nonlocal cash
         gross = shares * p
         commission = max(MIN_COMMISSION, gross * COMMISSION)
         slip = gross * SLIPPAGE
         cost = gross + commission + slip
         if cost > cash:
-            continue
+            return
         cash -= cost
         a_cost = None
         if adj_close is not None and c in adj_close.columns:
@@ -701,6 +724,119 @@ def run_line(
                      "slippage": round(slip, 2), "total_cost": round(cost, 2),
                      "score": round(float(rank.get(c, np.nan)), 4),
                      "factors": _explain_factors(c, comp.columns)})
+
+    if spec.get("lot_remainder"):
+        # ── lot_remainder 模式：整手零头分配 ─────────────────────────
+        # 为什么需要（2026-11-01 多资产线实测）：
+        #   整手约束（100 股）下，`int(budget/p/100)*100` 每只都要**丢掉零头**，
+        #   丢掉的部分变成**闲置现金**。A 腿预算只有 50万×0.95/60 ≈ 7,900 元，
+        #   股价 10~40 元时一手 1,000~4,000 元 → 每只平均丢 ~1,000 元，
+        #   60 只合计丢 ~6 万 = **A 腿 12% 的资金躺在现金里**（实测投入率 86.1%，
+        #   预期 95%）。研究端用小数股，没有这个问题 → 产品端白丢 12% 的仓位。
+        #   做法：先按整手向下取整记下零头，再把剩余现金按**零头最大优先**
+        #   补成整手（每只最多补一手，且不能跌破现金储备线）。
+        #   ⚠️ 只对开了这个开关的线生效：其余 5 条线是**既有纸面账户**，
+        #      改它们的历史口径会让已展示的净值无法复现 —— 要不要一起改，
+        #      走「先给方案、等拍板」的流程。
+        reserve = total_value * CASH_RESERVE
+        sim_cash = cash
+        plan: Dict[str, Dict[str, Any]] = {}
+        order: List[str] = []
+        for c in new_in[:max_buys]:
+            p = px(c)
+            if not np.isfinite(p) or p <= 0:
+                continue
+            tr = _tradability(c, latest, names, extras, close=close,
+                              open_price=open_price, high=high, low=low,
+                              volume=vol, close_prev=close_prev)
+            if not tr.can_buy:
+                blocked_buys.append({"code": c, "name": names.get(c, ""),
+                                     "reason": tr.blocked_reason or tr.reason})
+                continue
+            budget = min(
+                total_value * target_weight,
+                max(0.0, sim_cash - reserve),
+            )
+            if tr.max_buy_amount is not None:
+                budget = min(budget, tr.max_buy_amount)
+            shares = int(budget / p / BOARD_LOT) * BOARD_LOT
+            lot_cost = BOARD_LOT * p
+            if shares <= 0:
+                # 买不起一手 → 整只跳过（默认行为）。
+                # lot_cover 模式：只要一手不超过目标预算的 lot_cover_max 倍，
+                # 就**买一手**（宁可这只超配，也不要整只空着）。
+                # 为什么需要：Top60 策略在产品端显示 58 只会让人以为坏了；
+                # 一手超配 50% → 该股权重 +0.83%（组合口径），可接受。
+                cover_max = float(spec.get("lot_cover_max", 1.0))
+                if lot_cost <= 0 or cover_max <= 1.0:
+                    continue
+                if lot_cost > budget * cover_max + 1e-6:
+                    continue
+                if lot_cost + max(MIN_COMMISSION, lot_cost * COMMISSION) \
+                        + lot_cost * SLIPPAGE > sim_cash:
+                    continue
+                shares = BOARD_LOT
+                budget = lot_cost  # 零头 = 0（已经买满一手）
+            gross = shares * p
+            cost = gross + max(MIN_COMMISSION, gross * COMMISSION) + gross * SLIPPAGE
+            if cost > sim_cash:
+                continue
+            sim_cash -= cost
+            plan[c] = {"price": p, "shares": shares,
+                       "remainder": budget / p - shares, "boosted": False,
+                       # 零头按**金额**排序（不是股数）：一手金额差 20 倍
+                       # （511020 ≈1万 vs 518880 ≈500），按股数排会让高价
+                       # 标的继续欠配。
+                       "remainder_value": (budget / p - shares) * p}
+            order.append(c)
+        # 零头最大优先补一手（每只最多一次，且不跌破储备线）
+        for _ in range(len(order)):
+            best: Optional[str] = None
+            for c in order:
+                it = plan[c]
+                if it["boosted"]:
+                    continue
+                extra = BOARD_LOT * it["price"]
+                extra_cost = (extra + max(MIN_COMMISSION, extra * COMMISSION)
+                              + extra * SLIPPAGE)
+                if sim_cash - extra_cost < reserve - 1e-6:
+                    continue
+                if (best is None
+                        or it["remainder_value"] > plan[best]["remainder_value"]):
+                    best = c
+            if best is None:
+                break
+            extra = BOARD_LOT * plan[best]["price"]
+            sim_cash -= (extra + max(MIN_COMMISSION, extra * COMMISSION)
+                         + extra * SLIPPAGE)
+            plan[best]["shares"] += BOARD_LOT
+            plan[best]["boosted"] = True
+        for c in order:
+            _record_buy(c, plan[c]["price"], plan[c]["shares"])
+    else:
+        for c in new_in[:max_buys]:
+            p = px(c)
+            if not np.isfinite(p) or p <= 0:
+                continue
+            # ── 可成交性判定（统一规则引擎）──
+            tr = _tradability(c, latest, names, extras, close=close,
+                              open_price=open_price, high=high, low=low,
+                              volume=vol, close_prev=close_prev)
+            if not tr.can_buy:
+                blocked_buys.append({"code": c, "name": names.get(c, ""),
+                                     "reason": tr.blocked_reason or tr.reason})
+                continue
+            budget = min(
+                total_value * target_weight,
+                max(0.0, cash - total_value * CASH_RESERVE),
+            )
+            # 流动性上限：买入金额不能超过该股当日成交额的参与率
+            if tr.max_buy_amount is not None:
+                budget = min(budget, tr.max_buy_amount)
+            shares = int(budget / p / BOARD_LOT) * BOARD_LOT
+            if shares <= 0:
+                continue
+            _record_buy(c, p, shares)
 
     end_value = cash + sum(_pos_value(c) for c in positions)
 
@@ -772,6 +908,401 @@ def run_line(
                   and c not in {s["code"] for s in sells}],
     }
 
+
+
+# ── 多资产组合线（multi_asset_final）────────────────────────────────
+# 定稿口径见 docs/backtest/MULTI_ASSET_LEDGER_2026-10-31.md §十 / §十一：
+#   A股腿 42 因子 Top60/ndrop5 占 50%，ETF 袖套占 50%，**静态划分、腿间不再平衡**。
+# 研究值：组合夏普 main 1.4114 / oos 1.0691（噪声带 ±0.05，见台账 §11.4）。
+#
+# 为什么拆成两个 state key：
+#   A 腿要复用 `run_line` 的**唯一一份**撮合实现（复制撮合器必然漂移），
+#   但它不能覆盖既有 `honest_42f` 那条线的持仓文件 → 独立 state key。
+#   袖套腿是 ETF，规则完全不同（无印花税、无涨跌停、目标权重再平衡）→ 独立实现。
+MULTI_ASSET_A_KEY = "multi_asset_final_a"
+MULTI_ASSET_SLEEVE_KEY = "multi_asset_final_sleeve"
+MULTI_ASSET_A_WEIGHT = 0.50
+MULTI_ASSET_SLEEVE_WEIGHT = 0.50
+
+#: 袖套 ETF 显示名（取自 data/etf/etf_universe.json，2026-11-01 核对）
+ETF_NAMES: Dict[str, str] = {
+    "518880": "华安黄金ETF",
+    "159934": "易方达黄金ETF",
+    "159937": "博时黄金ETF",
+    "511260": "上证10年期国债ETF",
+    "511010": "国泰上证5年期国债ETF",
+    "511020": "平安5-10年期国债活跃券ETF",
+    "159980": "大成有色金属期货ETF",
+    "159985": "华夏饲料豆粕期货ETF",
+    "159981": "建信能源化工期货ETF",
+}
+
+
+def _sleeve_codes() -> List[str]:
+    return [c for lst in SLEEVE_HELD.values() for c in lst]
+
+
+def _ledger_cash_timeline(strategy: str) -> Dict[str, float]:
+    """从 ledger 重建「日期 → 现金」时间线（逐日前向填充）。
+
+    合并账本需要每条腿在同一日期的现金，才能算合并后的 cash_after。
+    """
+    out: Dict[str, float] = {}
+    p = ledger_path(strategy)
+    if not os.path.exists(p):
+        return out
+    try:
+        import csv as _csv
+        with open(p, newline="") as fh:
+            for r in _csv.DictReader(fh):
+                d = str(r.get("date") or "")
+                ca = _tofloat(r.get("cash_after"))
+                if d and ca is not None:
+                    out[d] = ca
+    except Exception:  # noqa: BLE001
+        pass
+    return out
+
+
+def _nav_value_map(strategy: str) -> Dict[str, float]:
+    """持仓文件里的 nav_history → {日期: 净值}。"""
+    p = holdings_path(strategy)
+    out: Dict[str, float] = {}
+    if not os.path.exists(p):
+        return out
+    try:
+        with open(p) as fh:
+            h = json.load(fh)
+        for row in (h.get("nav_history") or []):
+            d = str(row.get("date") or "")
+            v = _tofloat(row.get("value"))
+            if d and v is not None:
+                out[d] = v
+    except Exception:  # noqa: BLE001
+        pass
+    return out
+
+
+def _write_multi_asset_ledger(
+    trade_date: str,
+    merged_value: float,
+) -> None:
+    """把两条腿的账本合并成 multi_asset_final_ledger.csv（每次全量重写，幂等）。
+
+    为什么全量重写而不是追加：两条子账本是「追加式」的，重复跑会重复下单；
+    合并账本若也追加，同一个成交日会出现两行。**重写 = 天然幂等**。
+    """
+    import csv as _csv
+
+    a_cash = _ledger_cash_timeline(MULTI_ASSET_A_KEY)
+    s_cash = _ledger_cash_timeline(MULTI_ASSET_SLEEVE_KEY)
+    a_nav = _nav_value_map(MULTI_ASSET_A_KEY)
+    s_nav = _nav_value_map(MULTI_ASSET_SLEEVE_KEY)
+
+    def _fill_last(dct: Dict[str, float], date: str) -> float:
+        """取 date 当天或之前最近的一个值（没有则 0）。"""
+        if date in dct:
+            return dct[date]
+        prev = [d for d in dct if d <= date]
+        return dct[max(prev)] if prev else 0.0
+
+    rows: List[Dict[str, Any]] = []
+    for strategy, leg in ((MULTI_ASSET_A_KEY, "a"), (MULTI_ASSET_SLEEVE_KEY, "sleeve")):
+        p = ledger_path(strategy)
+        if not os.path.exists(p):
+            continue
+        with open(p, newline="") as fh:
+            for r in _csv.DictReader(fh):
+                d = str(r.get("date") or "")
+                if not d:
+                    continue
+                row = dict(r)
+                row["leg"] = leg
+                # 合并口径：现金 = 两腿之和（缺一侧则前向填充最近值）
+                row["cash_after"] = round(
+                    _fill_last(a_cash, d) + _fill_last(s_cash, d), 2
+                )
+                # 组合净值 = 两腿净值之和
+                row["portfolio_value"] = round(
+                    _fill_last(a_nav, d) + _fill_last(s_nav, d), 2
+                )
+                rows.append(row)
+    if not rows:
+        return
+    rows.sort(key=lambda x: (str(x.get("date")), str(x.get("action")),
+                             str(x.get("code"))))
+    fieldnames: List[str] = []
+    for r in rows:
+        for k in r:
+            if k not in fieldnames:
+                fieldnames.append(k)
+    os.makedirs(PAPER_DIR, exist_ok=True)
+    with open(ledger_path("multi_asset_final"), "w", newline="") as fh:
+        w = _csv.DictWriter(fh, fieldnames=fieldnames, extrasaction="ignore")
+        w.writeheader()
+        w.writerows(rows)
+
+
+def _invested_ratio(value: float, cash: float) -> float:
+    """投入率 = (总市值 - 现金) / 总市值。0 视为未建仓。"""
+    if not value:
+        return 0.0
+    return round(max(0.0, min(1.0, (value - cash) / value)), 6)
+
+
+def _append_nav(nav: List[Dict[str, Any]], point: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """净值历史追加一个点；**同日期则覆盖**（不是追加）。
+
+    为什么：同一成交日重跑（幂等重试 / 手动补跑）时，如果直接 append，
+    净值历史会出现两个同日期的点 → 收益率序列出现一个假的 0% 区间，
+    夏普/年化被稀释。实测 2026-11-01 E2E 抓到：重跑后 nav_history 有 2 个
+    点但日期相同。
+    """
+    out = list(nav or [])
+    if out and str(out[-1].get("date")) == str(point.get("date")):
+        out[-1] = point
+    else:
+        out.append(point)
+    return out[-800:]
+
+
+def run_multi_asset_line(
+    frames: Dict[str, Any],
+    panel: Dict[str, Any],
+    master: pd.DatetimeIndex,
+    names: Dict[str, str],
+    capital: float,
+    rebalance_day: pd.Timestamp,
+    extras: Optional[Dict[str, Any]] = None,
+    adj_close: Optional[pd.DataFrame] = None,
+) -> Dict[str, Any]:
+    """多资产组合线：A 股腿（42 因子 Top60）+ ETF 袖套（gold/bond/commodity 各 1/3）。
+
+    两条腿**静态 50/50 划分、腿间不再平衡**——这正是研究侧的
+    `merge_by_date([a_nav, sleeve_nav], [0.5, 0.5])` 在账户层面的等价物。
+    """
+    a_capital = capital * MULTI_ASSET_A_WEIGHT
+    s_capital = capital * MULTI_ASSET_SLEEVE_WEIGHT
+
+    # ── A 腿：复用 honest_42f 的同一套打分 + 撮合实现 ──────────────────
+    a_spec = {
+        "score": score_42f, "topk": 60, "ndrop": 5,
+        # 整手零头分配：A 腿只有 50 万预算，不开这个开关会有 ~12% 的资金
+        # 因整手取整闲置（实测投入率 86.1% vs 预期 95%），与研究端
+        # （小数股、100 万）不可比。详见 run_line 里的说明。
+        "lot_remainder": True,
+        # 买不起一手的标的可买一手（最多超目标预算 50%），
+        # 避免 Top60 在产品端只显示 58 只。
+        "lot_cover_max": 1.5,
+        "desc": "多资产组合 · A股腿（42 因子 Top60 / n_drop 5，占 50%）",
+    }
+    a_res = run_line(
+        MULTI_ASSET_A_KEY, a_spec, frames, panel, master, names,
+        a_capital, rebalance_day, extras=extras, adj_close=adj_close,
+    )
+
+    # ── 袖套腿 ────────────────────────────────────────────────────────
+    codes = _sleeve_codes()
+    miss = missing_codes(codes)
+    if miss:
+        raise SystemExit(
+            f"❌ 多资产线：袖套 ETF 缺少本地行情 {miss}。\n"
+            f"   持仓集退化会让权重静默摊到别的票上（9 只变 8 只 → 权重全错），"
+            f"必须先补数据：\n"
+            f"   cd backend && .venv-py313/bin/python3 scripts/etf_data_pipeline.py "
+            f"--codes {','.join(codes)}"
+        )
+    etf_bars = load_etf_bars(codes)
+
+    signal_day = pd.Timestamp(rebalance_day)
+    _after = master[master > signal_day]
+    if len(_after) == 0:
+        raise SystemExit(
+            f"❌ 多资产线：信号日 {signal_day.date()} 之后还没有交易日的行情数据"
+            f"（lag1 口径需要下一交易日成交）。"
+        )
+    trade_day = _after[0]
+    trade_idx = int(master.get_loc(trade_day))
+
+    s_paper = load_holdings(MULTI_ASSET_SLEEVE_KEY, s_capital)
+    s_positions = dict(s_paper.get("positions") or {})
+    s_cash = float(s_paper.get("cash", s_capital))
+    anchor = s_paper.get("reb_anchor_idx")
+    last_reb_idx = s_paper.get("last_reb_idx")
+    first_build = (anchor is None) or (not s_positions)
+
+    target = sleeve_target_weights()
+    if first_build:
+        anchor = trade_idx
+        reb = True
+    else:
+        # ⚠️ 必须排除「同一个成交日已经调过仓」的情况：
+        #    anchor 是在首次建仓时设成 trade_idx 的，而
+        #    is_rebalance_day(trade_idx, anchor) = (trade_idx-anchor)%21 == 0
+        #    在 anchor 当天**恒为真** → 同一成交日重跑（幂等重试 / 手动补跑）
+        #    会再调一次仓，多出一堆买卖记录（实测账本 76 → 85 行）。
+        #    用 last_reb_idx 记住「上次调仓发生在哪个交易日索引」来去重。
+        reb = (
+            is_rebalance_day(trade_idx, int(anchor))
+            and (last_reb_idx is None or int(last_reb_idx) != trade_idx)
+        )
+
+    s_buys: List[Dict[str, Any]] = []
+    s_sells: List[Dict[str, Any]] = []
+    if reb:
+        try:
+            s_positions, s_cash, s_buys, s_sells = rebalance_sleeve(
+                s_positions, s_cash, etf_bars, trade_day, target,
+            )
+        except SleeveError as e:
+            raise SystemExit(f"❌ 多资产线：{e}")
+
+    s_value = s_cash + sleeve_positions_value(s_positions, etf_bars, trade_day)
+    s_classes = sleeve_class_weights_now(s_positions, etf_bars, trade_day)
+
+    s_paper.update({
+        "cash": round(s_cash, 2),
+        "positions": s_positions,
+        "reb_anchor_idx": int(anchor),
+        "last_reb_idx": int(trade_idx) if reb else last_reb_idx,
+        "last_signal": str(signal_day.date()),
+        "last_trade": str(trade_day.date()),
+        "last_value": round(s_value, 2),
+        "initial_capital": s_capital,
+        "fill_assumption": "lag1：周五收盘出信号，下一交易日收盘成交",
+    })
+    s_nav = _append_nav(s_paper.get("nav_history"), {
+        "date": str(trade_day.date()),
+        "value": round(s_value, 2),
+        "return_pct": round((s_value / s_capital - 1.0) * 100, 4) if s_capital else 0.0,
+    })
+    s_paper["nav_history"] = s_nav
+    save_holdings(MULTI_ASSET_SLEEVE_KEY, s_paper)
+
+    s_rows: List[Dict[str, Any]] = []
+    for s in s_sells:
+        s_rows.append({
+            "date": str(trade_day.date()), "action": "SELL",
+            "code": s["code"], "name": ETF_NAMES.get(s["code"], s["code"]),
+            "price": s["price"], "shares": s["shares"], "amount": s["amount"],
+            "commission": s["commission"], "stamp_tax": s["stamp_tax"],
+            "slippage": s["slippage"], "score": "",
+            "cost_amount": s.get("cost_amount", 0.0),
+            "realized_pnl": s.get("realized_pnl", 0.0),
+            "cash_after": round(s_cash, 2), "portfolio_value": round(s_value, 2),
+        })
+    for b in s_buys:
+        s_rows.append({
+            "date": str(trade_day.date()), "action": "BUY",
+            "code": b["code"], "name": ETF_NAMES.get(b["code"], b["code"]),
+            "price": b["price"], "shares": b["shares"], "amount": b["amount"],
+            "commission": b["commission"], "stamp_tax": b["stamp_tax"],
+            "slippage": b["slippage"], "score": "",
+            "cash_after": round(s_cash, 2), "portfolio_value": round(s_value, 2),
+        })
+    append_ledger(MULTI_ASSET_SLEEVE_KEY, s_rows)
+
+    # ── 合并 ──────────────────────────────────────────────────────────
+    # ⚠️ A 腿的持仓**不在 run_line 的返回值里**（run_line 只返回汇总字段，
+    #    持仓由它自己写进 holdings 文件）。直接 a_res.get("positions") 永远
+    #    拿到空 dict → 合并持仓只剩袖套 9 只（实测 2026-11-01 E2E 抓到）。
+    #    正确做法：从 A 腿的持仓文件读（run_line 刚刚保存过）。
+    a_holdings = load_holdings(MULTI_ASSET_A_KEY, a_capital)
+    a_positions = a_holdings.get("positions") or {}
+    if not a_positions and int(a_res.get("n_positions") or 0) > 0:
+        raise SystemExit(
+            f"❌ 多资产线：A 腿持仓文件与本次调仓结果不一致"
+            f"（持仓文件 {len(a_positions)} 只，撮合结果 {a_res.get('n_positions')} 只）"
+            f"—— 拒绝写出一份持仓残缺的合并账本。"
+        )
+    merged_positions: Dict[str, Any] = {}
+    for c, p in a_positions.items():
+        q = dict(p)
+        q["leg"] = "a"
+        merged_positions[c] = q
+    for c, p in s_positions.items():
+        q = dict(p)
+        q["leg"] = "sleeve"
+        q["name"] = ETF_NAMES.get(c, c)
+        merged_positions[c] = q
+
+    merged_cash = float(a_res.get("cash", 0.0)) + s_cash
+    merged_value = float(a_res.get("value", 0.0)) + s_value
+
+    m_paper = load_holdings("multi_asset_final", capital)
+    m_nav = _append_nav(m_paper.get("nav_history"), {
+        "date": str(trade_day.date()),
+        "value": round(merged_value, 2),
+        "return_pct": round((merged_value / capital - 1.0) * 100, 4) if capital else 0.0,
+    })
+    m_paper.update({
+        "cash": round(merged_cash, 2),
+        "positions": merged_positions,
+        "nav_history": m_nav,
+        "last_signal": str(signal_day.date()),
+        "last_trade": str(trade_day.date()),
+        "last_value": round(merged_value, 2),
+        "initial_capital": capital,
+        "fill_assumption": "lag1：周五收盘出信号，下一交易日收盘成交",
+        "legs": {
+            "a": {
+                "name": "A股腿（42 因子 Top60）", "weight": MULTI_ASSET_A_WEIGHT,
+                "value": round(float(a_res.get("value", 0.0)), 2),
+                "cash": round(float(a_res.get("cash", 0.0)), 2),
+                "n_positions": len(a_positions),
+                # 投入率 = 持仓市值 / 总市值。**不是 1 就说明有闲置现金**：
+                # A 腿的每只预算只有 50万×0.95/60 ≈ 7,900 元，
+                # 股价 >79 元的股票买不起一手（100 股）→ 整只跳过、预算闲置。
+                # 这个数直接决定产品端能不能复现研究端的夏普，必须显式暴露。
+                "invested_ratio": _invested_ratio(
+                    float(a_res.get("value", 0.0)), float(a_res.get("cash", 0.0))),
+            },
+            "sleeve": {
+                "name": "ETF 袖套（黄金/债券/商品 各 1/3）",
+                "weight": MULTI_ASSET_SLEEVE_WEIGHT,
+                "value": round(s_value, 2), "cash": round(s_cash, 2),
+                "n_positions": len(s_positions),
+                "invested_ratio": _invested_ratio(s_value, s_cash),
+                "rebalanced": reb,
+                # ⚠️ 调仓当天要显示"距下次调仓 21 个交易日"，不是 0。
+                #   公式本身就够：(trade_idx - anchor) % 21 == 0（刚调过）→ 21。
+                #   之前多写了个 `0 if reb`，把刚调完仓显示成"0 天后还要调"，
+                #   前端会显示成"今天还要调仓"。
+                "next_rebalance_in_trading_days": (
+                    SLEEVE_REB_EVERY - ((trade_idx - int(anchor)) % SLEEVE_REB_EVERY)
+                ),
+                "class_weights_now": {k: round(v, 6) for k, v in s_classes.items()},
+                "target_weights": {k: round(v, 6) for k, v in target.items()},
+            },
+        },
+    })
+    save_holdings("multi_asset_final", m_paper)
+    _write_multi_asset_ledger(str(trade_day.date()), merged_value)
+
+    buys = list(a_res.get("buys") or []) + s_buys
+    sells = list(a_res.get("sells") or []) + s_sells
+    for b in buys:
+        b.setdefault("name", "")
+    for s in sells:
+        s.setdefault("name", "")
+
+    return {
+        "strategy": "multi_asset_final",
+        "signal_date": str(signal_day.date()),
+        "trade_date": str(trade_day.date()),
+        "desc": STRATEGIES["multi_asset_final"]["desc"],
+        "date": str(trade_day.date()),
+        "topk": 60, "ndrop": 5,
+        "cash": round(merged_cash, 2),
+        "value": round(merged_value, 2),
+        "n_positions": len(merged_positions),
+        "target_weight": round(1.0 / 60, 6),
+        "sells": sells, "buys": buys,
+        "blocked_buys": list(a_res.get("blocked_buys") or []),
+        "blocked_sells": list(a_res.get("blocked_sells") or []),
+        "holds": list(merged_positions.keys()),
+        "legs": m_paper["legs"],
+    }
 
 
 def rebuild_line_from_files(strategy: str, capital: float) -> Dict[str, Any]:
@@ -1002,8 +1533,13 @@ def main() -> None:
     for s in (args.strategies if not locals().get("_skipped") else []):
         spec = STRATEGIES[s]
         print(f"\n{'='*60}\n[{s}] {spec['desc']}", flush=True)
-        r = run_line(s, spec, frames, panel, master, names, args.capital,
-                     rebalance_day, extras=extras, adj_close=adj_close)
+        if spec.get("multi_asset"):
+            r = run_multi_asset_line(frames, panel, master, names,
+                                     args.capital, rebalance_day,
+                                     extras=extras, adj_close=adj_close)
+        else:
+            r = run_line(s, spec, frames, panel, master, names, args.capital,
+                         rebalance_day, extras=extras, adj_close=adj_close)
         results.append(r)
         print(f"  组合总值 ¥{r['value']:,.0f} | 现金 ¥{r['cash']:,.0f} | "
               f"{r['n_positions']} 只 | 买 {len(r['buys'])} 卖 {len(r['sells'])}",

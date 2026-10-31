@@ -109,6 +109,24 @@ SIGNAL_STRATEGIES: Dict[str, SignalStrategy] = {
         ndrop=3,
         factor_note="2021-2026 滚动 OOS 夏普 0.685，作为对照基线",
     ),
+    # 多资产组合线（2026-11-01）：平台唯一的**跨资产**信号线。
+    # 披露口径必须写"1.41 ± 0.05"而不是 1.4114 ——
+    # 台账 §11.4 的 placebo 检验显示组合夏普对 A 腿小幅扰动的噪声带就有 ±0.05。
+    "multi_asset_final": SignalStrategy(
+        key="multi_asset_final",
+        display_name="多资产组合（A 股 + 黄金/债券/商品）",
+        desc=(
+            "A 股腿 42 因子等权 Top60 占 50%；ETF 袖套（黄金 / 债券 / 商品 各 1/3，"
+            "类内等权、每月回类间等权）占 50%。两腿静态划分，腿间不再平衡。"
+        ),
+        topk=60,
+        ndrop=5,
+        factor_note=(
+            "3 年回测：组合夏普 1.41 ± 0.05（噪声带来自 placebo 对照，见台账 §11.4）、"
+            "回撤 −8.0%、年化 42.2%；A 腿与袖套相关性仅 0.24 —— "
+            "分散收益来自资产类别，不来自选股"
+        ),
+    ),
 }
 
 
@@ -252,7 +270,8 @@ class TradingSignalService:
             cost = float(pos.get("cost", 0) or 0)
             holds.append({
                 "code": code,
-                "name": self.stock_name(code),
+                # ETF（袖套腿）不在 A 股名称表里 → 用持仓文件里写入的 name
+                "name": pos.get("name") or self.stock_name(code),
                 "shares": shares,
                 "cost": cost,
                 "cost_amount": round(shares * cost, 2),
