@@ -216,8 +216,78 @@ def build() -> str:
              "随机数 → 若规则臂赢不了 placebo，则增量并非来自 gbm 的信息。")
     L.append("")
 
-    # ── §六 判据 ──
-    L.append("## 六、预注册判据汇总")
+    # ── §六 机制分解（新增）──
+    L.append("## 六、机制分解：信息增益 vs 稀释代价")
+    L.append("")
+    L.append("规则臂夏普低**不等于** gbm 没有信息。把「真实 gbm」与「同参数随机 placebo」"
+             "逐项对比，分离出两件事：**信息增益**（收益端）与**稀释代价**"
+             "（42f 排序被稀释 + 波动上升）。")
+    L.append("")
+    mrows = []
+    for w in W_LIST:
+        pls = [res_m[x] for x in plc_labels(PM, w)]
+        rl = res_m.get(f"fuse_w{w:.2f}", {})
+        if not pls:
+            continue
+        m = {k: sum(p[k] for p in pls) / len(pls)
+             for k in ("combined_sharpe", "combined_vol", "combined_maxdd",
+                       "combined_return")}
+        mrows.append([
+            f"{w:.2f}", n(rl.get("combined_sharpe")), n(m["combined_sharpe"]),
+            f"{rl.get('combined_sharpe', 0) - m['combined_sharpe']:+.4f}",
+            n(rl.get("combined_vol")), n(m["combined_vol"]),
+            f"{rl.get('combined_vol', 0) - m['combined_vol']:+.4f}",
+            n(rl.get("combined_return")), n(m["combined_return"]),
+            f"{(rl.get('combined_return', 0) - m['combined_return']) * 100:+.1f}pp",
+        ])
+    L.append(table(
+        ["w_gbm", "真实夏普", "placebo 均值", "Δ夏普", "真实波动", "placebo 波动",
+         "Δ波动", "真实收益", "placebo 收益", "Δ收益"], mrows))
+    L.append("")
+    all_neg = all(float(r[3]) < 0 for r in mrows) if mrows else False
+    pos_w = [r for r in mrows if float(r[3]) > 0]
+    if pos_w:
+        L.append(f"**gbm 的信息含量不为 0**：在 **{len(pos_w)}/{len(mrows)}** 个权重上，"
+                 f"真实 gbm 相对随机 placebo 的 Δ夏普为正"
+                 f"（{', '.join(r[0] for r in pos_w)}），"
+                 f"最大 **Δ夏普 {max(float(r[3]) for r in mrows):+.4f}**、"
+                 f"最大 **Δ收益 {max(float(r[9].replace('pp', '')) for r in mrows):+.1f}pp**。")
+        L.append("")
+    if all_neg:
+        L.append("**但相对「不加 gbm」的基线，所有权重都是负的** → "
+                 "**稀释 42f 排序的代价 > gbm 带来的信息增益**。")
+        L.append("")
+        L.append("→ P18 证伪的是**融合方式**（分数级线性加权会稀释已有排序），"
+                 "不是「gbm 有信息」这个命题本身。")
+        L.append("")
+    L.append("### 年度分解（组合逐年收益）")
+    L.append("")
+    yrs = sorted({y for v in res_m.values()
+                  for y in (v.get("combined_yearly") or {})})
+    yrows = []
+    base_y = (res_m.get("fuse_w0.00", {}).get("combined_yearly") or {})
+    yrows.append(["**基线 `fuse_w0.00`**", "—"]
+                 + [f"{base_y.get(y, float('nan')) * 100:+.2f}%" for y in yrs])
+    for w in W_LIST:
+        pls = [res_m[x] for x in plc_labels(PM, w)]
+        rl = res_m.get(f"fuse_w{w:.2f}", {})
+        if not pls:
+            continue
+        yrows.append([f"真实 `fuse_w{w:.2f}`", n(rl.get("combined_sharpe"))]
+                     + [f"{(rl.get('combined_yearly') or {}).get(y, float('nan')) * 100:+.2f}%"
+                        for y in yrs])
+        pm_ = {y: sum((p.get("combined_yearly") or {}).get(y, 0.0) for p in pls) / len(pls)
+               for y in yrs}
+        yrows.append([f"placebo 均值 w{w:.2f}", "—"]
+                     + [f"{pm_[y] * 100:+.2f}%" for y in yrs])
+    L.append(table(["臂", "夏普"] + yrs, yrows))
+    L.append("")
+    L.append("> 年度收益**不等于**风险调整后收益：融合臂在部分年份收益显著更高，"
+             "但波动同步上升 → 夏普不升。**只看板级夏普会漏掉这个结构。**")
+    L.append("")
+
+    # ── §七 判据 ──
+    L.append("## 七、预注册判据汇总")
     L.append("")
     L.append(table(
         ["判据", "阈值", "main 结果", "oos 结果"],
@@ -255,8 +325,8 @@ def build() -> str:
              f"通过判定 = (a)(b)(c)(d)(f) 五条全过。")
     L.append("")
 
-    # ── §七 总判定 ──
-    L.append("## 七、总判定")
+    # ── §八 总判定 ──
+    L.append("## 八、总判定")
     L.append("")
     if PO is None:
         L.append("**未定** —— 需 oos 阶段产物（`multi_asset_p18_oos.json`）。")
@@ -280,8 +350,8 @@ def build() -> str:
         L.append(f"- Δ组合（oos）= **{n(crit_o.get(cand, {}).get('delta_combined'))}**")
         L.append("")
 
-    # ── §八 诚实声明 ──
-    L.append("## 八、诚实声明")
+    # ── §九 诚实声明 ──
+    L.append("## 九、诚实声明")
     L.append("")
     L.append("- 本实验**只回答一个问题**：gbm 的正交信息能否通过分数级融合给 42f 带来增量。"
              "不回答「gbm 本身好不好」（gbm 单腿真实盘 lag1 仅 0.5258）。")
@@ -292,6 +362,13 @@ def build() -> str:
              "其他融合形式**未测**，不在本实验结论范围内。")
     L.append("- oos 窗口的 A 股腿面板数据自 2021-05-11 起，而 oos 起点正是该日 → "
              "oos **没有窗口前历史**，判据 (f) 的跨窗口迁移是唯一的外部检验。")
+    L.append("- **§六 的机制发现是「事后观察」，不是预注册结论**。"
+             "「gbm 信息含量 > 0」是在看到 4 个权重的 Δ夏普 分布之后才形成的叙述；"
+             "预注册判据 (c) 针对的是**候选臂**（main 上组合夏普最高的规则臂），"
+             "它已失败。**用 w=0.50 的 Δ夏普 去论证「gbm 有信息」，"
+             "等于在 4 个权重里挑最好的那个来说事 —— 有选择偏差。**"
+             "因此 §六 只能作为**待检验假设**记录，"
+             "要成立必须另开一个**事前注册**的实验（且要付新的试验预算）。")
     L.append("- 全局试验数已由 1937 升至 **1942**（本实验 +5）；"
              "每做一次搜索都在抬高自己需要翻越的门槛。")
     L.append("- **placebo 的实现细节必须一起读**：placebo 是 **每个交易日独立重抽**的"
