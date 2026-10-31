@@ -82,6 +82,12 @@ TRACKED = [
     "multi_asset_p12_long.json",        # P12 长历史 3 窗口组合分解
     "multi_asset_p12_longw.json",       # P12 长历史 3 窗口 w 曲线 + 5 窗口汇总
     "multi_asset_p12_diag.json",        # P12 E1~E6 根因诊断
+    # ── P13 / P14（2026-10-31 补登：此前 P13 产物漏登记，等于没有指纹保护）──
+    "multi_asset_p13_main.json",        # P13 袖套资产级权重优化（main）
+    "multi_asset_p13_oos.json",         # P13 袖套资产级权重优化（oos）
+    "multi_asset_p13_long.json",        # P13 长历史 3 窗口
+    "multi_asset_p14_main.json",        # P14 Oracle 上界（main）
+    "multi_asset_p14_oos.json",         # P14 Oracle 上界（oos）
 ]
 
 # 审计器读取的产物文件 —— 必须与 TRACKED 一一对应（漏一个 = 该产物可被静默覆盖）
@@ -129,6 +135,7 @@ AUDITED = [
     "multi_asset_p12_long.json",
     "multi_asset_p12_longw.json",
     "multi_asset_p12_diag.json",
+    # ── P13 / P14（2026-10-31 补登：此前 P13 产物漏登记，等于没有指纹保护）──
 ]
 
 

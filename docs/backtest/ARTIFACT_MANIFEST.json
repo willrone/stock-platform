@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-31T17:42:31",
-  "git_commit": "76643ebd",
+  "generated_at": "2026-10-31T23:58:41",
+  "git_commit": "7c851bbe",
   "data_dir": "data/backtest",
   "files": {
     "ALL_real_lag1_v2.json": {
@@ -84,14 +84,14 @@
       "mtime": "2026-10-31T04:03:51"
     },
     "multi_asset_p6_main.json": {
-      "sha256": "8a1422bcdd075d4eb0146bfd7e56f25f8fd4b4c5c20a6737a4525a408446d1a9",
+      "sha256": "92447ef333d19715a56eb55babe132217c3a18459bf8637f1113fafd28be3686",
       "bytes": 16161,
-      "mtime": "2026-10-31T04:07:10"
+      "mtime": "2026-10-31T21:53:54"
     },
     "multi_asset_p6_oos.json": {
       "sha256": "9d8f686b772e8aadd5f2cccfcaf1f08ca176656c194b4f7049ba65a510289106",
       "bytes": 15470,
-      "mtime": "2026-10-31T04:07:14"
+      "mtime": "2026-10-31T21:53:59"
     },
     "p6_order_diag.json": {
       "sha256": "702583071c21a29f3ea490f9237f834c634b8a0142e4972f7ec469351a908d62",
@@ -222,6 +222,31 @@
       "sha256": "1e61090287e07b339a1d70c8916d7ca89134af3477ad640b1977f98a67fe51e5",
       "bytes": 51298,
       "mtime": "2026-10-31T16:28:36"
+    },
+    "multi_asset_p13_main.json": {
+      "sha256": "a3d62f156c7a9c0c17d31938c36596a3b0b91ee184601f243a15ea19a05ab4db",
+      "bytes": 10905,
+      "mtime": "2026-10-31T20:44:41"
+    },
+    "multi_asset_p13_oos.json": {
+      "sha256": "63978442d20a3130efbaef0f19b01a5930d6b86ecc3281a3b7937fb6aeeb45b7",
+      "bytes": 10919,
+      "mtime": "2026-10-31T20:44:45"
+    },
+    "multi_asset_p13_long.json": {
+      "sha256": "3ab047f2c0a60e3c989cdae929bd70817c20163524a1f72d0a488ebbcfee081c",
+      "bytes": 21324,
+      "mtime": "2026-10-31T20:44:47"
+    },
+    "multi_asset_p14_main.json": {
+      "sha256": "32d06f62939995aed7e9083ae2df59d53cd4e26e743f416cea55961ff9810b44",
+      "bytes": 4153,
+      "mtime": "2026-10-31T23:02:52"
+    },
+    "multi_asset_p14_oos.json": {
+      "sha256": "29868beb4957a4b18e7eb3d8798dec9cdb26b370eb5f31ceece456731b8f0c04",
+      "bytes": 4156,
+      "mtime": "2026-10-31T23:02:56"
     }
   },
   "missing": [],
