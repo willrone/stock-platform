@@ -257,6 +257,86 @@ _LIMIT_BY_PREFIX = (
 )
 
 
+# ── PIT 日期感知的涨跌停幅度（2026-10-31 新增）────────────────────────
+#: 创业板注册制生效日：之前涨跌停 10%，之后 20%
+CHINEXT_20PCT_FROM = "2020-08-24"
+#: 科创板开板日：首个交易日即 20%
+STAR_MARKET_FROM = "2019-07-22"
+#: 北交所开市日：首个交易日即 30%
+BSE_FROM = "2021-11-15"
+
+
+def limit_pct_at(code: str, date, is_st: bool = False) -> float:
+    """按**交易日**PIT 判定该股当日涨跌停幅度。
+
+    为什么必须按日期（2026-10-31）：
+    `limit_pct` 用的是**现行**板块规则（创业板/科创板 20%）。但在
+    **2020-08-24 之前创业板只有 10%**。用 20% 去掩 2016~2019 的创业板，
+    会把"当日真的涨停（买不到）"的票放过去 → 成交价不可实现 →
+    长历史回测被系统性污染（本项目实测 w2016 窗口 A 腿夏普 -0.19，
+    其中一部分就是这类伪成交）。
+
+    规则（与 `_LIMIT_BY_PREFIX` 的板块划分一致，只加创业板的时间开关）：
+      - ST：5%（任何时候）
+      - 创业板(30x)：2020-08-24 起 20%，之前 10%
+      - 科创板(68x)：20%（2019-07-22 才有票）
+      - 北交所(92/83/87/43/82)：30%（2021-11-15 才有票）
+      - 其余（沪主板 60x / 深主板 00x / 中小板 002x）：10%（一直如此）
+
+    ⚠️ 本函数**不新增板块前缀**（如 88x），以保证 2020-08-24 之后的窗口
+    与现行 `limit_pct` 逐位一致 —— 长历史修复不得改变已定稿数值。
+    """
+    if is_st:
+        return ST_LIMIT_PCT
+    c2 = str(code)[:2]
+    if c2 == "30":
+        from datetime import datetime as _dt
+
+        d = _dt.fromisoformat(str(date)[:10]) if not hasattr(date, "year") else date
+        return 0.20 if str(d)[:10] >= CHINEXT_20PCT_FROM else 0.10
+    for prefix, val in _LIMIT_BY_PREFIX:
+        if c2 == prefix:
+            return val
+    return 0.10
+
+
+def limit_up_mask_matrix_at(
+    day_ret: np.ndarray,
+    codes,
+    dates,
+    is_st: Optional[np.ndarray] = None,
+) -> np.ndarray:
+    """逐票涨停掩码（**按日期 PIT**）：day_ret >= 该票当日涨停幅度。
+
+    与 `limit_up_mask_matrix` 的差别只在涨跌停幅度是否随日期变化
+    （创业板 2020-08-24 前后 10%/20%）。2020-08-24 之后的窗口两者**逐位相同**。
+
+    Args:
+        day_ret: (n_dates, n_stocks) 日涨跌幅
+        codes: 列名（用于判定板块）
+        dates: (n_dates,) 交易日（可迭代 str / datetime / Timestamp）
+        is_st: (n_stocks,) ST 标记（1=ST，涨停幅度 5%）
+    """
+    codes = list(codes)
+    n_dates = len(dates)
+    n_stocks = len(codes)
+    limits = np.empty((n_dates, n_stocks), dtype=np.float64)
+    st = None
+    if is_st is not None and len(is_st) == n_stocks:
+        st = np.asarray(is_st, dtype=np.float64).reshape(1, -1)
+    # 先算逐票的静态幅度（绝大多数情况与日期无关），再只对创业板做时间开关
+    base = limit_pct_array(codes).reshape(1, -1)
+    limits = np.repeat(base, n_dates, axis=0)
+    chinext = np.array([str(c)[:2] == "30" for c in codes])
+    if chinext.any():
+        for i, d in enumerate(dates):
+            ds = str(d)[:10]
+            limits[i, chinext] = (0.20 if ds >= CHINEXT_20PCT_FROM else 0.10)
+    if st is not None:
+        limits = np.where(st > 0, ST_LIMIT_PCT, limits)
+    return day_ret >= limits
+
+
 def limit_pct_array(codes) -> np.ndarray:
     """返回每只股票的涨跌停幅度数组。
 

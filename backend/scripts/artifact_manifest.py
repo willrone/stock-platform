@@ -70,6 +70,9 @@ TRACKED = [
     "multi_asset_xclass.json",            # P1 跨类动量
     "multi_asset_xclass_oos.json",
     "multi_asset_xclass_long_history.json",
+    "multi_asset_p10_gate.json",        # P10 验证门：features_full 逐位复现
+    "multi_asset_p10_long.json",        # P10 A 股腿 5 窗口长历史
+    "multi_asset_p10_stats.json",       # P10 跨窗口统计（派生）
 ]
 
 # 审计器读取的产物文件 —— 必须与 TRACKED 一一对应（漏一个 = 该产物可被静默覆盖）
@@ -105,6 +108,9 @@ AUDITED = [
     "multi_asset_p8_oos.json",
     "multi_asset_p9_main.json",
     "multi_asset_p9_oos.json",
+    "multi_asset_p10_gate.json",
+    "multi_asset_p10_long.json",
+    "multi_asset_p10_stats.json",
 ]
 
 

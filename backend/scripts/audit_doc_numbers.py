@@ -77,6 +77,9 @@ ART = {
     'p8o': J('multi_asset_p8_oos.json'),
     'p9m': J('multi_asset_p9_main.json'),
     'p9o': J('multi_asset_p9_oos.json'),
+    'p10g': J('multi_asset_p10_gate.json'),
+    'p10l': J('multi_asset_p10_long.json'),
+    'p10s': J('multi_asset_p10_stats.json'),
 }
 
 
@@ -727,6 +730,46 @@ def build_anchors():
                               ('j', _art, f'criteria.{_l}.{_path}')))
             if safe_dig(_art, f'criteria.{_l}.criteria') is not None:
                 A.append((P9DOC, _ti, _l, '通过判据数', ('p9npass', _art, _l)))
+
+    # ── P10 · A 股腿长历史重建 ──
+    #   表定位用**列名关键字**（check() 支持字符串 tidx），
+    #   避免表格顺序变化导致锚点错位。
+    P10DOC = 'P10_LONG_ASHARE'
+    _p10_order = ['w2013', 'w2016', 'w2019', 'oos', 'main']
+    _p10_name = {
+        'w2013': 'w2013（2013-05~2016-05）',
+        'w2016': 'w2016（2016-05~2019-05）',
+        'w2019': 'w2019（2019-05~2021-05）',
+        'oos': 'oos（2021-05~2023-05）',
+        'main': 'main（2023-05~2026-05）',
+    }
+    # 表 A：验证门（features_full vs features/day）
+    for _f in ('total_return', 'sharpe_ratio', 'max_drawdown', 'win_rate',
+               'total_trades'):
+        for _col, _path in (('期望（features/day）', f'expected.{_f}'),
+                            ('实得（features/full）', f'got.{_f}'),
+                            ('diff', f'diff.{_f}')):
+            A.append((P10DOC, 'diff', _f, _col, ('j', 'p10g', _path)))
+    # 表 B：长历史曲线
+    for _l in _p10_order:
+        if _l not in (ART['p10l'].get('results') or {}):
+            continue
+        A.append((P10DOC, 'A腿夏普', _p10_name[_l], '起点年',
+                  ('p10yr', 'p10l', _l, 'start')))
+        A.append((P10DOC, 'A腿夏普', _p10_name[_l], '终点年',
+                  ('p10yr', 'p10l', _l, 'end')))
+        for _col, _fld in (('A腿夏普', 'a_share_sharpe'),
+                           ('A腿收益', 'total_return'),
+                           ('A腿回撤', 'max_drawdown'),
+                           ('交易笔数', 'total_trades')):
+            A.append((P10DOC, 'A腿夏普', _p10_name[_l], _col,
+                      ('j', 'p10l', f'results.{_l}.{_fld}')))
+    # 表 C：跨窗口统计
+    for _row, _fld in (('窗口数', 'n_windows'), ('均值', 'mean_sharpe'),
+                       ('中位数', 'median_sharpe'), ('最小值', 'min_sharpe'),
+                       ('最大值', 'max_sharpe'), ('极差', 'range_sharpe'),
+                       ('标准差', 'stdev_sharpe')):
+        A.append((P10DOC, '值', _row, '值', ('j', 'p10s', _fld)))
     return A
 
 
@@ -916,6 +959,11 @@ def resolve(spec):
         if stat == 'min':
             return min(vals)
         raise SystemExit(f'[audit] 未知 p4fam stat {stat}')
+    if spec[0] == 'p10yr':
+        # P10：窗口起止年（JSON 里是完整日期字符串）
+        art, lab, which = spec[1], spec[2], spec[3]
+        w = dig(ART[art], f'results.{lab}.window')
+        return int(w[0 if which == 'start' else 1][:4])
     if spec[0] == 'jmin':
         # 两个产物值取小者
         return min(dig(ART[spec[1]], spec[2]), dig(ART[spec[3]], spec[4]))

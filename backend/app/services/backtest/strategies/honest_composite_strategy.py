@@ -47,6 +47,7 @@ from ..models import SignalType, TradingSignal
 from app.services.trading.execution_rules import (
     industry_ids,
     limit_up_mask_matrix,
+    limit_up_mask_matrix_at,
     load_st_flags,
     load_industry_map,
     zscore_with_industry,
@@ -354,8 +355,15 @@ class HonestCompositeStrategy(BaseStrategy):
         # 改为逐票按板块判定（主板 10% / 创业板科创板 20% / 北交所 30%）。
         # 2026-10-26 再补：ST / 退市整理期按 5% 判定
         # （数据源 data/stocks/st_names.json，375 只 ST + 94 只退市整理）。
-        limit_up_mask = limit_up_mask_matrix(
-            day_ret, close.columns, is_st=load_st_flags(list(close.columns))
+        # 2026-10-31 改为**按交易日 PIT** 的涨跌停幅度：
+        # 创业板 2020-08-24 注册制之前是 10%，现行 `limit_pct` 用 20%
+        # → 长历史窗口（2020-08 之前）会把"真的涨停买不到"的票放过去，
+        #   成交价不可实现 → 长历史回测被系统性污染。
+        # 2020-08-24 之后的窗口与原实现**逐位相同**（回归门见
+        # `backend/scripts/p10_limit_pit_regression.py`）。
+        limit_up_mask = limit_up_mask_matrix_at(
+            day_ret, close.columns, master,
+            is_st=load_st_flags(list(close.columns))
         )
 
         # nan-aware 等权复合 — 23 个诚实公式 + 18 个 Alpha158 面板因子
