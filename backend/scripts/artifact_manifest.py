@@ -95,6 +95,8 @@ TRACKED = [
     "multi_asset_p17_verify_oos.json",
     "multi_asset_p17_freq_main.json",
     "multi_asset_p17_freq_oos.json",
+    # ── 试验预算账本（只增不减；register 后由 trial_budget.py 自动重建清单）──
+    "trial_budget.json",
 ]
 
 # 审计器读取的产物文件 —— 必须与 TRACKED 一一对应（漏一个 = 该产物可被静默覆盖）
