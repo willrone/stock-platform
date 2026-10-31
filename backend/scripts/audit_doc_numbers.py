@@ -109,6 +109,20 @@ ART = {
 }
 
 
+def Jopt(name):
+    """产物可能还不存在（如实验尚未跑完）→ 返回空 dict，不让整个审计器崩。"""
+    p = os.path.join(BACK, name)
+    if not os.path.exists(p):
+        return {}
+    with open(p, encoding='utf-8') as fh:
+        return json.load(fh)
+
+
+ART['p18m'] = Jopt('multi_asset_p18_main.json')
+ART['p18o'] = Jopt('multi_asset_p18_oos.json')
+P18_READY = bool(ART['p18m']) and bool(ART['p18o'])
+
+
 def safe_dig(art, path):
     """取不到就返回 None（而不是抛 KeyError）——用于「该字段可能不存在」的锚点。"""
     try:
@@ -1668,6 +1682,26 @@ def prose_value(spec):
         d = dig(ART[f'p3{"m" if spec[1] == "main" else "o"}'],
                 ['results', 'base'])
         return abs(d['combined_maxdd']) * 100
+    # ── P18：42f 之上叠加 gbm 增量（分数级融合）──
+    if kind.startswith('p18_'):
+        art = ART['p18m' if spec[1] == 'main' else 'p18o']
+        cand = art.get('verdict', {}).get('candidate_main_best_rule_arm')
+        if kind == 'p18_base':
+            return dig(art, ['results', 'fuse_w0.00', 'combined_sharpe'])
+        if kind == 'p18_cand':
+            return dig(art, ['results', cand, 'combined_sharpe'])
+        if kind == 'p18_delta':
+            return dig(art, ['criteria', cand, 'delta_combined'])
+        if kind == 'p18_corr':
+            return dig(art, ['corr_median'])
+        if kind == 'p18_dsr':
+            return dig(art, ['verdict', 'dsr_report'])
+        if kind == 'p18_dsr_thr':
+            return dig(art, ['dsr95_threshold_sharpe'])
+        if kind == 'p18_arm':
+            return dig(art, ['results', spec[2], 'combined_sharpe'])
+        if kind == 'p18_placebo_max':
+            return dig(art, ['criteria', cand, 'placebo_max'])
     if kind == 'p17_oracle':
         # P17 三类同时取优的 oracle 组合夏普
         art = ART[f'p17v{"m" if spec[1] == "main" else "o"}']
@@ -1844,6 +1878,30 @@ def build_prose_anchors():
     A.append((P17, r'\*\*main 最优是双周（(?P<g1>\d+(?:\.\d+)?)），oos 最优是月度（(?P<g2>\d+(?:\.\d+)?)）',
               ('multi', ('p17_freq', 'main', 'biweekly_10'),
                ('p17_freq', 'oos', 'monthly_21'))))
+
+    # ── P18：42f 之上叠加 gbm 增量（分数级融合）──
+    # 用**正文正则**定位（表序号定位在插表后会全乱，见 P17 的教训）。
+    # 产物未跑齐时（P18_READY=False）整段跳过，不让审计器误报。
+    if P18_READY:
+        P18 = 'P18_FUSE_GBM'
+        A.append((P18, r'同日截面相关中位数 = \*\*(?P<g1>\d+(?:\.\d+)?)\*\*',
+                  ('multi', ('p18_corr', 'main'))))
+        A.append((P18, r'复现门：orig42f 组合夏普 = \*\*(?P<g1>\d+(?:\.\d+)?)\*\*，'
+                        r'fuse_w0\.00 组合夏普 = \*\*(?P<g2>\d+(?:\.\d+)?)\*\*',
+                  ('multi', ('p18_arm', 'main', 'orig42f'),
+                   ('p18_arm', 'main', 'fuse_w0.00'))))
+        A.append((P18, r'候选臂 main 组合夏普 = \*\*(?P<g1>\d+(?:\.\d+)?)\*\*，'
+                        r'基线 = \*\*(?P<g2>\d+(?:\.\d+)?)\*\*',
+                  ('multi', ('p18_cand', 'main'), ('p18_base', 'main'))))
+        A.append((P18, r'Δ组合（main）= \*\*(?P<g1>[+-]?\d+(?:\.\d+)?)\*\*',
+                  ('multi', ('p18_delta', 'main'))))
+        A.append((P18, r'候选臂 oos 组合夏普 = \*\*(?P<g1>\d+(?:\.\d+)?)\*\*，'
+                        r'oos 基线 = \*\*(?P<g2>\d+(?:\.\d+)?)\*\*',
+                  ('multi', ('p18_cand', 'oos'), ('p18_base', 'oos'))))
+        A.append((P18, r'Δ组合（oos）= \*\*(?P<g1>[+-]?\d+(?:\.\d+)?)\*\*',
+                  ('multi', ('p18_delta', 'oos'))))
+        A.append((P18, r'DSR（报告项）= \*\*(?P<g1>\d\.\d+)\*\* / 门槛 (?P<g2>\d+(?:\.\d+)?)',
+                  ('multi', ('p18_dsr', 'oos'), ('p18_dsr_thr', 'oos'))))
     return A
 
 

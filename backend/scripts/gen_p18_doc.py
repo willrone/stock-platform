@@ -68,6 +68,8 @@ def build() -> str:
     L: List[str] = []
     res_m = PM["results"]
     crit_m = PM.get("criteria", {})
+    res_o = PO.get("results", {}) if PO else {}
+    crit_o = PO.get("criteria", {}) if PO else {}
     verdict = PM.get("verdict", {})
     rank_m = PM.get("ranking", [])
     rule_m = [l for l in rank_m if res_m[l].get("kind") == "rule"]
@@ -160,6 +162,10 @@ def build() -> str:
             and g.get("total_trades") == b0.get("total_trades"))
     L.append(f"→ 两者**{'逐位一致 ✅' if same else '不一致 ❌'}**"
              f"（z-score 是单调仿射变换 → 排名不变 → 选股不变 → 净值不变）。")
+    L.append("")
+    L.append(f"- 复现门：orig42f 组合夏普 = **{n(g.get('combined_sharpe'))}**，"
+             f"fuse_w0.00 组合夏普 = **{n(b0.get('combined_sharpe'))}**"
+             f"（笔数 {g.get('total_trades')} / {b0.get('total_trades')}）")
     L.append("")
 
     # ── §四 规则臂结果 ──
@@ -258,13 +264,20 @@ def build() -> str:
         vo = PO.get("verdict", {})
         L.append(f"候选臂（main 阶段组合夏普最高的规则臂）：**`{cand}`**")
         L.append("")
+        L.append(f"- 候选臂 main 组合夏普 = **{n(res_m.get(cand, {}).get('combined_sharpe'))}**，"
+                 f"基线 = **{n(res_m.get('fuse_w0.00', {}).get('combined_sharpe'))}**")
+        L.append(f"- Δ组合（main）= **{n(crit_m.get(cand, {}).get('delta_combined'))}**")
+        L.append(f"- DSR（报告项）= **{n(vo.get('dsr_report'), 6)}** / 门槛 "
+                 f"{n(vo.get('dsr95_threshold_sharpe'))}")
         L.append(f"- all_pass = **{vo.get('all_pass')}**")
-        L.append(f"- Δ组合 = {n(vo.get('delta_combined'))}")
-        L.append(f"- DSR（报告项）= {n(vo.get('dsr_report'), 6)} / 门槛 {n(vo.get('dsr95_threshold_sharpe'))}")
         fw = vo.get("f_cross_window") or {}
         if fw:
             L.append(f"- (f) oos 最优臂 `{fw.get('best_oos_arm')}` 在 main 的规则臂中排 "
                      f"**{fw.get('rank_in_main')}/{fw.get('n_rule_arms_in_main')}**")
+        L.append("")
+        L.append(f"- 候选臂 oos 组合夏普 = **{n(res_o.get(cand, {}).get('combined_sharpe'))}**，"
+                 f"oos 基线 = **{n(res_o.get('fuse_w0.00', {}).get('combined_sharpe'))}**")
+        L.append(f"- Δ组合（oos）= **{n(crit_o.get(cand, {}).get('delta_combined'))}**")
         L.append("")
 
     # ── §八 诚实声明 ──
