@@ -75,7 +75,12 @@ TARGETS = [
     ("0.399303", "国证2000"),
     ("1.000852", "中证1000"),
 ]
-FIELDS = "date,open,close,high,low,volume"
+FIELDS = "trade_date,open,close,high,low,volume"
+# 历史遗留：早期这里写的是 "date"，而 `_rows_from_klines` 产出的列名是 **trade_date**，
+# 于是 `df[[c for c in FIELDS.split(",") if c in df.columns]]` 会**把 trade_date 悄悄丢掉**，
+# 写出缺日期列的 parquet → `load_market_proxies()` 的 `_ingest` 因缺 trade_date 直接跳过
+# → **新基准被静默忽略**（P11/P12 都可能因此少一个基准口径而不报错）。
+# 现在显式保证 trade_date 一定保留。
 
 
 def _url(secid: str) -> str:

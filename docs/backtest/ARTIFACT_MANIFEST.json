@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-11-01T04:19:58",
-  "git_commit": "59c42d26",
+  "generated_at": "2026-11-01T06:52:33",
+  "git_commit": "cef0b0e9",
   "data_dir": "data/backtest",
   "sha256_mode": "normalized-json-v1",
   "sha256_excludes": [
@@ -183,9 +183,9 @@
       "mtime": "2026-10-31T08:51:44"
     },
     "multi_asset_p11_alpha.json": {
-      "sha256": "cefc1d85c7ea561d67d6003254cdb826f27e2795d5ef1a32918ca8d655823f0f",
-      "bytes": 540718,
-      "mtime": "2026-10-31T12:08:57"
+      "sha256": "7cc99ecdc5e4b2d82fca5c565bac3612b4a43bac45a8dca723f6d3eb8d06c89e",
+      "bytes": 542094,
+      "mtime": "2026-11-01T06:50:14"
     },
     "multi_asset_p11_stats.json": {
       "sha256": "ce321f3fe10db2d315eafce3f095aeabdd4aaf0385d8846454c563507beef3b7",
@@ -282,12 +282,19 @@
       "bytes": 2113,
       "mtime": "2026-11-01T03:31:41"
     },
+    "multi_asset_p18_main.json": {
+      "sha256": "b35ab447a380f33260b04df1d117f3d24dece72fa560c68d36b91b7c46e7c96f",
+      "bytes": 802860,
+      "mtime": "2026-11-01T05:18:11"
+    },
     "trial_budget.json": {
       "sha256": "2814b92524c954033882a27f5bf809ec80ce9b6c2b0cccc4df55b04eb65517f8",
       "bytes": 1676,
       "mtime": "2026-11-01T04:19:58"
     }
   },
-  "missing": [],
+  "missing": [
+    "multi_asset_p18_oos.json"
+  ],
   "uncovered_audited": []
 }
