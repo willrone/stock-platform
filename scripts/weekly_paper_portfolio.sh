@@ -9,6 +9,12 @@
 #
 # ⚠️ 退出码纪律：`python ... | grep -v INFO` 会让 $? 变成 grep 的退出码，
 # 脚本崩了也显示 0。必须先重定向取真实 RC，再 grep 生成 .log。
+#
+# ⚠️ locale 陷阱（2026-11-01 修复）：bash 在 **UTF-8 locale** 下会把紧跟变量名的
+#    **非 ASCII 字符算进变量名** —— `"RC=$RC，日志"` 里的变量名其实是 "RC，"，
+#    于是报 `RC: unbound variable` 并**当场退出**（launchd 走 C locale 所以排期跑
+#    一直没事，手工在终端跑必炸；ETF 刷新失败那行更致命：它跑在纸面盘之前，
+#    一炸就整条线跳过）。规矩：**变量后面紧跟中文/全角标点，一律写 ${VAR}**。
 set -uo pipefail
 
 ROOT="/Users/rone/Projects/stock-platform"
@@ -43,7 +49,7 @@ env -u PYTHONPATH -u PYTHONHOME "$PY" scripts/etf_data_pipeline.py \
   --codes "$ETF_CODES" --start 2019-01-01 --end "$(date +%F)" \
   >>"$RAW" 2>&1 || ETFRC=$?
 if [ "$ETFRC" -ne 0 ]; then
-  echo "⚠️ ETF 数据刷新失败（RC=$ETFRC）—— 袖套腿将用旧数据运行" | tee -a "$LOG"
+  echo "⚠️ ETF 数据刷新失败（RC=${ETFRC}）—— 袖套腿将用旧数据运行" | tee -a "$LOG"
 fi
 
 # ── 第 2 步：跑纸面盘（含多资产组合线）───────────────────────────────
@@ -64,7 +70,7 @@ ls -1t "$LOG_DIR"/paper_portfolio_*.log 2>/dev/null | tail -n +9 | while read -r
 done
 
 if [ "$RC" -ne 0 ]; then
-  echo "❌ paper_portfolio 失败 RC=$RC，日志：$LOG" | tee -a "$LOG"
+  echo "❌ paper_portfolio 失败 RC=${RC}，日志：$LOG" | tee -a "$LOG"
   exit "$RC"
 fi
 

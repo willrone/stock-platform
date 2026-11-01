@@ -37,15 +37,27 @@ class BacktestDataAdapter:
             # 1. 提取现有数据
             base_data = self._extract_base_data(task_result)
 
-            # 2. 计算扩展风险指标
+            # 2. 计算扩展风险指标（引擎权威指标一并传入，避免重算出第二套数）
+            engine_metrics = {
+                key: task_result.get(key)
+                for key in (
+                    "annualized_return",
+                    "volatility",
+                    "sharpe_ratio",
+                    "max_drawdown",
+                )
+                if task_result.get(key) is not None
+            }
             extended_risk_metrics = await self._calculate_extended_risk_metrics(
                 task_result.get("portfolio_history", []),
                 task_result.get("initial_cash", 100000),
+                engine_metrics=engine_metrics,
             )
 
-            # 3. 分析月度收益
+            # 3. 分析月度收益（基准 = t0 初始资金；保留首月）
             monthly_returns = await self._analyze_monthly_returns(
-                task_result.get("portfolio_history", [])
+                task_result.get("portfolio_history", []),
+                task_result.get("initial_cash", 100000),
             )
 
             # 4. 分析持仓表现（使用完整的PositionAnalyzer）
@@ -139,24 +151,64 @@ class BacktestDataAdapter:
             "portfolio_history": task_result.get("portfolio_history", []),
         }
 
+    @staticmethod
+    def _prefer_engine(engine_value: Any, local_value: float) -> float:
+        """引擎权威值优先；引擎缺失/非有限时才用本地重算值。
+
+        单一口径来源：引擎（portfolio_manager）算的指标与回测结果一起返回，
+        适配器不再用另一套定义重算一遍（那会在同一响应里产生两个夏普）。
+        """
+        if engine_value is None:
+            return float(local_value)
+        try:
+            value = float(engine_value)
+        except (TypeError, ValueError):
+            return float(local_value)
+        if not np.isfinite(value):
+            return float(local_value)
+        return value
+
     async def _calculate_extended_risk_metrics(
-        self, portfolio_history: List[Dict], initial_cash: float
+        self,
+        portfolio_history: List[Dict],
+        initial_cash: float,
+        engine_metrics: Optional[Dict[str, Any]] = None,
     ) -> Optional[ExtendedRiskMetrics]:
-        """基于现有组合历史计算扩展风险指标"""
+        """基于现有组合历史计算扩展风险指标
+
+        口径（2026-11-01 修正）：
+        - **单一权威来源**：引擎已经算好 annualized_return / volatility /
+          sharpe_ratio / max_drawdown 并随结果返回；适配器原先用**另一套定义**又
+          重算一遍（夏普 = (年化 − rf) / 年化波动；引擎 = 日均 / 日σ × √252），
+          同一份 API 响应因此出现**两个夏普**（实测 9.340288 vs 12.873346，差 3.53）。
+          现在引擎值优先，缺失才本地重算。
+        - **补回首段**：引擎的快照是每个交易日**收盘后**记录的，第一个快照 = 第一个
+          交易日收盘，不是 t0。原先 pct_change().dropna() 把「t0 → 首个快照」整段丢掉：
+          期间数少 1（年化指数变成 252/(N−1)，系统性偏高）且首日盈亏不进入波动率 / VaR。
+        """
+        engine_metrics = engine_metrics or {}
 
         if not portfolio_history:
             logger.warning("组合历史数据为空，无法计算扩展风险指标")
             return None
 
         try:
-            # 转换为pandas DataFrame
+            # 转换为pandas DataFrame（按时间排序，保证 iloc[0]/iloc[-1] 是首/末快照）
             df = pd.DataFrame(portfolio_history)
             if "date" in df.columns:
                 df["date"] = pd.to_datetime(df["date"])
                 df.set_index("date", inplace=True)
+            df = df.sort_index()
+            values = df["portfolio_value"]
 
-            # 计算收益率序列
-            returns = df["portfolio_value"].pct_change().dropna()
+            # 计算收益率序列：**补上「t0 → 首个快照」这一段**
+            # （原实现 pct_change().dropna() 把这一段整段丢掉）
+            returns = values.pct_change()
+            if len(returns) > 0 and initial_cash and float(initial_cash) > 0:
+                returns.iloc[0] = (values.iloc[0] - float(initial_cash)) / float(
+                    initial_cash
+                )
+            returns = returns.dropna()
 
             if len(returns) == 0:
                 logger.warning("收益率序列为空，无法计算扩展风险指标")
@@ -165,18 +217,27 @@ class BacktestDataAdapter:
             # 计算扩展指标
             extended_metrics = {}
 
-            # 获取基础指标
+            # 获取基础指标（引擎权威值优先，避免同一响应里出现两套数）
             volatility = returns.std() * np.sqrt(252)
             if pd.isna(volatility) or np.isnan(volatility):
                 volatility = 0.0
+            volatility = self._prefer_engine(
+                engine_metrics.get("volatility"), volatility
+            )
 
-            annualized_return = (df["portfolio_value"].iloc[-1] / initial_cash) ** (
+            local_annualized = (values.iloc[-1] / initial_cash) ** (
                 252 / len(returns)
             ) - 1
-            if pd.isna(annualized_return) or np.isnan(annualized_return):
-                annualized_return = 0.0
+            if pd.isna(local_annualized) or np.isnan(local_annualized):
+                local_annualized = 0.0
+            annualized_return = self._prefer_engine(
+                engine_metrics.get("annualized_return"), local_annualized
+            )
 
             # Sortino比率
+            # 口径说明：分子用**引擎的年化**（365 日历天 CAGR，与页面显示的年化同一个数），
+            # 分母是下行波动的 √252 交易日年化 —— 这是行业常见搭配（分子 CAGR、
+            # 分母交易日缩放），两者口径差异约 3~4%（样本里 242 交易日/年 ≠ 252）。
             downside_returns = returns[returns < 0]
             if len(downside_returns) > 0:
                 downside_deviation = downside_returns.std() * np.sqrt(252)
@@ -194,7 +255,10 @@ class BacktestDataAdapter:
                 extended_metrics["downside_deviation"] = 0
 
             # Calmar比率
-            max_drawdown = self._calculate_max_drawdown(df["portfolio_value"])
+            max_drawdown = self._prefer_engine(
+                engine_metrics.get("max_drawdown"),
+                self._calculate_max_drawdown(values),
+            )
             if max_drawdown < 0:
                 extended_metrics["calmar_ratio"] = (
                     annualized_return - self.risk_free_rate
@@ -213,11 +277,15 @@ class BacktestDataAdapter:
                 self._calculate_max_drawdown_duration(df["portfolio_value"])
             )
 
-            # 夏普比率（重新计算，使用无风险利率）
-            sharpe_ratio = (
+            # 夏普比率：引擎权威值优先（引擎定义 = 日均 / 日σ × √252；
+            # 本地兜底口径 = (年化 − rf) / 年化波动，与引擎不同，只在引擎缺失时用）
+            local_sharpe = (
                 (annualized_return - self.risk_free_rate) / volatility
                 if volatility > 0
                 else 0
+            )
+            sharpe_ratio = self._prefer_engine(
+                engine_metrics.get("sharpe_ratio"), local_sharpe
             )
 
             return ExtendedRiskMetrics(
@@ -236,9 +304,18 @@ class BacktestDataAdapter:
             return None
 
     async def _analyze_monthly_returns(
-        self, portfolio_history: List[Dict]
+        self, portfolio_history: List[Dict], initial_cash: float
     ) -> Optional[List[MonthlyReturnsAnalysis]]:
-        """分析月度收益"""
+        """分析月度收益
+
+        口径（2026-11-01 修正）：
+        - 基准是 **t0 初始资金**（initial_cash），不是第一个日度快照。引擎的快照是
+          每个交易日**收盘后**记录的，第一个快照 = 第一个交易日收盘，用它当基准会把
+          首日盈亏整段排除。
+        - **不丢弃首月**：原实现 monthly_values.pct_change().dropna() 会把第一个月度桶
+          丢掉，导致「月度序列复利 ≠ 累计收益」（实测缺口 10.29pp：3 个月 +10%/+5%/−2%
+          时，月度复利 +2.90% 而累计收益 +13.19%），前端热力图也少首月。
+        """
 
         if not portfolio_history:
             logger.warning("组合历史数据为空，无法分析月度收益")
@@ -249,20 +326,28 @@ class BacktestDataAdapter:
             if "date" in df.columns:
                 df["date"] = pd.to_datetime(df["date"])
                 df.set_index("date", inplace=True)
+            df = df.sort_index()
+
+            # 基准：t0 初始资金（引擎权威口径的 total_return 也用它）
+            if initial_cash and float(initial_cash) > 0:
+                base = float(initial_cash)
+            else:
+                base = float(df["portfolio_value"].iloc[0])
 
             # 按月重采样
             monthly_values = df["portfolio_value"].resample("ME").last()
-            monthly_returns = monthly_values.pct_change().dropna()
-
-            # 获取初始价值用于计算累积收益
-            initial_value = df["portfolio_value"].iloc[0]
+            monthly_returns = monthly_values.pct_change()
+            if len(monthly_returns) > 0:
+                # 首月的基准是 t0，而不是「不存在的上一个月末」
+                monthly_returns.iloc[0] = (monthly_values.iloc[0] - base) / base
+            monthly_returns = monthly_returns.dropna()
 
             result = []
 
             for date, monthly_return in monthly_returns.items():
                 # 计算从初始时点到当前月末的累积收益
                 current_value = monthly_values[date]
-                cumulative_return = (current_value - initial_value) / initial_value
+                cumulative_return = (current_value - base) / base
 
                 analysis = MonthlyReturnsAnalysis(
                     year=date.year,

@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-11-01T21:10:57",
-  "git_commit": "a545ea2d",
+  "generated_at": "2026-11-02T00:00:46",
+  "git_commit": "6cedf0a3",
   "data_dir": "data/backtest",
   "sha256_mode": "normalized-json-v2",
   "sha256_excludes": [

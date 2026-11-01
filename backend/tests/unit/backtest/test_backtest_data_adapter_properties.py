@@ -294,6 +294,18 @@ class TestBacktestDataAdapterProperties:
         )
         sample_data["portfolio_history"] = portfolio_history
         sample_data["initial_cash"] = initial_cash
+        # 本用例验证**本地兜底计算**路径（引擎指标缺失时适配器自己算）。
+        # 样例里预置的 annualized_return / volatility / sharpe_ratio / max_drawdown
+        # 是占位值（0.15 / 0.20 / 0.75 / −0.10），与本用例生成的组合历史无关；
+        # 新契约（2026-11-01，引擎权威值优先）下它们会覆盖本地计算 → 显式移除，
+        # 让本用例专注验证兜底计算本身。透传路径见 test_engine_metrics_passed_through。
+        for _engine_key in (
+            "annualized_return",
+            "volatility",
+            "sharpe_ratio",
+            "max_drawdown",
+        ):
+            sample_data.pop(_engine_key, None)
 
         # 执行适配
         loop = asyncio.new_event_loop()
@@ -352,6 +364,42 @@ class TestBacktestDataAdapterProperties:
         assert (
             0 <= downside_deviation < 2.0
         ), f"下行偏差 {downside_deviation} 应该非负且在合理范围内"
+
+    def test_engine_metrics_passed_through(self):
+        """新契约（2026-11-01）：引擎权威指标必须**原样透传**到扩展风险指标。
+
+        背景：适配器原先用另一套定义重算夏普（(年化 − rf) / 年化波动），而引擎用的是
+        日均 / 日σ × √252 → 同一份 API 响应里出现**两个夏普**（实测 9.340288 vs
+        12.873346，差 3.53），且引擎的 365 日历天年化 vs 适配器的 252 交易日年化会
+        继续放大分歧。现在单一权威来源 = 引擎（portfolio_manager）。
+        """
+        sample_data = self._create_sample_backtest_result()
+        engine_sharpe = 1.2345
+        engine_volatility = 0.3333
+        engine_max_drawdown = -0.1234
+        engine_annualized = 0.2222
+        sample_data["sharpe_ratio"] = engine_sharpe
+        sample_data["volatility"] = engine_volatility
+        sample_data["max_drawdown"] = engine_max_drawdown
+        sample_data["annualized_return"] = engine_annualized
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            enhanced_result = loop.run_until_complete(
+                self.adapter.adapt_backtest_result(sample_data)
+            )
+        finally:
+            loop.close()
+
+        risk_metrics = enhanced_result.extended_risk_metrics
+        assert risk_metrics is not None
+        assert risk_metrics.sharpe_ratio == engine_sharpe
+        assert risk_metrics.volatility == engine_volatility
+        assert risk_metrics.max_drawdown == engine_max_drawdown
+        # 派生指标必须用引擎的年化（365 日历天口径），不能再用适配器自算的 252 交易日
+        expected_calmar = (engine_annualized - 0.03) / abs(engine_max_drawdown)
+        assert abs(risk_metrics.calmar_ratio - expected_calmar) < 1e-9
 
     @given(
         num_months=st.integers(min_value=6, max_value=24),
@@ -441,11 +489,38 @@ class TestBacktestDataAdapterProperties:
                 # 而不是复利公式，所以这里不验证复利公式的一致性
                 # 这是因为月度重采样可能导致小的数值差异
 
+        # 回归（2026-11-01）：月度序列必须覆盖**每一个**日历月，不能丢首月。
+        # 原实现 monthly_values.pct_change().dropna() 会把第一个桶丢掉 → 前端热力图
+        # 少首月，且「月度序列复利」与「累计收益」对不上（实测缺口 10.29pp）。
+        distinct_months = {
+            (
+                datetime.fromisoformat(snapshot["date"]).year,
+                datetime.fromisoformat(snapshot["date"]).month,
+            )
+            for snapshot in portfolio_history
+        }
+        assert len(monthly_returns) == len(distinct_months), (
+            f"月度收益条数 {len(monthly_returns)} != 覆盖的日历月数 "
+            f"{len(distinct_months)}（首月被丢弃）"
+        )
+
+        # 回归：月度序列复利必须等于末月累计收益（同一页面上两个数必须自洽）
+        compounded = 1.0
+        for month_data in monthly_returns:
+            compounded *= 1 + month_data.monthly_return
+        assert abs(
+            (compounded - 1) - monthly_returns[-1].cumulative_return
+        ) < 1e-9, (
+            f"月度序列复利 {compounded - 1:.6f} != 末月累计 "
+            f"{monthly_returns[-1].cumulative_return:.6f}"
+        )
+
         # 验证最终累积收益与组合价值的一致性
         # 月度桶按真实日历月聚合，而生成序列用"30 天伪月份"推进，最后一个日度快照
         # 可能落在最后一个完整月桶之后（桶数也可能少于 num_months）。期望值取
-        # 「最后一个月桶所在年月」的最后一个快照，与月度桶同锚点对比——原实现直接
-        # 对比最终快照，尾部天数的收益会混进误差，随机数据下偶发超过 0.05。
+        # 「最后一个月桶所在年月」的最后一个快照，与月度桶同锚点对比。
+        # 口径（2026-11-01 修正）：累计收益的基准是 **t0 初始资金**，与生产实现
+        # 一致 → 两者应逐位相等（原来差第一天的盈亏，且用 0.05 的宽容忍掩盖）。
         last_month = monthly_returns[-1]
         anchor_value = initial_cash
         for snapshot in portfolio_history:
@@ -455,7 +530,7 @@ class TestBacktestDataAdapterProperties:
         expected_final_return = (anchor_value - initial_cash) / initial_cash
 
         return_error = abs(last_month.cumulative_return - expected_final_return)
-        assert return_error < 0.05, f"最终累积收益与组合收益不一致: {return_error}"
+        assert return_error < 1e-9, f"最终累积收益与组合收益不一致: {return_error}"
 
     @given(
         num_stocks=st.integers(min_value=2, max_value=10),
