@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.rone.research-backup</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/rone/Projects/stock-platform/scripts/backup_research_artifacts.sh</string>
+  </array>
+  <!-- 每天 22:30 把研究产物备份到外接 SSD 并做指纹校验（**独立兜底**）。
+       为什么必须有排期（2026-11-02）：
+         1. data/ 被 .gitignore（.gitignore:296）→ 指纹清单 110 个产物里 108 个**不在 git**
+         2. 本机 Time Machine 失效（tmutil latestbackup → "Failed to mount destination"）
+         3. data/backtest = P1~P18 全部结论的**唯一原始证据**
+       → 没有排期 = 副本只在我"记得跑"时更新 = 平时实际没有副本。
+
+       为什么是 22:30 而不是更早：Hermes cron 在 **21:30** 跑同一条备份（主排期，
+       能把结果回报给用户）；本 job 是**网关/机器状态异常时的兜底**，错开 1 小时，
+       两者用同一把 mkdir 锁（runtime/backup.lock）互斥 → 不会并发写同一副本。
+
+       为什么盘要在运行期插着才有用：未挂载时脚本明确报错 rc=2，不做半吊子备份。
+
+       幂等：rsync -a --delete 只传差异；重复跑安全。
+       失败可见：脚本内部先 rsync、再指纹校验，任一步失败都非零退出；
+       外接盘未挂载 → rc=2 且日志里写明"研究产物目前无副本"。 -->
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict>
+      <key>Hour</key><integer>22</integer>
+      <key>Minute</key><integer>30</integer>
+    </dict>
+  </array>
+  <key>RunAtLoad</key>
+  <false/>
+  <key>StandardOutPath</key>
+  <string>/Users/rone/Projects/stock-platform/runtime/logs/research_backup_launchd.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/rone/Projects/stock-platform/runtime/logs/research_backup_launchd.err.log</string>
+  <key>ProcessType</key>
+  <string>Background</string>
+</dict>
+</plist>
