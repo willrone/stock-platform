@@ -1911,3 +1911,61 @@ line 46 那条才是真雷：TDX/网络抖一下 → 周一 17:40 的排期跑�
 - **备份脚本必须自带校验 + 失败即非零退出**，否则"备份成功"只是一行日志。
 - **"106 个不符"的第一反应应是怀疑自己**：指纹算法是清单定义的一部分，
   复制一份算法 = 复制一份会漂移的 bug；正确解是 import 同一实现。
+
+## 12.28 性质测试的"假绿"与"空覆盖"：断言被 except 吞成 skip + CI-only 兜底模型（2026-11-02）
+
+### A. 发现（来自一条迟到的全量单测回执里的 `SKIPPED [1]`）
+
+回执本身大部分是旧信息（两条 FAILED 已被 §12.26 的 `bf12dca0` 修掉），但那条
+`SKIPPED [1] 置信区间测试跳过: 模型加载失败: 模型信息不存在: test_model` 挖出两个缺陷：
+
+| # | 缺陷 | 位置 | 后果 |
+|---|---|---|---|
+| 1 | **断言被 `except Exception` 吞成 skip** | `tests/unit/prediction/test_prediction_engine_properties.py` 4 处 + `tests/unit/models/test_qlib_optimizations.py` 1 处 | try 包住了断言 → `AssertionError` 被当成"环境问题"跳过 → **性质被违反时套件仍报绿（假绿）** |
+| 2 | **性质从未被执行（空覆盖）** | 同上 | 引擎的兜底模型只在 `GITHUB_ACTIONS=true` 时启用（`prediction_engine.py:118-123`）→ 本地 `model_id="test_model"` 必抛"模型信息不存在" → 4 个性质测试在本地**永远跳过** |
+
+**缺陷 1 的机理**：`pytest.skip()` 抛的是 `Skipped`（`BaseException` 子类）→ 逃得出
+`except Exception`；但 **`AssertionError` 是 `Exception`** → 会被吞成 skip。于是
+`assert lower <= predicted_price <= upper` 这类**性质断言失败**的表现是"跳过"而不是"失败"，
+套件照样绿。
+
+**缺陷 2 的机理**：fixture 只造了样本数据、没造模型；模型又只在 CI 环境变量下才有兜底 →
+"本地绿"与"CI 绿"覆盖的是**不同的代码路径** → 本地的性质测试一直在空跑。
+
+### B. 修法
+
+1. **try 只包"可能因环境失败的调用"，断言一律移到 try 之外**（5 处）；加
+   `assert x is not None` 哨兵消掉 Pyright 的 `possibly unbound`。
+2. **fixture 复用引擎自己的兜底模型**：`model_loader._create_fallback_model("test_model")`
+   → 它把模型与带 `feature_columns` 的 metadata 写进 loader 缓存 → 本地与 CI 走**同一条**
+   预测路径。引擎对缺失特征列会用 0 填充并按训练顺序对齐（`_execute_prediction`）→
+   兜底模型可直接用，无需训练。
+3. `config.confidence_levels` 显式收窄（`levels is not None`），类型检查与运行期同时成立。
+
+### C. 验证
+
+| 项 | 修前 | 修后 |
+|---|---|---|
+| `test_prediction_engine_properties.py` | 8 项：7 passed + **1 skipped** | **8 passed**（0 skip） |
+| 全量 `tests/unit` | 1 skipped（性质空跑） | **735 passed, 0 skipped, 0 failed**，RC=0（230s） |
+| 故意失败的探针（放一个必失败用例） | — | **RC=1 + `FAILED` 行正常上报** → 确认没有假绿 |
+
+### D. 顺带查清：`-q` 叠加吃掉汇总行（**不是仓库的锅**）
+
+现象：多次全量运行里 pytest 最终计数行（"N passed in Xs"）消失，只剩 RC=0 与全点进度行。
+二分过程：仓库 `pyproject.toml` 的 `addopts` 里**已经含 `-q`**，我再在命令行加一个 `-q`
+→ 变成 `-qq`（双静默）→ pytest 不打印最终计数行。用最小 ini 逐项复现 → 定位到 `-q` 叠加。
+
+影响：**仅影响人类可读的计数行**，不影响退出码与失败上报（故意失败的探针证明：RC=1 + `FAILED` 正常）。
+教训：**先怀疑自己的调用方式**，不要急着改仓库配置。
+（附带小发现：`norecursedirs` 是**覆盖**默认值而非追加 → `.hypothesis` 目录不再被忽略，
+hypothesis 插件每次告警。无害，但值得知道。）
+
+### E. 教训
+
+- **"跳过"不等于"通过"**：一条 skip 能把整个性质测试藏起来（空覆盖）；断言被
+  `except` 吞成 skip 则是更隐蔽的假绿。skip 是合法的第三种状态，但**只能覆盖环境性失败**。
+- 守卫网要同时检查两件事：**断言是否真的被执行过**，以及**失败是否真的变红**。
+- 判据：`except Exception` 里只允许包"调用"，**不允许包"断言"**（`AssertionError` 是 `Exception` → 会被吞）。
+- 环境开关（`GITHUB_ACTIONS`）会让本地与 CI 覆盖不同代码路径 → 性质测试必须**两端都能跑**，
+  否则本地永远在空跑，而"本地全绿"是假象。
