@@ -120,7 +120,17 @@ def Jopt(name):
 
 ART['p18m'] = Jopt('multi_asset_p18_main.json')
 ART['p18o'] = Jopt('multi_asset_p18_oos.json')
-P18_READY = bool(ART['p18m']) and bool(ART['p18o'])
+# ⚠️ 2026-11-01 修正：原门控是 `p18m and p18o`（**and**）→ oos 产物按预注册
+# 故意不产出时，**整个 P18 断言段永远被跳过**，P18 文档的数字一条都没被审过。
+# 正确语义：P18 的判决**只依赖 main 阶段**（判据 (a) 在 main 上就能定），
+# oos 产物缺席时那些 oos 专属断言应「不存在」，而不是「整段不审」。
+P18_MAIN_READY = bool(ART['p18m'])
+P18DOC = 'P18_FUSE_GBM'
+P18_OOS_READY = bool(ART['p18m']) and bool(ART['p18o'])
+# 兼容旧名（外部脚本可能引用）
+P18_READY = P18_MAIN_READY
+# P18 的融合权重网格（来自产物 prereg，不硬编码）
+W18_LIST = ART['p18m'].get('prereg', {}).get('w_gbms', [0.10, 0.20, 0.30, 0.50]) if P18_MAIN_READY else []
 
 
 def safe_dig(art, path):
@@ -992,6 +1002,84 @@ def build_anchors():
                        ('中位数', 'median_alpha_sharpe'), ('最小值', 'min_alpha_sharpe'),
                        ('最大值', 'max_alpha_sharpe'), ('标准差', 'stdev_alpha_sharpe')):
         A.append((P11DOC, '统计量', _row, 'α夏普(等权买入持有)', ('j', 'p11s', _fld)))
+
+    # ── P18：42f+gbm 分数级融合 ──
+    # 表定位用**行标签**（('row', 行标签)）而非表序号：P18 文档未来插表不会让锚点失效
+    # （P17 教训：插表 → 表序号位移 → 锚点必须手工同步改）。
+    # 同一个行标签可能出现在多张表 → 定位时再用**列名**筛一次（见 check()）。
+    if P18_MAIN_READY:
+        _DIAGROW = "('2023-05-08 00:00:00', '2026-05-08 00:00:00')"
+        # §二 诊断表：正交性（否决前置）
+        A.append((P18DOC, ('row', _DIAGROW), _DIAGROW, '可算天数',
+                  ('j', 'p18m', ['diagnostics', _DIAGROW, 'n_days'])))
+        A.append((P18DOC, ('row', _DIAGROW), _DIAGROW, 'Pearson 中位',
+                  ('j', 'p18m', ['diagnostics', _DIAGROW, 'pearson_median'])))
+        A.append((P18DOC, ('row', _DIAGROW), _DIAGROW, 'Spearman 中位',
+                  ('j', 'p18m', ['diagnostics', _DIAGROW, 'spearman_median'])))
+        A.append((P18DOC, ('row', _DIAGROW), _DIAGROW, 'gbm 覆盖率中位',
+                  ('j', 'p18m', ['diagnostics', _DIAGROW, 'gbm_coverage_median'])))
+        # §三 复现门表：orig42f 与 fuse_w0.00 必须逐位一致
+        for _arm, _lab in (('orig42f', '`orig42f`（原始 42f 分数）'),
+                           ('fuse_w0.00', '`fuse_w0.00`（z 化后，w=0）')):
+            A.append((P18DOC, ('row', _lab), _lab, '组合夏普',
+                      ('j', 'p18m', ['results', _arm, 'combined_sharpe'])))
+            A.append((P18DOC, ('row', _lab), _lab, 'A腿夏普',
+                      ('j', 'p18m', ['results', _arm, 'a_share_sharpe'])))
+            A.append((P18DOC, ('row', _lab), _lab, '交易笔数',
+                      ('j', 'p18m', ['results', _arm, 'total_trades'])))
+        # §四 规则臂结果表
+        for _w in W18_LIST:
+            _arm = f'fuse_w{_w:.2f}'
+            _lab = f'`{_arm}`'
+            A.append((P18DOC, ('row', _lab), _lab, '组合夏普',
+                      ('j', 'p18m', ['results', _arm, 'combined_sharpe'])))
+            A.append((P18DOC, ('row', _lab), _lab, 'A腿夏普',
+                      ('j', 'p18m', ['results', _arm, 'a_share_sharpe'])))
+            A.append((P18DOC, ('row', _lab), _lab, '组合波动',
+                      ('j', 'p18m', ['results', _arm, 'combined_vol'])))
+            A.append((P18DOC, ('row', _lab), _lab, '笔数',
+                      ('j', 'p18m', ['results', _arm, 'total_trades'])))
+            A.append((P18DOC, ('row', _lab), _lab, 'Δ组合',
+                      ('p18deltabase', 'p18m', _w)))
+            A.append((P18DOC, ('row', _lab), _lab, 'placebo 最高',
+                      ('p18plcmax', 'p18m', _w)))
+            A.append((P18DOC, ('row', _lab), _lab, '滚动胜率',
+                      ('j', 'p18m', ['criteria', _arm, 'rolling', 'win_rate'])))
+        # §五 placebo 对照表
+        for _w in W18_LIST:
+            _rowlab = f'{_w:.2f}'
+            A.append((P18DOC, ('row', _rowlab), _rowlab, '规则臂组合夏普',
+                      ('j', 'p18m', ['results', f'fuse_w{_w:.2f}', 'combined_sharpe'])))
+            A.append((P18DOC, ('row', _rowlab), _rowlab, 'placebo 最低',
+                      ('p18plcmin', 'p18m', _w)))
+            A.append((P18DOC, ('row', _rowlab), _rowlab, 'placebo 最高',
+                      ('p18plcmax', 'p18m', _w)))
+            A.append((P18DOC, ('row', _rowlab), _rowlab, 'placebo 均值',
+                      ('p18plcmean', 'p18m', _w)))
+            A.append((P18DOC, ('row', _rowlab), _rowlab, '规则 − placebo 最高',
+                      ('p18delta', 'p18m', _w)))
+        # §六 机制分解表
+        for _w in W18_LIST:
+            _rowlab = f'{_w:.2f}'
+            A.append((P18DOC, ('row', _rowlab), _rowlab, '真实夏普',
+                      ('j', 'p18m', ['results', f'fuse_w{_w:.2f}', 'combined_sharpe'])))
+            A.append((P18DOC, ('row', _rowlab), _rowlab, '真实波动',
+                      ('j', 'p18m', ['results', f'fuse_w{_w:.2f}', 'combined_vol'])))
+            A.append((P18DOC, ('row', _rowlab), _rowlab, 'placebo 波动',
+                      ('p18plcvolmean', 'p18m', _w)))
+            A.append((P18DOC, ('row', _rowlab), _rowlab, 'Δ波动',
+                      ('p18delta_vol', 'p18m', _w)))
+            A.append((P18DOC, ('row', _rowlab), _rowlab, 'Δ夏普',
+                      ('p18delta_real_vs_plcmean', 'p18m', _w)))
+        # §六 年度分解表（基线 + 4 个真实臂的逐年收益）
+        for _yr in ('2023', '2024', '2025', '2026'):
+            A.append((P18DOC, ('row', '**基线 `fuse_w0.00`**'), '**基线 `fuse_w0.00`**', _yr,
+                      ('p18year', 'p18m', 'fuse_w0.00', _yr)))
+            for _w in W18_LIST:
+                _arm = f'fuse_w{_w:.2f}'
+                _lab = f'真实 `{_arm}`'
+                A.append((P18DOC, ('row', _lab), _lab, _yr,
+                          ('p18year', 'p18m', _arm, _yr)))
     return A
 
 
@@ -1034,6 +1122,18 @@ def build_crit_anchors():
     for _key, _lab in P12_CRIT:
         A.append(('P12_ALPHA_WEIGHT', 13, _lab, 'main', ('p12crit', 'main', _key)))
         A.append(('P12_ALPHA_WEIGHT', 13, _lab, 'oos', ('p12crit', 'oos', _key)))
+    # P18 §七 判据汇总表：main/oos 两列都从产物回读
+    # （P18 的 oos 按预注册不跑 → oos 列必须是「不跑（按预注册）」，
+    #   不是空白、也不是 ❌ —— 空着会让人以为是漏填）
+    if P18_MAIN_READY:
+        for _lab, _key in (('(a) main 组合夏普', 'a_main_combined_ge_base_plus_0.05'),
+                           ('(c) 胜 placebo', 'c_beats_placebo'),
+                           ('(d) 滚动 504 日夏普胜率', 'd_rolling_win_rate_ge_0.60')):
+            A.append((P18DOC, ('row', _lab), _lab, 'main 结果',
+                      ('p18crit', 'main', _key)))
+            A.append((P18DOC, ('row', _lab), _lab, 'oos 结果',
+                      ('p18crit_oos_na', _key)))
+        # (e) DSR 是**数值**报告项（不是符号）→ 走数值锚点，见 build_anchors
     return A
 
 
@@ -1046,6 +1146,19 @@ def resolve_text(spec):
 
 def resolve_crit(spec):
     """判据符号：产物 True→✅ / False→❌ / None→—"""
+    if spec[0] == 'p18crit':
+        # P18：候选臂（main 上组合夏普最高的规则臂）的判据布尔
+        # 文档格格式是 '✅ True' / '❌ False' / '—'（与 P12 的纯符号不同）
+        cand = dig(ART['p18m'], ['verdict', 'candidate_main_best_rule_arm'])
+        v = dig(ART['p18m'], ['criteria', cand, spec[2]])
+        return '✅ True' if v is True else ('—' if v is None else '❌ False')
+    if spec[0] == 'p18crit_oos_na':
+        # P18：oos 未跑时该列必须是明确的占位符，不能是空白
+        if not P18_OOS_READY:
+            return '不跑（按预注册）'
+        cand = dig(ART['p18m'], ['verdict', 'candidate_main_best_rule_arm'])
+        v = dig(ART['p18o'], ['criteria', cand, spec[1]])
+        return '✅ True' if v is True else ('—' if v is None else '❌ False')
     v = dig(ART['p12d'], ['diagnostics', 'F_final_criteria', 'table', spec[1], spec[2]])
     return '✅' if v is True else ('—' if v is None else '❌')
 
@@ -1064,6 +1177,17 @@ def check_crit_cells(texts, anchors):
             problems.append(f'{doc_pref}: 文档不存在')
             continue
         tables = extract_tables(texts[doc])
+        if isinstance(tidx, tuple) and tidx and tidx[0] == 'row':
+            cands = [i for i, (h, rows) in enumerate(tables)
+                     if any(r and norm(r[0]) == norm(tidx[1]) for r in rows)]
+            cands2 = [i for i in cands
+                      if any(norm(c) == norm(col_hdr) for c in tables[i][0])]
+            if cands2:
+                cands = cands2
+            if not cands:
+                problems.append(f'{doc}: 找不到含行「{tidx[1]}」的表')
+                continue
+            tidx = cands[0]
         if tidx >= len(tables):
             problems.append(f'{doc}: 表序号 {tidx} 越界（共 {len(tables)} 张表）')
             continue
@@ -1074,6 +1198,7 @@ def check_crit_cells(texts, anchors):
             continue
         want = resolve_crit(spec)
         got = norm(cell)
+        want = norm(want)
         if got != want:
             problems.append(
                 f'{doc}[表{tidx}] 「{row_label}」×「{col_hdr}」= {got!r}，'
@@ -1226,7 +1351,7 @@ def resolve(spec):
         # L3 产物里某族（mom_/random_）所有 combined_sharpe 的均值
         art, fam = spec[1], spec[2]
         pre = 'mom_' if fam == 'mom' else 'random_'
-        vals = [dig(ART[art], f'results.{k}.combined_sharpe')
+        vals = [dig(ART[art], ['results', k, 'combined_sharpe'])
                 for k in ART[art]['results'] if k.startswith(pre)]
         return sum(vals) / len(vals)
     if spec[0] == 'l3_delta':
@@ -1442,6 +1567,72 @@ def resolve(spec):
         # 定稿三类下 α 夏普（国证A指）main/oos 的值
         art = 'p12m' if spec[1] == 'main' else 'p12o'
         return dig(ART[art], ['results', 'w050', 'alpha_sharpe_IDX_399317'])
+    if spec[0] == 'p18deltabase':
+        # P18：某臂组合夏普 − 基线（fuse_w0.00）组合夏普
+        art, w = spec[1], spec[2]
+        return dig(ART[art], ['criteria', f'fuse_w{w:.2f}', 'delta_combined'])
+    if spec[0] == 'p18plcmax':
+        # P18：某 w 下 placebo 臂组合夏普的最大值
+        art, w = spec[1], spec[2]
+        vals = [dig(ART[art], ['results', k, 'combined_sharpe'])
+                for k in ART[art]['results'] if k.startswith(f'plc_w{w:.2f}_s')]
+        return max(vals)
+    if spec[0] == 'p18plcmin':
+        # P18：某 w 下 placebo 臂组合夏普的最小值
+        art, w = spec[1], spec[2]
+        vals = [dig(ART[art], ['results', k, 'combined_sharpe'])
+                for k in ART[art]['results'] if k.startswith(f'plc_w{w:.2f}_s')]
+        return min(vals)
+    if spec[0] == 'p18plcmean':
+        # P18：某 w 下 placebo 臂组合夏普的均值
+        art, w = spec[1], spec[2]
+        vals = [dig(ART[art], ['results', k, 'combined_sharpe'])
+                for k in ART[art]['results'] if k.startswith(f'plc_w{w:.2f}_s')]
+        return sum(vals) / len(vals)
+    if spec[0] == 'p18plcvolmean':
+        # P18：某 w 下 placebo 臂组合波动的均值
+        art, w = spec[1], spec[2]
+        vals = [dig(ART[art], ['results', k, 'combined_vol'])
+                for k in ART[art]['results'] if k.startswith(f'plc_w{w:.2f}_s')]
+        return sum(vals) / len(vals)
+    if spec[0] == 'p18plcretmean':
+        # P18：某 w 下 placebo 臂组合收益的均值
+        art, w = spec[1], spec[2]
+        vals = [dig(ART[art], ['results', k, 'combined_return'])
+                for k in ART[art]['results'] if k.startswith(f'plc_w{w:.2f}_s')]
+        return sum(vals) / len(vals)
+    if spec[0] == 'p18delta':
+        # P18：某 w 下「规则臂夏普 − 同参数 placebo 最高夏普」
+        art, w = spec[1], spec[2]
+        rule = dig(ART[art], ['results', f'fuse_w{w:.2f}', 'combined_sharpe'])
+        vals = [dig(ART[art], ['results', k, 'combined_sharpe'])
+                for k in ART[art]['results'] if k.startswith(f'plc_w{w:.2f}_s')]
+        return rule - max(vals)
+    if spec[0] == 'p18delta_real_vs_plcmean':
+        # P18：真实臂夏普 − 同参数 placebo 平均夏普
+        art, w = spec[1], spec[2]
+        rule = dig(ART[art], ['results', f'fuse_w{w:.2f}', 'combined_sharpe'])
+        vals = [dig(ART[art], ['results', k, 'combined_sharpe'])
+                for k in ART[art]['results'] if k.startswith(f'plc_w{w:.2f}_s')]
+        return rule - sum(vals) / len(vals)
+    if spec[0] == 'p18delta_vol':
+        # P18：真实臂波动 − 同参数 placebo 平均波动
+        art, w = spec[1], spec[2]
+        rule = dig(ART[art], ['results', f'fuse_w{w:.2f}', 'combined_vol'])
+        vals = [dig(ART[art], ['results', k, 'combined_vol'])
+                for k in ART[art]['results'] if k.startswith(f'plc_w{w:.2f}_s')]
+        return rule - sum(vals) / len(vals)
+    if spec[0] == 'p18delta_ret':
+        # P18：真实臂收益 − 同参数 placebo 平均收益（文档按 pp 展示）
+        art, w = spec[1], spec[2]
+        rule = dig(ART[art], ['results', f'fuse_w{w:.2f}', 'combined_return'])
+        vals = [dig(ART[art], ['results', k, 'combined_return'])
+                for k in ART[art]['results'] if k.startswith(f'plc_w{w:.2f}_s')]
+        return (rule - sum(vals) / len(vals)) * 100
+    if spec[0] == 'p18year':
+        # P18：某臂某年组合收益（文档按百分比展示）
+        art, lab, yr = spec[1], spec[2], spec[3]
+        return dig(ART[art], ['results', lab, 'combined_yearly', yr])
     return dig(ART[spec[1]], spec[2])
 
 
@@ -1457,25 +1648,45 @@ def check(texts, anchors):
             problems.append(f'{doc_pref}: 文档不存在')
             continue
         tables = extract_tables(texts[doc])
-        if isinstance(tidx, str):
+        # 用局部变量 ti 承载解析后的表序号（避免与锚点里的原始形态混用类型）
+        ti = a[1]
+        if isinstance(ti, tuple) and ti and ti[0] == 'row':
+            # 按**行标签**定位表：插表导致表序号位移时仍然稳（P17 教训：
+            # 「往文档插新表会让后面表序号位移」→ 表序号锚点必须同步改，
+            #  行标签锚点不用）。ti = ('row', 行标签, 列名)
+            cands = [i for i, (h, rows) in enumerate(tables)
+                     if any(r and norm(r[0]) == norm(ti[1]) for r in rows)]
+            # 同一个行标签可能出现在多张表（如 P18 的 '0.10' 同时在 placebo 表和机制表）：
+            # 用**列名**再筛一次，选出真正含该列的表。
+            cands2 = [i for i in cands
+                      if any(norm(c) == norm(col_hdr) for c in tables[i][0])]
+            if cands2:
+                cands = cands2
+            if not cands:
+                problems.append(f'{doc}: 找不到含行「{ti[1]}」的表')
+                continue
+            ti = cands[0]
+        elif isinstance(ti, str):
             # 按表头关键字定位表
             cands = [i for i, (h, _) in enumerate(tables)
                      if any(norm(col_hdr) == norm(c) for c in h)]
             if not cands:
                 problems.append(f'{doc}: 找不到含列「{col_hdr}」的表')
                 continue
-            tidx = cands[0]
-        if tidx >= len(tables):
-            problems.append(f'{doc}: 表序号 {tidx} 越界（共 {len(tables)} 张表）')
+            ti = cands[0]
+        else:
+            ti = int(ti)
+        if ti >= len(tables):
+            problems.append(f'{doc}: 表序号 {ti} 越界（共 {len(tables)} 张表）')
             continue
-        header, data = tables[tidx]
+        header, data = tables[ti]
         cell, err = find_cell(header, data, row_label, col_hdr)
         if err:
-            problems.append(f'{doc}[表{tidx}] {err}')
+            problems.append(f'{doc}[表{ti}] {err}')
             continue
         nums = cell_num_positions(cell)
         if not nums:
-            problems.append(f'{doc}[表{tidx}] 「{row_label}」×「{col_hdr}」不是数字：{cell!r}')
+            problems.append(f'{doc}[表{ti}] 「{row_label}」×「{col_hdr}」不是数字：{cell!r}')
             continue
         want = resolve(spec)
         # 锚点可带第 6 位：复合格里要核对**第 N 个**数字（默认第 0 个）
@@ -1485,7 +1696,7 @@ def check(texts, anchors):
             got = nums[0][0]
             kind = '百分比格' if (len(nums) == 1 and '%' in cell) else '数值/复合格'
             problems.append(
-                f'{doc}[表{tidx}] 「{row_label}」×「{col_hdr}」= {got}（{kind}），'
+                f'{doc}[表{ti}] 「{row_label}」×「{col_hdr}」= {got}（{kind}），'
                 f'产物 = {want}（×100={want*100:.4f}）')
     return problems
 
@@ -1881,9 +2092,11 @@ def build_prose_anchors():
 
     # ── P18：42f 之上叠加 gbm 增量（分数级融合）──
     # 用**正文正则**定位（表序号定位在插表后会全乱，见 P17 的教训）。
-    # 产物未跑齐时（P18_READY=False）整段跳过，不让审计器误报。
-    if P18_READY:
-        P18 = 'P18_FUSE_GBM'
+    # ⚠️ 门控语义（2026-11-01 修正）：main 断言只要 main 产物存在就执行；
+    # oos 断言只在 oos 产物存在时执行。原实现用 `and` 把整段一起跳过
+    # → P18 文档数字长期无人审计。
+    P18 = 'P18_FUSE_GBM'
+    if P18_MAIN_READY:
         A.append((P18, r'同日截面相关中位数 = \*\*(?P<g1>\d+(?:\.\d+)?)\*\*',
                   ('multi', ('p18_corr', 'main'))))
         A.append((P18, r'复现门：orig42f 组合夏普 = \*\*(?P<g1>\d+(?:\.\d+)?)\*\*，'
@@ -1895,6 +2108,7 @@ def build_prose_anchors():
                   ('multi', ('p18_cand', 'main'), ('p18_base', 'main'))))
         A.append((P18, r'Δ组合（main）= \*\*(?P<g1>[+-]?\d+(?:\.\d+)?)\*\*',
                   ('multi', ('p18_delta', 'main'))))
+    if P18_OOS_READY:
         A.append((P18, r'候选臂 oos 组合夏普 = \*\*(?P<g1>\d+(?:\.\d+)?)\*\*，'
                         r'oos 基线 = \*\*(?P<g2>\d+(?:\.\d+)?)\*\*',
                   ('multi', ('p18_cand', 'oos'), ('p18_base', 'oos'))))
@@ -1902,6 +2116,10 @@ def build_prose_anchors():
                   ('multi', ('p18_delta', 'oos'))))
         A.append((P18, r'DSR（报告项）= \*\*(?P<g1>\d\.\d+)\*\* / 门槛 (?P<g2>\d+(?:\.\d+)?)',
                   ('multi', ('p18_dsr', 'oos'), ('p18_dsr_thr', 'oos'))))
+    elif P18_MAIN_READY:
+        # oos 不跑时，DSR 报告项在 §八 用 main 阶段的值列出（main 产物里有）
+        A.append((P18, r'DSR（报告项）= \*\*(?P<g1>\d\.\d+)\*\* / 门槛 (?P<g2>\d+(?:\.\d+)?)',
+                  ('multi', ('p18_dsr', 'main'), ('p18_dsr_thr', 'main'))))
     return A
 
 
@@ -2113,7 +2331,18 @@ def main():
                 continue
             try:
                 tables = extract_tables(texts[doc])
-                if isinstance(tidx, str):
+                if isinstance(tidx, tuple) and tidx and tidx[0] == 'row':
+                    # 行标签定位（与 check() 同语义）：先用行标签筛，再用列名筛
+                    cands = [i for i, (h, rows) in enumerate(tables)
+                             if any(r and norm(r[0]) == norm(tidx[1]) for r in rows)]
+                    cands2 = [i for i in cands
+                              if any(norm(c) == norm(col_hdr) for c in tables[i][0])]
+                    if cands2:
+                        cands = cands2
+                    if not cands:
+                        continue
+                    tidx = cands[0]
+                elif isinstance(tidx, str):
                     cands = [i for i, (h, _) in enumerate(tables)
                              if any(norm(col_hdr) == norm(c) for c in h)]
                     if not cands:
@@ -2270,6 +2499,142 @@ def main():
         for p in cp2[:5]:
             print(f'      {p}')
         neg_ok = neg_ok and len(cp2) > 0
+
+        # ── 逐锚点穷举自检 ───────────────────────────────────────────
+        # 上面的注入是「每文档一处」，只能证明「这个文档被抓到」，
+        # 不能证明**每一条锚点都真的生效**（写错行列 → 静默不比对 → 绿灯）。
+        # 这里对每一条锚点单独注入一次，逐条确认审计失败。
+        # 代价 = O(锚点数 × 文档解析)，只在 --neg 下跑。
+        print()
+        print('=' * 78)
+        print('逐锚点穷举自检：每条锚点单独注入 → 必须逐条失败')
+        print('=' * 78)
+        miss_anchor, ok_anchor, skipped = [], 0, []
+        for a in anchors:
+            doc_pref, tidx, row_label, col_hdr, spec = a[0], a[1], a[2], a[3], a[4]
+            doc = next((k for k in texts if k.startswith(doc_pref)), None)
+            if not doc:
+                skipped.append((doc_pref, row_label, col_hdr, '文档缺失'))
+                continue
+            try:
+                tables = extract_tables(texts[doc])
+                if isinstance(tidx, tuple) and tidx and tidx[0] == 'row':
+                    cands = [i for i, (h, rows) in enumerate(tables)
+                             if any(r and norm(r[0]) == norm(tidx[1]) for r in rows)]
+                    cands2 = [i for i in cands
+                              if any(norm(c) == norm(col_hdr) for c in tables[i][0])]
+                    if cands2:
+                        cands = cands2
+                    if not cands:
+                        skipped.append((doc_pref, row_label, col_hdr, '无此行'))
+                        continue
+                    tidx = cands[0]
+                elif isinstance(tidx, str):
+                    cands = [i for i, (h, _) in enumerate(tables)
+                             if any(norm(col_hdr) == norm(c) for c in h)]
+                    if not cands:
+                        skipped.append((doc_pref, row_label, col_hdr, '无此列'))
+                        continue
+                    tidx = cands[0]
+                if tidx >= len(tables):
+                    skipped.append((doc_pref, row_label, col_hdr, '表越界'))
+                    continue
+                header, data = tables[tidx]
+                cell, err = find_cell(header, data, row_label, col_hdr)
+                if err or cell is None:
+                    skipped.append((doc_pref, row_label, col_hdr, err or '无格'))
+                    continue
+                # **按 (行, 列) 索引定位**，不能按文本找：
+                # 同一行里两列可能文本完全相同（如 P2 的「样本外」与「较差窗口」
+                # 都可能是 0.8722）→ 按文本找会改错列 → 该锚点看起来「抓不到」。
+                hi = [norm(c) for c in header]
+                ci = next((k for k, c in enumerate(hi) if c == norm(col_hdr)), None)
+                # 行键可能是元组（前 N 列依次匹配），语义与 find_cell 一致
+                if isinstance(row_label, (tuple, list)):
+                    wcols = [norm(x) for x in row_label]
+                    nk = len(wcols)
+                else:
+                    wcols = [norm(row_label)]
+                    nk = 1
+                ri = None
+                for k, r in enumerate(data):
+                    if not r or len(r) < nk:
+                        continue
+                    if nk == 1:
+                        if norm(r[0]) == wcols[0]:
+                            ri = k
+                            break
+                    else:
+                        if norm(r[0]).startswith(wcols[0]) and all(
+                                norm(r[i]) == wcols[i] for i in range(1, nk)):
+                            ri = k
+                            break
+                if ci is None or ri is None:
+                    skipped.append((doc_pref, row_label, col_hdr, '行列索引定位失败'))
+                    continue
+                cell = data[ri][ci]
+                nums = cell_num_positions(cell)
+                if not nums:
+                    skipped.append((doc_pref, row_label, col_hdr, '格内无数字'))
+                    continue
+                # 复合格里可能有多个数字，锚点可能对应第 idx 个 →
+                # 逐个位置注入，只要**任一**位置能破坏该锚点就算这条锚点有效。
+                # （只注入第 0 个会误判：锚点盯的是第 1 个数字时，第 0 个坏了也照样通过。）
+                variants = []
+                for n, s, e in nums:
+                    bad = cell[:s] + f"{n + 0.5:.4f}" + cell[e:]
+                    if bad != cell:
+                        variants.append((n, s, e, bad))
+                if not variants:
+                    skipped.append((doc_pref, row_label, col_hdr, '注入值相同'))
+                    continue
+                old_row = data[ri][ci]
+                # 找到对应 markdown 行：表 tidx 的第 (ri+2) 行（+1 表头 +1 分隔行）
+                lines6 = texts[doc].splitlines(keepends=True)
+                tbl_lines = []
+                cur = []
+                for ln in lines6:
+                    if ln.strip().startswith('|'):
+                        cur.append(ln)
+                    else:
+                        if len(cur) >= 2:
+                            tbl_lines.append(cur)
+                        cur = []
+                if len(cur) >= 2:
+                    tbl_lines.append(cur)
+                if tidx >= len(tbl_lines):
+                    skipped.append((doc_pref, row_label, col_hdr, '表行定位失败'))
+                    continue
+                raw = tbl_lines[tidx][ri + 2]  # +1 表头 +1 分隔行
+                broke = False
+                for n, s, e, bad in variants:
+                    new_row = old_row[:s] + f"{n + 0.5:.4f}" + old_row[e:]
+                    cells = raw.split('|')
+                    cells[ci + 1] = new_row
+                    new_raw = '|'.join(cells)
+                    t6 = dict(texts)
+                    t6[doc] = t6[doc].replace(raw, new_raw, 1)
+                    if check(t6, [a]):
+                        broke = True
+                        break
+                if broke:
+                    ok_anchor += 1
+                else:
+                    miss_anchor.append((doc_pref, row_label, col_hdr))
+            except Exception as ex:
+                skipped.append((doc_pref, row_label, col_hdr, f'异常:{ex}'))
+        print(f'  可注入锚点：{ok_anchor + len(miss_anchor)}，抓��成功：{ok_anchor}，漏抓：{len(miss_anchor)}')
+        if miss_anchor:
+            print('  ❌ 漏抓锚点（前 15 条）：')
+            for m in miss_anchor[:15]:
+                print(f'      {m[0]} 「{str(m[1])[:24]}」×「{str(m[2])[:16]}」')
+        if skipped:
+            print(f'  ℹ️  跳过（该格不含可注入数字等）：{len(skipped)} 条')
+            for sk in skipped[:8]:
+                print(f'      {sk[0]} 「{str(sk[1])[:20]}」×「{str(sk[2])[:14]}」 {sk[3]}')
+        all_ok = neg_ok and not miss_anchor
+        print(f'  逐锚点自检：{"✅ 全部锚点可被破坏并抓到" if not miss_anchor else "❌ 有锚点形同虚设"}')
+        neg_ok = all_ok
         print(f'  自检结论：{"✅ 审计能抓到注入的错误" if neg_ok else "❌ 审计有漏洞"}')
         print('  （动态注入不落盘，文档未被修改）')
         if not neg_ok:

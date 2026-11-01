@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-11-01T07:00:25",
-  "git_commit": "86874aa5",
+  "generated_at": "2026-11-01T11:41:01",
+  "git_commit": "3b893e3a",
   "data_dir": "data/backtest",
   "sha256_mode": "normalized-json-v1",
   "sha256_excludes": [
@@ -293,8 +293,9 @@
       "mtime": "2026-11-01T04:19:58"
     }
   },
-  "missing": [
-    "multi_asset_p18_oos.json"
-  ],
+  "missing": [],
+  "expected_missing": {
+    "multi_asset_p18_oos.json": "P18 main 被判据(a)否决，按预注册 §10.2/§11.6 不跑 oos"
+  },
   "uncovered_audited": []
 }

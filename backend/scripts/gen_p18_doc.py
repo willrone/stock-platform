@@ -76,9 +76,24 @@ def build() -> str:
     cand = rule_m[0] if rule_m else None
 
     # ── 一句话结论（措辞由判据结果决定）──
+    # ⚠️ 2026-11-01 修正：原逻辑只看「oos 产物在不在」，于是 main 已判否、
+    # 按预注册 §10.2/§11.6 **故意不跑 oos** 时，文档却写「未定 / 需 oos 阶段产物」
+    # —— 与台账 §11「P18 否决 → 换源线封线」**直接矛盾**，且给读者一个
+    # 「还欠一次 oos 才能定论」的错误印象。
+    # 正确语义：**判决由 main 阶段的预注册判据 (a)(c)(d) 就能定**
+    # —— (a) 判否（Δ = −0.032 < +0.05）即已否决，按 §10.2「main 通过后才跑 oos」
+    # → oos 无需跑（跑了只会制造分叉路径）→ 结论 = **否决**。
+    a_ok = crit_m.get(cand, {}).get("a_main_combined_ge_base_plus_0.05") if cand else None
     if PO is None:
-        head = ("**main 窗口已跑完，oos 窗口待跑** —— 本文档的最终判定需要 oos 阶段，"
-                "当前结论为**未定**。")
+        if a_ok is False:
+            head = (f"**否决**：候选臂 `{cand}` 在 main 窗口即未过预注册判据 (a)"
+                    f"（组合夏普 {n(res_m.get(cand, {}).get('combined_sharpe'))} "
+                    f"< 基线 {n(res_m.get('fuse_w0.00', {}).get('combined_sharpe'))} + 0.05）"
+                    f" → 按预注册 §10.2「main 通过后才跑 oos」，"
+                    f"**gbm 的正交信息在分数级融合上不产生可采纳增量** → 换源线封线。")
+        else:
+            head = ("**main 窗口已跑完，oos 窗口待跑** —— 本文档的最终判定需要 oos 阶段，"
+                    "当前结论为**未定**。")
     else:
         vo = PO.get("verdict", {})
         passed = vo.get("all_pass")
@@ -292,6 +307,8 @@ def build() -> str:
     L.append("")
 
     # ── §七 判据 ──
+    # oos 列的占位符要说明「为什么是 —」：main 已判否 → 按预注册不跑 oos
+    oos_na = ("不跑（按预注册）" if (PO is None and a_ok is False) else "—")
     L.append("## 七、预注册判据汇总")
     L.append("")
     L.append(table(
@@ -301,25 +318,25 @@ def build() -> str:
              b(crit_m.get(cand, {}).get("a_main_combined_ge_base_plus_0.05"))
              if cand else "—",
              b((PO or {}).get("criteria", {}).get(cand, {})
-               .get("a_main_combined_ge_base_plus_0.05")) if PO and cand else "—"],
-            ["(b) oos 组合夏普", "≥ 基线 − 0.02", "—",
+               .get("a_main_combined_ge_base_plus_0.05")) if PO and cand else oos_na],
+            ["(b) oos 组合夏普", "≥ 基线 − 0.02", oos_na,
              b((PO or {}).get("criteria", {}).get(cand, {})
-               .get("c_oos_combined_ge_base_minus_0.02")) if PO and cand else "—"],
+               .get("c_oos_combined_ge_base_minus_0.02")) if PO and cand else oos_na],
             ["(c) 胜 placebo", "规则 > 同参数 placebo 最高",
              b(crit_m.get(cand, {}).get("c_beats_placebo")) if cand else "—",
              b((PO or {}).get("criteria", {}).get(cand, {})
-               .get("c_beats_placebo")) if PO and cand else "—"],
+               .get("c_beats_placebo")) if PO and cand else oos_na],
             ["(d) 滚动 504 日夏普胜率", "≥ 60%",
              b(crit_m.get(cand, {}).get("d_rolling_win_rate_ge_0.60")) if cand else "—",
              b((PO or {}).get("criteria", {}).get(cand, {})
-               .get("d_rolling_win_rate_ge_0.60")) if PO and cand else "—"],
+               .get("d_rolling_win_rate_ge_0.60")) if PO and cand else oos_na],
             ["(e) DSR ≥ 0.95", "**降级为报告项**（恒假条件，见下）",
              n(crit_m.get(cand, {}).get("dsr"), 6) if cand else "—",
              n((PO or {}).get("criteria", {}).get(cand, {}).get("dsr"), 6)
-             if PO and cand else "—"],
-            ["(f) 跨窗口迁移", "oos 最优臂在 main 不排最差", "—",
+             if PO and cand else oos_na],
+            ["(f) 跨窗口迁移", "oos 最优臂在 main 不排最差", oos_na,
              b(((PO or {}).get("verdict", {}).get("f_cross_window") or {})
-               .get("not_worst_in_main")) if PO else "—"],
+               .get("not_worst_in_main")) if PO else oos_na],
         ]))
     L.append("")
     thr = PM.get("dsr95_threshold_sharpe")
@@ -333,7 +350,27 @@ def build() -> str:
     # ── §八 总判定 ──
     L.append("## 八、总判定")
     L.append("")
-    if PO is None:
+    if PO is None and a_ok is False:
+        # main 已判否 → 判决已定（不需要 oos），但**必须把 main 阶段的数字照样列出来**
+        # （否则文档里没有任何一处能被审计器回读核对的判决数字）
+        L.append("**否决** —— 候选臂在 main 窗口即未过预注册判据 (a)。")
+        L.append("")
+        L.append(f"候选臂（main 阶段组合夏普最高的规则臂）：**`{cand}`**")
+        L.append("")
+        L.append(f"- 候选臂 main 组合夏普 = **{n(res_m.get(cand, {}).get('combined_sharpe'))}**，"
+                 f"基线 = **{n(res_m.get('fuse_w0.00', {}).get('combined_sharpe'))}**")
+        L.append(f"- Δ组合（main）= **{n(crit_m.get(cand, {}).get('delta_combined'))}**")
+        L.append(f"- DSR（报告项）= **{n(PM.get('verdict', {}).get('dsr_report'), 6)}** / 门槛 "
+                 f"{n(PM.get('verdict', {}).get('dsr95_threshold_sharpe'))}")
+        L.append(f"- all_pass = **{PM.get('verdict', {}).get('all_pass')}**"
+                 "（main 阶段判据已否 → 整实验判决 = 否决，无须 oos 确认）")
+        L.append("")
+        L.append("> **为什么 oos 没跑**：预注册 §10.2 的通过判定是「(a)(b)(c)(d)(f) 五条全过」，"
+                 "其中 (a) 只依赖 main。§10.4 写明「若 (a)~(f) 任一不过 → 换源线彻底封线」。"
+                 "(a) 已判否 ⇒ 无论 oos 结果如何，结论都是否决 ⇒ 补跑 oos 只会制造分叉路径"
+                 "（可以一直换 seed / 换窗口直到 oos 好看）。**故 oos 不跑是按预注册执行，不是漏跑。**")
+        L.append("")
+    elif PO is None:
         L.append("**未定** —— 需 oos 阶段产物（`multi_asset_p18_oos.json`）。")
     else:
         vo = PO.get("verdict", {})

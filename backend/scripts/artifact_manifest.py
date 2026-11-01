@@ -96,11 +96,24 @@ TRACKED = [
     "multi_asset_p17_freq_main.json",
     "multi_asset_p17_freq_oos.json",
     # ── P18：42f 之上叠加 gbm 增量（分数级 z-score 融合）──
+    # p18_oos 按预注册**故意不存在**（main 即被判据 (a) 否决 → §10.2/§11.6 不跑 oos）
+    # → 放 EXPECTED_MISSING，而不是从 TRACKED 删掉（删掉会破坏 AUDITED ⊆ TRACKED 覆盖门）
     "multi_asset_p18_main.json",
     "multi_asset_p18_oos.json",
     # ── 试验预算账本（只增不减；register 后由 trial_budget.py 自动重建清单）──
     "trial_budget.json",
 ]
+
+# ── 预期缺失（故意不产出的产物）──────────────────────────────────
+# 语义区分：**产物从不存在**（按预注册不跑）vs **产物本来存在但丢了**（真故障）。
+# 两类混在一个 `missing` 列表里 → verify 每次都打同一条 ⚠️ 假警报，
+# 真故障发生时会被淹没（告警疲劳 = 告警失效）。
+# 规则：进入本表的产物，必须在台账里写明「按预注册不产出」的理由与章节号。
+EXPECTED_MISSING = {
+    # P18 在 main 窗口即被预注册判据 (a) 否决 → 按 §10.2/§11.6「main 通过后才跑 oos」，
+    # oos 产物故意不存在（不是漏跑、不是丢失）。
+    "multi_asset_p18_oos.json": "P18 main 被判据(a)否决，按预注册 §10.2/§11.6 不跑 oos",
+}
 
 # 审计器读取的产物文件 —— 必须与 TRACKED 一一对应（漏一个 = 该产物可被静默覆盖）
 AUDITED = [
@@ -218,7 +231,9 @@ def build() -> int:
     for name in TRACKED:
         p = os.path.join(DATA_DIR, name)
         if not os.path.exists(p):
-            missing.append(name)
+            # 预期缺失（按预注册不产出）与真缺失分开记，别让假警报淹掉真故障
+            if name not in EXPECTED_MISSING:
+                missing.append(name)
             continue
         st = os.stat(p)
         entries[name] = {
@@ -236,6 +251,8 @@ def build() -> int:
         "sha256_excludes": list(VOLATILE_KEYS),
         "files": entries,
         "missing": missing,
+        "expected_missing": {k: v for k, v in EXPECTED_MISSING.items()
+                             if not os.path.exists(os.path.join(DATA_DIR, k))},
         "uncovered_audited": uncovered,
     }
     os.makedirs(os.path.dirname(MANIFEST), exist_ok=True)
@@ -271,6 +288,11 @@ def verify() -> int:
         if cur != meta["sha256"]:
             bad.append(f"{name}: sha256 不符\n      清单 {meta['sha256'][:16]}…"
                        f"\n      当前 {cur[:16]}…")
+    # 预期缺失的产物如果**突然出现** → 必须重新 build 登记指纹
+    # （否则它是个没人守护的产物：可被静默覆盖，而文档数字还指着它）
+    for name in manifest.get("expected_missing", {}):
+        if os.path.exists(os.path.join(DATA_DIR, name)):
+            bad.append(f"{name}: 标记为「预期缺失」但文件已出现 → 需重新 build 登记指纹")
     if bad:
         print(f"❌ 产物指纹校验失败（{len(bad)} 项）：")
         for b in bad:
@@ -279,6 +301,9 @@ def verify() -> int:
         return 1
     if manifest.get("missing"):
         print(f"⚠️  清单记录的缺失产物：{manifest['missing']}")
+    exp = manifest.get("expected_missing", {})
+    if exp:
+        print(f"ℹ️  预期缺失（按预注册不产出，非故障）：{list(exp)}")
     print(f"✅ 产物指纹校验通过：{len(manifest.get('files', {}))} 个产物与清单一致"
           f"（清单生成于 {manifest.get('generated_at')}，commit {manifest.get('git_commit')}）")
     return 0
