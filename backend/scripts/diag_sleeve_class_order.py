@@ -261,7 +261,8 @@ def main() -> int:
                   f"| 末值 {r['final']:>12,.0f} | 类权重偏离 均 {r['dev_mean']*100:5.2f}pt "
                   f"最大 {r['dev_max']*100:5.2f}pt | 投入 {r['invested_mean']*100:5.2f}%")
 
-    out = os.path.join(ROOT, "scripts", "diag_sleeve_class_order.json")
+    # 2026-11-01：产物归位到 data/backtest/（纳入指纹门）
+    out = os.path.join(ROOT, "..", "data", "backtest", "diag_sleeve_class_order.json")
     with open(out, "w") as fh:
         json.dump(results, fh, ensure_ascii=False, indent=1)
     print(f"[diag] 产物 → {out}")

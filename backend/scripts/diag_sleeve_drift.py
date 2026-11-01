@@ -134,7 +134,8 @@ def main() -> int:
         print(f"        {y}: 调仓日 均 {np.mean(ds)*100:5.2f}pt 最大 {np.max(ds)*100:5.2f}pt"
               f"  (n={len(ds)})")
 
-    out = os.path.join(ROOT, "scripts", "diag_sleeve_drift.json")
+    # 2026-11-01：产物归位到 data/backtest/（纳入指纹门）
+    out = os.path.join(ROOT, "..", "data", "backtest", "diag_sleeve_drift.json")
     with open(out, "w") as fh:
         json.dump({
             "window": [str(dates[0].date()), str(dates[-1].date())],

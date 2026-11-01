@@ -252,7 +252,10 @@ def main() -> int:
         ),
         "rebalances": detail,
     }
-    outp = args.out or os.path.join(os.path.dirname(os.path.abspath(__file__)),
+    # 2026-11-01：默认产物落 data/backtest/（原来落在 backend/scripts/ →
+    # 在指纹门的覆盖范围之外，等于一份没人守护的结论）
+    _repo = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    outp = args.out or os.path.join(_repo, "data", "backtest",
                                      f"parity_backtest_{wname}.json")
     with open(outp, "w") as fh:
         json.dump(out, fh, ensure_ascii=False, indent=1)

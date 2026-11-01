@@ -148,6 +148,13 @@ TRACKED = [
     # 原写在 backend/scripts/sleeve_verify.json → 落在指纹门覆盖范围之外，
     # 等于一份没人守护的结论。归位到 data/backtest/ 并纳入指纹。
     "sleeve_verify.json",
+    # ── 产品口径 parity + 袖套漂移诊断（2026-11-01 归位）──────────
+    # 三个产物原先都写在 backend/scripts/ → 在指纹门覆盖范围之外，
+    # 而它们的结论都被台账正文引用（§12.12 交付清单第 5 项、§12.11 类权重偏离口径）。
+    # 归位到 data/backtest/ 并纳入指纹。三个产物均无易变字段 → 指纹稳定。
+    "parity_backtest_main.json",
+    "diag_sleeve_drift.json",
+    "diag_sleeve_class_order.json",
 ]
 
 # ── 预期缺失（故意不产出的产物）──────────────────────────────────

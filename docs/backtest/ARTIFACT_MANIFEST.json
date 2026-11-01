@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-11-01T20:02:51",
-  "git_commit": "a87b9c37",
+  "generated_at": "2026-11-01T20:56:35",
+  "git_commit": "d13e402f",
   "data_dir": "data/backtest",
   "sha256_mode": "normalized-json-v2",
   "sha256_excludes": [
@@ -415,6 +415,21 @@
       "sha256": "098276bcb2668752265afbc5afcd0c5588b62aa3e8a5d34b088d262ea25d8f8e",
       "bytes": 542,
       "mtime": "2026-11-01T20:00:31"
+    },
+    "parity_backtest_main.json": {
+      "sha256": "787faa530e56aeffeb3079517d26202315c7170bda1358188648f91ffbef6554",
+      "bytes": 40672,
+      "mtime": "2026-11-01T07:42:04"
+    },
+    "diag_sleeve_drift.json": {
+      "sha256": "9cfdeeba321c4ad45af79418423a1fbe2cac5b8829e157f8f56b9d434da4df2b",
+      "bytes": 357235,
+      "mtime": "2026-11-01T06:31:31"
+    },
+    "diag_sleeve_class_order.json": {
+      "sha256": "a1a3af143d9f4ca57469a18bc62688444071b272b8a5d83b91882a6234bf4f40",
+      "bytes": 353094,
+      "mtime": "2026-11-01T06:30:04"
     }
   },
   "missing": [],
@@ -427,6 +442,8 @@
     "_blend_nav_25f.json",
     "baseline_final.json",
     "deflated_sharpe.json",
+    "diag_sleeve_class_order.json",
+    "diag_sleeve_drift.json",
     "ensemble_correlation.json",
     "full_history_features_progress.json",
     "full_history_reconcile.json",
@@ -474,6 +491,7 @@
     "p3_bond_recon.json",
     "p3_recon.json",
     "p5_class_audit.json",
+    "parity_backtest_main.json",
     "pool_partition.json",
     "sleeve_verify.json",
     "trial_budget.json",

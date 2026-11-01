@@ -730,7 +730,7 @@ Parity 回测（产品口径，2023-05 → 2026-05，141 个采样点）报出
 「类权重最大偏离 均值 2.85 pt / 最差 7.10 pt」，第一反应是撮合器坏了。
 
 **用产品代码单独跑袖套复核后，这个归因是错的**（`scripts/diag_sleeve_drift.py`，
-2020-01 → 2026-10，74 次调仓）：
+产物 `data/backtest/diag_sleeve_drift.json`，2020-01 → 2026-10，74 次调仓）：
 
 | 口径 | 均值 | 最大 |
 |---|---|---|
@@ -752,7 +752,8 @@ Parity 回测（产品口径，2023-05 → 2026-05，141 个采样点）报出
 
 #### 12.10.1 「先买后卖」顺序：实测有影响，但只有 0.45 pt
 
-`scripts/diag_sleeve_class_order.py`（袖套单独 A/B，2020-01 → 2026-10）：
+`scripts/diag_sleeve_class_order.py`（袖套单独 A/B，2020-01 → 2026-10；
+产物 `data/backtest/diag_sleeve_class_order.json`）：
 
 | 口径 | 夏普 | 回撤 | 末值 | 调仓日类权重偏离 | 投入率 |
 |---|---|---|---|---|---|
@@ -829,10 +830,10 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.rone.paper-portfolio
 | 2 | 多资产线接入纸面盘（A 腿 + 袖套腿 + 合并账本/净值） | `paper_portfolio.py::run_multi_asset_line` |
 | 3 | 研究口径 ↔ 产品实现**逐点等价** | 净值最大逐点差 **6.661e-16**（`verify_sleeve_impl.py`） |
 | 4 | E2E（账本/持仓/净值三处自洽、50/50、21 交易日、幂等） | ✅ 全部通过（`test_multi_asset_line.py`） |
-| 5 | Parity 回测（产品口径跑 3 年真实历史） | 夏普 **1.4724** / 回撤 -8.14% / 年化 13.23%（研究口径 1.4114） |
+| 5 | Parity 回测（产品口径跑 3 年真实历史） | 夏普 **1.4724** / 回撤 -8.14% / 年化 13.23%（研究口径 1.4114）；产物 `data/backtest/parity_backtest_main.json` |
 | 6 | 整手撮合器修 4 个 bug | 见 §12.7、§12.9 |
 | 7 | NaN 健壮性（停牌股估值） | parity 回测抓出并修复 |
-| 8 | 类权重偏离的真实口径 | 调仓日 ≈1pt / 区间内最多 5pt（`diag_sleeve_drift.py`） |
+| 8 | 类权重偏离的真实口径 | 调仓日 ≈1pt / 区间内最多 5pt（`diag_sleeve_drift.py`，产物 `data/backtest/diag_sleeve_drift.json`） |
 | 9 | launchd 时点修正（周五→周一） | `com.rone.paper-portfolio.plist` |
 
 #### 待决（需要拍板，本轮**没有**擅自做）
