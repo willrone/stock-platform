@@ -923,10 +923,10 @@ pairs_trading / mean_reversion / cointegration / value·momentum·low_vol·multi
 |---|---|---|
 | 每日信号推送（真金白银路径） | ✅ **活的** | hermes cron `daily-signal-push`，周一 17:45 → 微信；上次 10-26 ok，下次 11-02 |
 | TDX 日线更新 | ✅ 活的 | cron `tdx-daily-update` 工作日 17:30（另有 launchd `com.rone.tdx-update`） |
-| 纸面盘定时任务 | ❌ **没加载 + 时点错** | `launchctl list` 无此 job；plist 原写周五 17:00（与 lag1 矛盾）→ §12.11 |
-| 纸面盘 6 条线 | ⚠️ **只有 1 个调仓点** | 全部 last_signal=2026-10-23 / last_trade=2026-10-26；**nav_history 0 点** → 净值曲线还没长出来 |
-| 研究结论简报推送 | ❌ **投递失败** | cron `strategy-conclusion-brief`（周二 08:00→微信）上次 `delivery_failed`：iLink session not ready |
-| 多资产线 | ✅ 本轮上线 | 代码+等价性+E2E+parity 全绿；定时任务待用户加载 plist |
+| 纸面盘定时任务 | ✅ **已加载**（2026-11-01 修） | `launchctl list` 有 `com.rone.paper-portfolio`；排期 **周一 17:40 + 周二 09:20**（§12.11 时点修正）。⚠️ 原判「没加载」已作废：plist 一直存在但**从未 bootstrap**（`launchctl print` → Could not find service），2026-11-01 才真正加载 |
+| 纸面盘 6 条线 | ⚠️ **只有 1 个调仓点** | 全部 last_signal=2026-10-23 / last_trade=2026-10-26；**nav_history 0 点** → 净值曲线还没长出来（lag1 正确行为：数据只到 10-30，下一个成交日 11-02） |
+| 研究结论简报推送 | ❌ **投递失败**（**需用户动作**） | cron `strategy-conclusion-brief`（周二 08:00→微信）上次 `delivery_failed`：`iLink sendmessage session not ready: prepare failed — the user must send the bot a message first (or re-pair)` → **只能用微信给 bot 发一条任意消息**来激活，代码侧无解 |
+| 多资产线 | ✅ 本轮上线 | 代码+等价性+E2E+parity 全绿；定时任务**已加载**（同上）。⚠️ 2026-11-01 修掉一个会让整轮纸面盘崩的 NameError（见 §12.18）—— 不修的话旗舰线在同一个 Python 进程里**轮不到执行** |
 | 真实用户漏斗埋点 | ✅ **本轮上线** | 表 `funnel_events` + `POST /funnel/track` + 报告 CLI/API；口径与证据见 `docs/FUNNEL_TRACKING_2026-11-01.md`（单测 6 / E2E 27 / 前端 6 / tsc / build 全过） |
 
 #### D. 收入现状（`backend/data/app.db`，23 个用户）
@@ -1335,3 +1335,83 @@ P18 文档的每一个数字（表格 + 正文 + 判据符号）**一条都没�
 - **自检自己会骗人**：定位歧义（重复文本 / 多数字复合格）会让自检误报"锚点无效"。
   自检代码的定位必须与被检代码**同语义**。
 
+---
+
+## 12.18 三道「长得像在跑、其实从没跑过」的闸门（2026-11-01）
+
+修 `paper_portfolio.py` 的 NameError 时顺藤摸瓜查出来的。三个问题**互相独立**，
+但属于同一类病：**「有文件 / 被引用 / 在文档里写着」被当成了「它在跑」**。
+
+### 12.18.1 必崩错误没人看：flake8 只覆盖 `app/`
+
+| 项 | 内容 |
+|---|---|
+| **现象** | `scripts/paper_portfolio.py:219` 引用已删除的 `LIMIT_UP` → 纸面盘跑到 gbm_voltgt 就 `NameError` 崩（RC=1）。**同一次运行里后面的 `multi_asset_final` 旗舰线根本轮不到执行** → 旗舰线永远长不出第一个净值点 |
+| **根因** | `backend/scripts/check-code-quality.sh` 的 flake8 只 lint `app/`。而 cron/launchd 实际执行的是 `scripts/`（+ `backend/scripts/`）→ **F821（undefined name，必崩的 NameError）这一类从来没被门禁看过** |
+| **引入时间** | commit `3d3e34e5` 删 `LIMIT_UP` 常量时漏删引用 → **从引入到被抓到隔了整整一个月** |
+| **修法** | 删掉 `"limit_up": LIMIT_UP` 行。与「最后一次能跑的状态」**逐位等价**：当时传的就是 0.095，而 `GbmVoltgtStrategy.__init__` 自身默认也是 0.095；该 config 现在只用于日志打印，实际掩码走 `limit_up_mask_matrix`（逐票按板块判定） |
+| **新增闸门** | `backend/scripts/check_undefined_names.py` —— F821/F811 **零基线**（不是「存量基线」模式：F821 本来就该是 0，允许基线等于允许再烂下去）。覆盖 `app/` + `scripts/`。**负向注入验证过**：注入 F821 → RC=1；还原 → RC=0 且文件逐字节一致 |
+| **为什么不查全量 flake8** | 其余类别（未用 import / 行太长 / 格式）是**存量噪声**：全量 300+ 条，基线永远不归零 → 告警疲劳 → 门禁失效。这与台账 §12.17「假警报淹没真故障」是同一个病 → 只对**会崩的类别**设闸门，其余由 `check-code-quality.sh` 做存量基线管理 |
+
+顺带修掉另外 3 处同类 F821（不崩、只是类型检查报错）：
+`daily_signal.py`（`List`/`Tuple` 未导入）、`verify_10y_pit.py`（`Optional` 未导入）、`run_strategy_baseline.py`（`pd` 只在字符串注解里出现）。
+
+### 12.18.2 门禁的门自己是坏的：CRLF 行尾
+
+| 项 | 内容 |
+|---|---|
+| **现象** | `scripts/pre-commit-check.sh` 和 `scripts/quick-check.sh` 是 **CRLF 行尾** → bash 解析到 `for pattern in "${SENSITIVE_FILES[@]}"; do\r` 直接语法错误 → **脚本第一行都没执行**。但文件一直在、一直被文档和 commit hook 引用、看起来"在跑" |
+| **证据** | `file scripts/pre-commit-check.sh` → `with CRLF line terminators`；`bash -n` → `syntax error near unexpected token 'do'`。`git show HEAD:scripts/pre-commit-check.sh` 同样坏 → **不是本次改动引入，是历史遗留** |
+| **范围** | 全仓 47 个 .sh 里**只有这 2 个**是 CRLF（其余 43 个是 LF）→ 典型的「从 Windows 编辑器/网页复制粘贴引入」，且没有任何检查发现它 |
+| **修法** | 两个文件转 LF。转完 `bash -n` 全仓 47 个 .sh **0 语法错误** |
+| **新增闸门** | `backend/scripts/check_gates_runnable.py` —— 「门禁的门也要能跑」：所有 `.sh` 必须是 LF + 通过 `bash -n`；8 个关键闸门脚本必须存在且可解析。**这条闸门自己就是防「门禁假存在」的** |
+
+### 12.18.3 门禁依赖的工具本身是坏的：shebang 指向旧用户名
+
+| 项 | 内容 |
+|---|---|
+| **现象** | `backend/.venv-py313/bin/pyflakes` 的 shebang 写着 `/Users/ronghui/...`（旧用户名）→ 直接执行报 `bad interpreter: .../python3` |
+| **绕法** | 一律用 `<venv>/bin/python -m flake8`（绕开 shebang），并显式 `env -u PYTHONPATH -u PYTHONHOME`（见 MEMORY：PYTHONPATH 指向 Hermes venv 会污染 pip/解释器行为） |
+
+### 12.18.4 教训（新增工程经验第 16 条）
+
+> **一个门禁「有文件 / 在 CI 里被引用 / 在文档里写着」不等于「它在跑」。**
+> 必须有一条**独立的**检查去验证**门禁本身可执行**（行尾 / 语法 / 依赖工具可用），
+> 否则就是「门禁的门没锁」——比没有门禁更危险，因为它提供虚假的安全感。
+> 验证门禁有效性的唯一方法是**负向注入**：故意制造一个该门禁该抓的错误，
+> 确认它真的报错、且退出码非 0。**只跑通一次不算验证过。**
+
+（本节对应 commit `68f604c5`）
+
+---
+
+## 12.19 每周简报（strategy-conclusion-brief）已陈旧且框架与定稿矛盾（2026-11-01）
+
+### 12.19.1 事实
+
+| 项 | 内容 |
+|---|---|
+| **cron** | `strategy-conclusion-brief`，周二 08:00，deliver=weixin，`no_agent`，script=`~/.hermes/scripts/build_brief.sh` |
+| **投递状态** | 上次运行（2026-10-27 08:00）**失败**：`iLink sendmessage session not ready: prepare failed — the user must send the bot a message first (or re-pair)` → **需用户动作**：用微信给 bot 发一条任意消息激活会话。代码侧无解 |
+| **内容源（硬编码）** | `build_brief.sh` 里 `DOC="docs/backtest/CONCLUSION_2026-10-27.md"` → **固定指向 10-27 那篇**；再跑 `backend/scripts/build_conclusion_brief.py` 汇总 `data/backtest/*.json` |
+| **基线源（硬编码）** | `BASELINE_FILE = "ALL_real_lag1_v2.json"` + `baseline_final.json` = **25 因子 honest_composite 单资产线** |
+
+### 12.19.2 三个问题
+
+1. **主线基线已不是当前定稿**。简报「与目标的差距」一节以 `honest_composite` **0.880** 为基线，输出「夏普 ≥ 1.5 → ❌ 差 0.620」。但**当前定稿是多资产线，组合夏普 1.4114（main）/ 1.0691（oos）**（P3，10-31）→ 简报在告诉用户「差 0.62」，实际旗舰线早已越过 1.4。**简报全文没有一个字提到多资产线**。
+2. **10-27 之后 18 个实验的判决全部缺席**（P2~P18，含 10-31 的 P3 定稿、11-01 的 P17/P18 否决）。用户收到的结论是 5 天前的。
+3. **「所有实验里夏普最高的 15 条」表把 `fundseg_seg3_fund.json` 的 **2.114** 放在第一位**（单段窗口 fund-flow 子实验，149 笔）。表下虽然有免责说明，但**表头第一行就是 2.114** —— 这正是 P18 §九 自己警告的「用 w=0.50 的 Δ夏普 去论证 = 在 4 个权重里挑最好的那个来说事」的选择偏差，只是这次发生在简报生成器里。
+
+### 12.19.3 判定
+
+简报的内容与当前定稿**不一致**，且**框架性地把用户往回引**（回到已被多资产线超越的单资产基线）。
+在修好之前，**周二那份推送不能作为结论依据**。
+
+### 12.19.4 修法（待做，未实施）
+
+- 基线改为**当前定稿**（多资产线 main 1.4114 / oos 1.0691），单资产 0.880 降级为「A 腿内部对照」；
+- 结论源改为**台账 §十二 的判决汇总**（而不是硬编码 10-27 那篇）；P2~P18 的已证伪/已封线清单必须进简报；
+- 「最高夏普 15 条」表**加硬约束**：只收**多窗口 + 有 OOS 标注 + 非单段子实验**的结果；单段 / 子实验 / 无 OOS 的条目单独归到「不可对外承诺」区，**不进主表**；
+- 投递失败的根因是 iLink 会话未就绪 → 需用户发一条微信消息；代码侧应做**投递失败重试 + 失败即本地留档**，不能只报错。
+
+（本节待实施项已登记，见台账待办。）
