@@ -28,6 +28,8 @@ import json
 import os
 import re
 import sys
+from decimal import Decimal, ROUND_HALF_UP
+from typing import Any, List, Optional, Tuple
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 BACK = os.path.join(ROOT, 'data', 'backtest')
@@ -35,7 +37,12 @@ DOCS = os.path.join(ROOT, 'docs', 'backtest')
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # artifact_manifest 同目录
 
 
+ART_FILES: List[str] = []
+
+
 def J(name):
+    # 登记被读取的产物文件名 —— 供下面的「审计器读取 ⊆ 指纹清单」闸门用。
+    ART_FILES.append(name)
     with open(os.path.join(BACK, name), encoding='utf-8') as fh:
         return json.load(fh)
 
@@ -106,6 +113,18 @@ ART = {
     'p17vo': J('multi_asset_p17_verify_oos.json'),
     'p17fm': J('multi_asset_p17_freq_main.json'),
     'p17fo': J('multi_asset_p17_freq_oos.json'),
+    # ── P14 / P15（2026-11-01 补登）──
+    # P14：Oracle 上界（main/oos）；P15：past_j 长历史独立审判。
+    # 此前 P13/P14/P15 三份文档**一条表格断言都没有** —— 它们的判决
+    # （袖套权重优化封线 / 上界结构性缺失 / past_j 封死）是整个研究侧
+    # 「到此为止」的依据，却完全靠手抄数字。
+    'p14m': J('multi_asset_p14_main.json'),
+    'p14o': J('multi_asset_p14_oos.json'),
+    'p15l': J('multi_asset_p15_long_pastj.json'),
+    # ── P13（2026-11-01 补登）──
+    'p13m': J('multi_asset_p13_main.json'),
+    'p13o': J('multi_asset_p13_oos.json'),
+    'p13l': J('multi_asset_p13_long.json'),
 }
 
 
@@ -1080,6 +1099,181 @@ def build_anchors():
                 _lab = f'真实 `{_arm}`'
                 A.append((P18DOC, ('row', _lab), _lab, _yr,
                           ('p18year', 'p18m', _arm, _yr)))
+
+    # ── P15 · past_j 长历史独立审判（2026-11-01 补登）──
+    # 文档：P15_LONG_PASTJ_2026-10-31.md
+    #
+    # 为什么补：P13 / P14 / P15 这三份文档此前**一条表格断言都没有**。
+    # 而它们的判决（袖套资产级权重优化封线 / Oracle 上界结构性缺失 /
+    # past_j 封死）正是「研究侧到此为止」的最终依据 —— 却全靠手抄数字。
+    # 2026-11-01 实查：一份**中间版**脚本（未提交）静默覆盖了
+    # multi_asset_p15_long_pastj.json 的全部数字，没有任何机制发现。
+    #
+    # 表定位用 ('row', 行标签[, 消歧列]) —— 往文档插新表时表序号会位移，
+    # 行标签锚点不受影响（P17 教训）。
+    P15 = 'P15_LONG_PASTJ'
+    _P15_ROWS = [
+        ('w2013', 0, 'w2013（优化期 46%，**无检验力**）'),
+        ('w2016', 1, 'w2016（优化期 0%，**无检验力**）'),
+        ('w2019', 2, '**w2019（优化期 88%）**'),
+    ]
+    # 主结果表：定稿 / past_s / past_j / oracle_s / A腿权重(past_j)
+    for _w, _i, _lbl in _P15_ROWS:
+        for _col, _fld in (('定稿', 'base_sharpe'),
+                           ('`past_s`', 'past_s'),
+                           ('`past_j`', 'past_j'),
+                           ('`oracle_s`', 'oracle_s'),
+                           ('A腿权重(past_j)', 'past_j_a_leg_w')):
+            A.append((P15, ('row', _lbl), _lbl, _col, ('p15row', _i, _fld)))
+    # 基线复现门表：修复后 P12 归档值 / P15 基线
+    # （这两个数必须**逐位相等**——不等说明长历史撮合器又分叉了）
+    for _w, _i, _lbl in _P15_ROWS:
+        for _col, _fld in (('修复后 P12 归档值', 'expected_from_p12'),
+                           ('P15 基线（= `P12.build_sleeve`）', 'combo_sharpe')):
+            A.append((P15, ('row', _w), _w, _col, ('p15base', _w, _fld)))
+    # 收益/σ 表：行标签是 (窗口, 方案) 二元组
+    # ⚠️「σ/定稿」列**不设断言** —— 那是派生比值，文档按展示值再四舍五入，
+    # 容差恰好卡在边界（66.75 vs 66.8 → 差 0.05）→ 会造成假警报（告警疲劳）。
+    # 底层的年化σ / 年化收益本身已逐格断言，比值没丢。
+    for _w, _i, _lbl in _P15_ROWS:
+        # (方案标签, 年化收益 spec, 年化σ spec, 夏普 spec)
+        if _w == 'w2016':
+            # w2016 三个方案在文档里合并成一行（'定稿 / past_s / past_j'）
+            _rows = [('定稿 / `past_s` / `past_j`',
+                      ('p15base', _w, 'ann_return'),
+                      ('p15base', _w, 'ann_vol'),
+                      ('p15base', _w, 'combo_sharpe'))]
+        else:
+            _rows = [('定稿',
+                      ('p15base', _w, 'ann_return'),
+                      ('p15base', _w, 'ann_vol'),
+                      ('p15base', _w, 'combo_sharpe')),
+                     ('**`past_j`**',
+                      ('p15row', _i, 'past_j_ann_return'),
+                      ('p15row', _i, 'past_j_ann_vol'),
+                      ('p15row', _i, 'past_j'))]
+        for _sc, _s_ret, _s_vol, _s_shp in _rows:
+            A.append((P15, '年化收益', (_w, _sc), '年化收益', _s_ret))
+            A.append((P15, '年化σ', (_w, _sc), '年化σ', _s_vol))
+            A.append((P15, '夏普', (_w, _sc), '夏普', _s_shp))
+    # 5 窗口 A 腿权重表：main/oos 来自 P14，长历史来自 P15
+    A.append((P15, ('row', 'A 腿权重'), 'A 腿权重', 'main', ('p14pastjw', 'p14m')))
+    A.append((P15, ('row', 'A 腿权重'), 'A 腿权重', 'oos', ('p14pastjw', 'p14o')))
+    for _w, _i, _lbl in _P15_ROWS:
+        A.append((P15, ('row', 'A 腿权重'), 'A 腿权重', _w,
+                  ('p15row', _i, 'past_j_a_leg_w')))
+    # Oracle 上界跨窗口复制表：main/oos 来自 P14，长历史来自 P15
+    # 消歧列用 '上界增益'（该表独有）—— 'w2013' 行在收益/σ 表里也存在，
+    # 且两张表都有 '定稿' 列。
+    for _wlbl, _art in (('main', 'p14m'), ('oos', 'p14o')):
+        A.append((P15, ('row', _wlbl, '上界增益'), _wlbl, '定稿',
+                  ('j', _art, ['baseline_metrics', 'combined_sharpe'])))
+        A.append((P15, ('row', _wlbl, '上界增益'), _wlbl, '`oracle_s` 上界',
+                  ('j', _art, ['results', 'oracle_s', 'combined_sharpe'])))
+        A.append((P15, ('row', _wlbl, '上界增益'), _wlbl, '**上界增益**',
+                  ('p14gain', _art)))
+    for _w, _i, _lbl in _P15_ROWS:
+        A.append((P15, ('row', _w, '上界增益'), _w, '定稿',
+                  ('p15row', _i, 'base_sharpe')))
+        A.append((P15, ('row', _w, '上界增益'), _w, '`oracle_s` 上界',
+                  ('p15row', _i, 'oracle_s')))
+        A.append((P15, ('row', _w, '上界增益'), _w, '**上界增益**',
+                  ('p15gain', _i)))
+
+    # ── P13 · 袖套资产级权重优化（2026-11-01 补登）──
+    # 文档：P13_ASSET_WEIGHT_2026-10-31.md
+    #
+    # 为什么补：P13 的判决是「袖套权重优化封线」，和 P14/P15 一起构成
+    # 研究侧「到此为止」的三根支柱，而它此前**一条表格断言都没有**。
+    #
+    # 表定位：能用唯一列名的用行标签锚点；不能的（表 8 的列名与表 5/6 重名）
+    # 用表序号，并在注释里写明为什么 —— P13 已结项，不会再插表。
+    P13 = 'P13_ASSET_WEIGHT'
+    _P13_SCHEMES = ['base_equal', 'code_invvol', 'code_erc', 'code_minvar',
+                    'class_rp']
+    # 表1 基线复现：唯一列 'P13 base_equal'
+    for _win, _art in (('main', 'p13m'), ('oos', 'p13o')):
+        A.append((P13, ('row', _win, 'P13 base_equal'), _win, 'P13 base_equal',
+                  ('p13r', _art, _win, 'base_equal', 'combined_sharpe')))
+    # 表4 零技巧基准（买入持有等权）：用 '组合夏普' 消歧
+    # （表 6/8 也有 '组合夏普' 列，但它们的行标签是方案名，不是 main/oos）
+    for _win, _art in (('main', 'p13m'), ('oos', 'p13o')):
+        A.append((P13, ('row', _win, '组合夏普'), _win, '袖套夏普',
+                  ('p13bhb', _art, 'sleeve_sharpe')))
+        A.append((P13, ('row', _win, '组合夏普'), _win, '组合夏普',
+                  ('p13bhb', _art, 'combined_sharpe')))
+    # 表5 main 袖套口径：唯一列 'ρ(袖套,A)'
+    for _sc in _P13_SCHEMES:
+        _lbl = _sc
+        A.append((P13, ('row', _lbl, 'ρ(袖套,A)'), _lbl, '袖套夏普',
+                  ('p13r', 'p13m', 'main', _sc, 'sleeve_sharpe')))
+        A.append((P13, ('row', _lbl, 'ρ(袖套,A)'), _lbl, 'σ',
+                  ('p13r', 'p13m', 'main', _sc, 'sleeve_vol')))
+        A.append((P13, ('row', _lbl, 'ρ(袖套,A)'), _lbl, '回撤',
+                  ('p13r', 'p13m', 'main', _sc, 'sleeve_maxdd')))
+        A.append((P13, ('row', _lbl, 'ρ(袖套,A)'), _lbl, 'ρ(袖套,A)',
+                  ('p13r', 'p13m', 'main', _sc, 'rho_sleeve_ashare')))
+        A.append((P13, ('row', _lbl, 'ρ(袖套,A)'), _lbl, '换手',
+                  ('p13r', 'p13m', 'main', _sc, 'turnover_ratio')))
+        A.append((P13, ('row', _lbl, 'ρ(袖套,A)'), _lbl, 'μ(年)',
+                  ('p13mu', 'p13m', 'main', _sc)))
+        if _sc != 'base_equal':  # 基线的 Δ 格里是 '—'
+            A.append((P13, ('row', _lbl, 'ρ(袖套,A)'), _lbl, 'Δ vs 基线',
+                      ('p13d', 'p13m', 'main', _sc, 'sleeve_sharpe')))
+    # 表6 main 组合口径：唯一列 '组合回撤'
+    for _sc in _P13_SCHEMES:
+        A.append((P13, ('row', _sc, '组合回撤'), _sc, '组合夏普',
+                  ('p13r', 'p13m', 'main', _sc, 'combined_sharpe')))
+        A.append((P13, ('row', _sc, '组合回撤'), _sc, '组合μ',
+                  ('p13r', 'p13m', 'main', _sc, 'combined_return')))
+        A.append((P13, ('row', _sc, '组合回撤'), _sc, '组合回撤',
+                  ('p13r', 'p13m', 'main', _sc, 'combined_maxdd')))
+        A.append((P13, ('row', _sc, '组合回撤'), _sc, 'ρ',
+                  ('p13r', 'p13m', 'main', _sc, 'rho_sleeve_ashare')))
+        if _sc != 'base_equal':
+            A.append((P13, ('row', _sc, '组合回撤'), _sc, 'Δ vs 基线',
+                      ('p13d', 'p13m', 'main', _sc, 'combined_sharpe')))
+    # 表7 成本×2：唯一列 '成本×2后组合夏普'
+    for _sc in _P13_SCHEMES:
+        # 注意：表7 的「换手」列是**原口径**换手（cost_x2 的换手略有不同：
+        # class_rp 原 15.91 vs 成本×2 后 15.88）→ 用 results 的字段。
+        A.append((P13, ('row', _sc, '成本×2后组合夏普'), _sc, '换手',
+                  ('p13r', 'p13m', 'main', _sc, 'turnover_ratio')))
+        A.append((P13, ('row', _sc, '成本×2后组合夏普'), _sc, '成本×2后组合夏普',
+                  ('p13cx2', 'p13m', _sc, 'combined_sharpe')))
+        A.append((P13, ('row', _sc, '成本×2后组合夏普'), _sc, 'Δ',
+                  ('p13c2', 'p13m', 'main', _sc)))
+    # 表8 oos 口径：列名与表5/表6 重名 → 用表序号 8
+    # （P13 已结项不再插表；若将来插表，这里会**报错**而不是静默失效）
+    for _sc in _P13_SCHEMES:
+        A.append((P13, 8, _sc, '袖套夏普',
+                  ('p13r', 'p13o', 'oos', _sc, 'sleeve_sharpe')))
+        A.append((P13, 8, _sc, '组合夏普',
+                  ('p13r', 'p13o', 'oos', _sc, 'combined_sharpe')))
+        A.append((P13, 8, _sc, 'ρ',
+                  ('p13r', 'p13o', 'oos', _sc, 'rho_sleeve_ashare')))
+    # 表13 类风险贡献：唯一列 'main 风险贡献'
+    # 「权重」列是**定义值**（类等权 = 33.3%），产物里没有这个字段 → 不设断言。
+    for _cls in ('gold', 'bond', 'commodity'):
+        A.append((P13, ('row', _cls, 'main 风险贡献'), _cls, 'main 风险贡献',
+                  ('p13rc', 'p13m', _cls)))
+        A.append((P13, ('row', _cls, 'main 风险贡献'), _cls, 'oos 风险贡献',
+                  ('p13rc', 'p13o', _cls)))
+    # 表15 长历史 3 窗口（袖套口径）：列名唯一 → 行标签锚点
+    # 只断言各方案**主值**（第 0 个数字）；Δ 与「随机第一」是复合格，
+    # 且随机列的格内含 'rand_code_s99' 这类带数字的方案名 → 数字位置不稳，
+    # 留作**已知缺口**（台账 §七 登记），不硬塞断言。
+    for _w in ('w2013', 'w2016', 'w2019'):
+        _lbl = {'w2013': 'w2013 (2013-05~2016-05)',
+                'w2016': 'w2016 (2016-05~2019-05)',
+                'w2019': 'w2019 (2019-05~2021-05)'}[_w]
+        for _col, _sc in (('base', 'base_equal'),
+                          ('code_invvol', 'code_invvol'),
+                          ('code_erc', 'code_erc'),
+                          ('code_minvar', 'code_minvar'),
+                          ('class_rp', 'class_rp')):
+            A.append((P13, ('row', _lbl, 'base'), _lbl, _col,
+                      ('p13r', 'p13l', _w, _sc, 'sleeve_sharpe')))
     return A
 
 
@@ -1251,6 +1445,74 @@ def cell_num_positions(cell):
             for m in re.finditer(r'[-+]?\d+(?:\.\d+)?', txt)]
 
 
+def _fmt_dec(val: float, dec: int) -> str:
+    """按**四舍五入**（ROUND_HALF_UP）格式化到 dec 位小数。
+
+    为什么不用 Python 的 f'{val:.Nf}'：
+    f-string 走的是「二进制精确值的就近舍入 + 平局取偶」，于是 31.45 → '31.4'；
+    而人手写文档是按「四舍五入」→ 31.45 → '31.5'。
+    两者在**平局**上不一致 → 回填器会把文档里正确的 31.5% 改写成 31.4%，
+    审计器又会按同一套规则判它「对」→ 文档被工具悄悄改掉，还没人发现。
+    实测就踩到过：P13 表13 的 gold oos 风险贡献（0.3145 → 31.45 → 31.5）。
+
+    取值基准用 repr(val)（能唯一往返的最短十进制串 = 人会写的那个数），
+    而不是 float 的精确二进制展开。
+
+    用 format(d, 'f') 而不是 str(d)：后者在 dec 较大且值为 0 时会输出
+    '0E-10' 这种科学计数（P10 的 diff 表就撞上了）。
+    """
+    q = Decimal(1).scaleb(-dec)
+    d = Decimal(repr(val)).quantize(q, rounding=ROUND_HALF_UP)
+    return format(d, 'f')
+
+
+def fmt_like(old: str, want: float, idx: int = 0) -> str:
+    """按旧单元格的格式重写**第 idx 个**数字（保留装饰、符号、小数位数）。
+
+    这是**回填器与审计器共享的格式约定**，唯一真源放在审计器里，
+    回填器 `backfill_doc_numbers.fmt_like` 改为直接代理到这里。
+
+    约定（与定位规则配套）：
+      - 单元格只有一个数字且含 `%` → 百分比格，写 want×100；
+      - 否则（纯数值格 / 复合格如 `1.3767 (+59.0%)`）→ 写 want，
+        且只替换**第 idx 个**数字；
+      - 小数位数 = 原格里那个数字自带的小数位数（文档通常按 3~4 位展示）；
+      - 舍入用四舍五入（ROUND_HALF_UP），见 _fmt_dec。
+
+    **idx 必须支持**：锚点可带第 6 位指定「复合格里对应第几个数字」
+    （例：P12 的 '0.15 (1/4)' 盯的是括号里的 '1'）。
+    早期回填器无视 idx，一律改写**第一个**数字 → 一旦 --apply 就会把
+    P12 的 58 个 '子窗口众数' 格从 '0.15 (1/4)' 改成 '1.00 (1/4)'，
+    把对的文档改坏（而且审计器当时也只查第 0 个 → 两边一起失灵）。
+
+    早期版本用「格子里出现 % 就整格 ×100」的粗暴规则，会把夏普写成
+    137.8600，而审计器当时用同一套错误逻辑 → 审计与回填**同时失灵**，
+    互为盲区。现在定位规则（target_number / cell_num_positions）只有一份，
+    审计器的主判定也直接用它，不再各写一套。
+    """
+    nums = cell_num_positions(old)
+    if not nums or idx >= len(nums):
+        return old
+    _n, s, e = nums[idx]
+    if len(nums) == 1 and '%' in old:
+        val = want * 100.0
+    else:
+        val = want
+    raw = old[s:e]
+    dec = len(raw.split(".")[1]) if "." in raw else 0
+    out = _fmt_dec(val, dec)
+    # 原值带显式正号且新值非负 → 保留正号
+    if raw.startswith("+") and not out.startswith("-"):
+        out = "+" + out
+    # **保留原文的减号字形**：文档统一用 U+2212 '−'（排版减号），
+    # 而格式化输出的是 ASCII '-'。早期回填器无视这一点，--apply 会把
+    # 文档里全部 '−0.0988' 改成 '-0.0988'（42 格）—— 数字没错但排版被改。
+    # 规则：原格是 U+2212 → 新值也用 U+2212；原格是 ASCII '-' → 保持 ASCII。
+    if raw.startswith("−") and out.startswith("-"):
+        out = "−" + out[1:]
+    return old[:s] + out + old[e:]
+
+
 def target_number(cell, want, idx=0):
     """定位单元格中对应 `want` 的数字。
 
@@ -1270,8 +1532,16 @@ def target_number(cell, want, idx=0):
             return ('pct', n, s, e)
         if abs(n - want) <= TOL:
             return ('direct', n, s, e)
-        return None
-    if abs(n - want) <= TOL:
+    else:
+        if abs(n - want) <= TOL:
+            return ('direct', n, s, e)
+    # ── 展示精度兜底（2026-11-01）────────────────────────────
+    # 文档格是产物的**舍入展示**时，小数位数可能比产物少
+    # （例：产物 0.2575 → 文档写 0.258）。这**不是**数字漂移。
+    # 但也不能靠放宽容差解决 —— 容差一放，真实漂移会被一起放过。
+    # 所以这里只在「按回填器同一约定重写后**与原格逐字符相同**」时判通过：
+    # 这是精确匹配，不是模糊放行；产物一变，重写结果就与原格不同 → 照样报错。
+    if fmt_like(cell, want, idx) == cell:
         return ('direct', n, s, e)
     return None
 
@@ -1633,10 +1903,111 @@ def resolve(spec):
         # P18：某臂某年组合收益（文档按百分比展示）
         art, lab, yr = spec[1], spec[2], spec[3]
         return dig(ART[art], ['results', lab, 'combined_yearly', yr])
+    if spec[0] == 'p15row':
+        # P15：summary.rows[i] 的某字段（i = 长历史窗口序号 0/1/2）
+        return dig(ART['p15l'], ['summary', 'rows', f'[{spec[1]}]', spec[2]])
+    if spec[0] == 'p15base':
+        # P15：results.<窗口>.baseline.<字段>
+        return dig(ART['p15l'], ['results', spec[1], 'baseline', spec[2]])
+    if spec[0] == 'p15gain':
+        # P15：某长历史窗口的 oracle_s 上界增益（oracle_s − 定稿）
+        r = dig(ART['p15l'], ['summary', 'rows', f'[{spec[1]}]'])
+        return r['oracle_s'] - r['base_sharpe']
+    if spec[0] == 'p14gain':
+        # P14：某窗口的 oracle_s 上界增益（oracle_s − 基线）
+        art = ART[spec[1]]
+        return (dig(art, ['results', 'oracle_s', 'combined_sharpe'])
+                - dig(art, ['baseline_metrics', 'combined_sharpe']))
+    if spec[0] == 'p14pastjw':
+        # P14：past_j 的 A 腿权重均值（P15 文档 5 窗口表的 main/oos 列）
+        return dig(ART[spec[1]], ['results', 'past_j', 'a_leg_weight_avg'])
+    if spec[0] == 'p13r':
+        # P13：某窗口某方案的某字段。
+        # main/oos → results.<方案>.<字段>；长历史 → results.<窗口>.results.<方案>.<字段>
+        art, win, scheme, field = spec[1], spec[2], spec[3], spec[4]
+        o = ART[art]
+        if win in ('main', 'oos'):
+            return dig(o, ['results', scheme, field])
+        return dig(o, ['results', win, 'results', scheme, field])
+    if spec[0] == 'p13d':
+        # P13：某方案相对基线（base_equal）的差值（同窗口同字段）
+        art, win, scheme, field = spec[1], spec[2], spec[3], spec[4]
+        o = ART[art]
+        if win in ('main', 'oos'):
+            return (dig(o, ['results', scheme, field])
+                    - dig(o, ['results', 'base_equal', field]))
+        return (dig(o, ['results', win, 'results', scheme, field])
+                - dig(o, ['results', win, 'results', 'base_equal', field]))
+    if spec[0] == 'p13c2':
+        # P13：成本×2 后的组合夏普相对原值的差
+        art, win, scheme = spec[1], spec[2], spec[3]
+        o = ART[art]
+        return (dig(o, ['cost_x2', scheme, 'combined_sharpe'])
+                - dig(o, ['results', scheme, 'combined_sharpe']))
+    if spec[0] == 'p13cx2':
+        # P13：成本×2 后的某个字段（表 7）
+        art, scheme, field = spec[1], spec[2], spec[3]
+        return dig(ART[art], ['cost_x2', scheme, field])
+    if spec[0] == 'p13mu':
+        # P13：袖套年化 μ —— 口径 = (1+累计收益)^(252/自然日跨度) − 1
+        # （脚本原口径；已用 base_equal/invvol/erc/minvar/class_rp 五个方案
+        #   逐一核对文档展示值，四舍五入到 2 位全部一致）
+        art, win, scheme = spec[1], spec[2], spec[3]
+        o = ART[art]
+        if win in ('main', 'oos'):
+            ncal = o['n_calendar']
+            ret = dig(o, ['results', scheme, 'sleeve_return'])
+        else:
+            ncal = dig(o, ['results', win, 'n_calendar'])
+            ret = dig(o, ['results', win, 'results', scheme, 'sleeve_return'])
+        return (1.0 + ret) ** (252.0 / ncal) - 1.0
+    if spec[0] == 'p13bhb':
+        # P13：零技巧基准（买入持有等权）
+        return dig(ART[spec[1]], ['buyhold_equal_benchmark', spec[2]])
+    if spec[0] == 'p13rc':
+        # P13：类风险贡献（base_equal）
+        return dig(ART[spec[1]], ['risk_contrib_by_class', 'base_equal', spec[2]])
     return dig(ART[spec[1]], spec[2])
 
 
 TOL = 5e-4
+
+
+def resolve_table_idx(tables, ti: Any, col_hdr: str) -> Tuple[int, Optional[str]]:
+    """把锚点的表定位形态解析成表序号 → (idx, 错误信息)；出错时 idx = -1。
+
+    形态：
+      - ('row', 行标签[, 消歧列]) → 按行标签定位表；可选第三位用于**消歧**
+        （col_hdr 是「要读的那一列」，而定位往往要靠同表的另一列区分：
+        P15 的 'w2013' 同时在「收益/σ 表」和「上界增益表」，两张表都有 '定稿' 列）；
+      - str → 按表头列名定位表；
+      - int → 直接当表序号。
+
+    **check() 与 --neg 注入自检必须共用这一份实现。**
+    2026-11-01 教训：两边各写一套会分叉，分叉的方向恰好是
+    「注入自检说抓到了，实际注入的是另一张表」→ 共错盲区。
+    """
+    if isinstance(ti, tuple) and len(ti) >= 2 and ti[0] == 'row':
+        _row = ti[1]
+        cands = [i for i, (h, rows) in enumerate(tables)
+                 if any(r and norm(r[0]) == norm(_row) for r in rows)]
+        _disc = norm(ti[2]) if len(ti) > 2 else norm(col_hdr)
+        cands2 = [i for i in cands
+                  if any(norm(c) == _disc for c in tables[i][0])]
+        if cands2:
+            cands = cands2
+        if not cands:
+            return -1, f'找不到含行「{_row}」的表'
+        return cands[0], None
+    if isinstance(ti, str):
+        cands = [i for i, (h, _) in enumerate(tables)
+                 if any(norm(col_hdr) == norm(c) for c in h)]
+        if not cands:
+            return -1, f'找不到含列「{col_hdr}」的表'
+        return cands[0], None
+    if isinstance(ti, int):
+        return ti, None
+    return -1, f'表定位形态非法：{ti!r}'
 
 
 def check(texts, anchors):
@@ -1648,34 +2019,10 @@ def check(texts, anchors):
             problems.append(f'{doc_pref}: 文档不存在')
             continue
         tables = extract_tables(texts[doc])
-        # 用局部变量 ti 承载解析后的表序号（避免与锚点里的原始形态混用类型）
-        ti = a[1]
-        if isinstance(ti, tuple) and ti and ti[0] == 'row':
-            # 按**行标签**定位表：插表导致表序号位移时仍然稳（P17 教训：
-            # 「往文档插新表会让后面表序号位移」→ 表序号锚点必须同步改，
-            #  行标签锚点不用）。ti = ('row', 行标签, 列名)
-            cands = [i for i, (h, rows) in enumerate(tables)
-                     if any(r and norm(r[0]) == norm(ti[1]) for r in rows)]
-            # 同一个行标签可能出现在多张表（如 P18 的 '0.10' 同时在 placebo 表和机制表）：
-            # 用**列名**再筛一次，选出真正含该列的表。
-            cands2 = [i for i in cands
-                      if any(norm(c) == norm(col_hdr) for c in tables[i][0])]
-            if cands2:
-                cands = cands2
-            if not cands:
-                problems.append(f'{doc}: 找不到含行「{ti[1]}」的表')
-                continue
-            ti = cands[0]
-        elif isinstance(ti, str):
-            # 按表头关键字定位表
-            cands = [i for i, (h, _) in enumerate(tables)
-                     if any(norm(col_hdr) == norm(c) for c in h)]
-            if not cands:
-                problems.append(f'{doc}: 找不到含列「{col_hdr}」的表')
-                continue
-            ti = cands[0]
-        else:
-            ti = int(ti)
+        ti, terr = resolve_table_idx(tables, tidx, col_hdr)
+        if terr:
+            problems.append(f'{doc}: {terr}')
+            continue
         if ti >= len(tables):
             problems.append(f'{doc}: 表序号 {ti} 越界（共 {len(tables)} 张表）')
             continue
@@ -2252,6 +2599,24 @@ def main():
             return 2
         print()
 
+    # ── 闸门：审计器读取的每个产物都必须纳入指纹清单 ──
+    # 2026-11-01 实查出的洞：multi_asset_p15_long_pastj.json 文档数字指着它，
+    # 但它既不在 TRACKED 也不在 AUDITED → 一份未提交的中间版脚本可以整个
+    # 覆盖掉它，而**没有任何机制发现**（因为审计器根本没读它）。
+    # 这个闸门把「审计器读 ⇒ 必须受指纹保护」变成硬约束：
+    # 以后再加产物忘了登记，审计会直接失败，而不是静默失去保护。
+    import artifact_manifest as _AM
+    _untracked = sorted({f for f in ART_FILES if f not in _AM.TRACKED})
+    if _untracked:
+        print('=' * 78)
+        print('❌ 覆盖完整性闸门失败：审计器读取的产物未纳入指纹清单')
+        print('=' * 78)
+        for f in _untracked:
+            print(f'   - {f}')
+        print('   → 这些产物可被静默覆盖，文档数字将不可验证。')
+        print('   → 先登记进 artifact_manifest.TRACKED（必要时补 AUDITED）再重跑。')
+        return 2
+
     texts = load_docs()
     anchors = build_anchors()
     text_anchors = build_text_anchors()
@@ -2312,6 +2677,34 @@ def main():
         print('=' * 78)
         print('自检：动态注入错误 → 期望审计失败')
         print('=' * 78)
+        # ── 定向自检：展示精度兜底（fmt_like）不能变成「万能放行」──
+        # 逐锚点注入用的是 n+0.5 的大偏差，抓不到「差一个末位」的情况。
+        # 而 fmt_like 兜底恰恰是**展示精度**相关的，必须单独验：
+        #   正确舍入 ✅ 通过 / 差一位 ❌ 报错 / 多一位 ❌ 报错 / 百分比同理。
+        _fmt_cases = [
+            ('0.258', 0.2575, True),    # 产物 0.2575 → 文档展示 0.258 ✅
+            ('0.257', 0.2575, False),   # 舍错方向 ❌
+            ('0.2580', 0.2575, False),  # 展示位数比产物多 ❌
+            ('0.2575', 0.2575, True),   # 等精度 ✅
+            ('0.601', 0.6006, True),    # 产物 0.6006 → 0.601 ✅
+            ('0.602', 0.6006, False),
+            ('14.44%', 0.144381, True),  # 百分比格 ✅
+            ('14.50%', 0.144381, False),  # 超出 0.05pp 容差 → 报错
+            ('+11.41%', 0.114075, True),  # 带正号 ✅
+            ('1.4114', 1.41144113, True),
+            ('1.4120', 1.41144113, False),  # 超出数值容差且不是正确舍入 → 报错
+        ]
+        _fmt_bad = []
+        for _cell, _want, _ok in _fmt_cases:
+            _got = target_number(_cell, _want) is not None
+            if _got != _ok:
+                _fmt_bad.append((_cell, _want, _ok, _got))
+        if _fmt_bad:
+            print('  ❌ 展示精度兜底自检失败（这些格被误判或误放过）：')
+            for _c, _w, _e, _g in _fmt_bad:
+                print(f'      格 {_c!r} × 产物 {_w!r}：期望 {"通过" if _e else "报错"}，实际 {"通过" if _g else "报错"}')
+            return 1
+        print(f'  ✅ 展示精度兜底定向自检通过（{len(_fmt_cases)} 例：正确舍入放过 / 差一位与错位数全部报错）')
         # **动态注入**：从锚点实时定位真实单元格并改坏其中一个数字。
         # 旧实现把注入目标写死成字面量（如 `**1.3767**`），
         # 文档数字一更新注入点就失效 —— 自检形同虚设（而且是「静默失效」）。
@@ -2331,24 +2724,10 @@ def main():
                 continue
             try:
                 tables = extract_tables(texts[doc])
-                if isinstance(tidx, tuple) and tidx and tidx[0] == 'row':
-                    # 行标签定位（与 check() 同语义）：先用行标签筛，再用列名筛
-                    cands = [i for i, (h, rows) in enumerate(tables)
-                             if any(r and norm(r[0]) == norm(tidx[1]) for r in rows)]
-                    cands2 = [i for i in cands
-                              if any(norm(c) == norm(col_hdr) for c in tables[i][0])]
-                    if cands2:
-                        cands = cands2
-                    if not cands:
-                        continue
-                    tidx = cands[0]
-                elif isinstance(tidx, str):
-                    cands = [i for i, (h, _) in enumerate(tables)
-                             if any(norm(col_hdr) == norm(c) for c in h)]
-                    if not cands:
-                        continue
-                    tidx = cands[0]
-                if tidx >= len(tables):
+                # 表定位走**同一个** resolve_table_idx（第三份拷贝已删除）——
+                # 注入自检与核对必须指向同一张表，否则注入的是别处。
+                tidx, terr = resolve_table_idx(tables, tidx, col_hdr)
+                if terr or tidx >= len(tables):
                     continue
                 header, data = tables[tidx]
                 cell, err = find_cell(header, data, row_label, col_hdr)
@@ -2518,24 +2897,12 @@ def main():
                 continue
             try:
                 tables = extract_tables(texts[doc])
-                if isinstance(tidx, tuple) and tidx and tidx[0] == 'row':
-                    cands = [i for i, (h, rows) in enumerate(tables)
-                             if any(r and norm(r[0]) == norm(tidx[1]) for r in rows)]
-                    cands2 = [i for i in cands
-                              if any(norm(c) == norm(col_hdr) for c in tables[i][0])]
-                    if cands2:
-                        cands = cands2
-                    if not cands:
-                        skipped.append((doc_pref, row_label, col_hdr, '无此行'))
-                        continue
-                    tidx = cands[0]
-                elif isinstance(tidx, str):
-                    cands = [i for i, (h, _) in enumerate(tables)
-                             if any(norm(col_hdr) == norm(c) for c in h)]
-                    if not cands:
-                        skipped.append((doc_pref, row_label, col_hdr, '无此列'))
-                        continue
-                    tidx = cands[0]
+                # 表定位必须走**同一个** resolve_table_idx（与 check() 共用），
+                # 否则注入自检可能注到别的表上 → 「说抓到了，其实没抓到」。
+                tidx, terr = resolve_table_idx(tables, tidx, col_hdr)
+                if terr:
+                    skipped.append((doc_pref, row_label, col_hdr, terr))
+                    continue
                 if tidx >= len(tables):
                     skipped.append((doc_pref, row_label, col_hdr, '表越界'))
                     continue

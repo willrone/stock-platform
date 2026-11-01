@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-11-01T11:41:01",
-  "git_commit": "3b893e3a",
+  "generated_at": "2026-11-01T15:54:08",
+  "git_commit": "c5d15865",
   "data_dir": "data/backtest",
   "sha256_mode": "normalized-json-v1",
   "sha256_excludes": [
@@ -251,6 +251,11 @@
       "sha256": "113d4f37ba5663b0097972bb0fcdf24eb089e1aeb01328d17b3fa623c0da2672",
       "bytes": 4156,
       "mtime": "2026-10-31T23:02:56"
+    },
+    "multi_asset_p15_long_pastj.json": {
+      "sha256": "70152063e32de856ffd69d840ff8886ede3ad7074f0aa8af8fd8cb750771ab5f",
+      "bytes": 11453,
+      "mtime": "2026-11-01T14:19:45"
     },
     "multi_asset_p17_single_main.json": {
       "sha256": "55e83a97c7cae78d8be5539859a080c84121f3faf44002f34d0d3b1b4cf68e63",

@@ -80,32 +80,22 @@ def table_blocks(lines: List[str]) -> List[List[int]]:
     return keep
 
 
-def fmt_like(old: str, want: float) -> str:
-    """按旧单元格的格式重写数值（保留装饰、符号、小数位数）。
+def fmt_like(old: str, want: float, idx: int = 0) -> str:
+    """按旧单元格的格式重写**第 idx 个**数字（保留装饰、符号、小数位数）。
 
-    **定位规则必须与审计器 `target_number` 完全一致**：
-      - 单元格只有一个数字且含 `%` → 百分比格，写 want×100；
-      - 否则（纯数值格 / 复合格如 `1.3767 (+59.0%)`）→ 写 want，且只替换**第一个**数字。
+    **2026-11-01：实现下沉到审计器 `audit_doc_numbers.fmt_like`，此处只代理。**
+    原因：这个函数是「文档展示精度」的**唯一约定**（小数位数沿用原格、
+    舍入用四舍五入）。审计器要判断「文档格是否就是产物按该约定舍入后的结果」，
+    回填器要按同一约定写回 —— 两边各写一份，迟早会分叉，
+    而分叉的方向恰好是「审计通过但数字不对」。
+    注意：审计器的**主判定**不依赖这个函数（数值容差独立判定），
+    fmt_like 只在「按约定重写后与原格逐字符相同」时作为精确兜底，
+    所以两边共用不会造成共错盲区（负向注入测试守着这条线）。
 
-    早期版本用「格子里出现 % 就整格 ×100」的粗暴规则，
-    会把 `**1.3767 (+59.0%)` 的夏普写成 `137.8600`，
-    而审计器当时用同一套错误逻辑 → 审计与回填**同时失灵**，互为盲区。
+    **idx 必须支持**（锚点第 6 位）：早期无视 idx 一律改写第一个数字，
+    --apply 会把 P12 的 58 个 '子窗口众数' 格从 '0.15 (1/4)' 改成 '1.00 (1/4)'。
     """
-    nums = AUD.cell_num_positions(old)
-    if not nums:
-        return old
-    _n, s, e = nums[0]
-    if len(nums) == 1 and "%" in old:
-        val = want * 100.0
-    else:
-        val = want
-    raw = old[s:e]
-    dec = len(raw.split(".")[1]) if "." in raw else 0
-    out = f"{val:.{dec}f}"
-    # 原值带显式正号且新值非负 → 保留正号
-    if raw.startswith("+") and not out.startswith("-"):
-        out = "+" + out
-    return old[:s] + out + old[e:]
+    return AUD.fmt_like(old, want, idx)
 
 
 def backfill_doc(doc_path: str, anchors: List[Any]) -> Tuple[str, int, int]:
@@ -115,25 +105,36 @@ def backfill_doc(doc_path: str, anchors: List[Any]) -> Tuple[str, int, int]:
     lines = text.split("\n")
     blocks = table_blocks(lines)
 
+    # 表结构（供 AUD.resolve_table_idx 定位用）：
+    # 块的顺序与 AUD.extract_tables 的表顺序**一致**（table_blocks 已保证）。
+    tables_meta: List[Tuple[List[str], List[List[str]]]] = []
+    for b in blocks:
+        hdr_cells: List[str] = []
+        data_cells: List[List[str]] = []
+        for li in b:
+            cells = lines[li].split("|")[1:-1]
+            if cells and all(re.fullmatch(r"\s*:?-{2,}:?\s*", c or " ") for c in cells):
+                continue
+            if not hdr_cells:
+                hdr_cells = cells
+            else:
+                data_cells.append(cells)
+        tables_meta.append((hdr_cells, data_cells))
+
     # 锚点按 (tidx, row_label, col_hdr) 分组
     changed = 0
     missed = 0
     for a in anchors:
         doc_pref, tidx, row_label, col_hdr, spec = a[0], a[1], a[2], a[3], a[4]
-        if isinstance(tidx, str):
-            cands = []
-            for bi, b in enumerate(blocks):
-                hdr = [AUD.norm(c) for c in lines[b[0]].split("|")[1:-1]]
-                if any(AUD.norm(col_hdr) == AUD.norm(c) for c in hdr):
-                    cands.append(bi)
-            if not cands:
-                missed += 1
-                continue
-            tidx = cands[0]
-        if tidx >= len(blocks):
+        # 锚点可带第 6 位：复合格里对应**第 N 个**数字（默认第 0 个）
+        idx = a[5] if len(a) > 5 else 0
+        # 表定位必须走**同一个** resolve_table_idx（与审计器共用）——
+        # 否则回填器会改到别的表上（曾把 tuple 锚点当成表序号直接崩）。
+        ti, terr = AUD.resolve_table_idx(tables_meta, tidx, col_hdr)
+        if terr or ti >= len(blocks):
             missed += 1
             continue
-        b = blocks[tidx]
+        b = blocks[ti]
         # 表头行 + 数据行（跳过分隔行），保持与 extract_tables 一致
         hdr_cells: List[str] = []
         data: List[Tuple[int, List[str]]] = []
@@ -182,7 +183,19 @@ def backfill_doc(doc_path: str, anchors: List[Any]) -> Tuple[str, int, int]:
         li, cells = hit
         old = cells[ci]
         want = AUD.resolve(spec)
-        new_cell = fmt_like(old, want)
+        # ── 只修「审计器判不过」的格 ─────────────────────────────
+        # 回填器不是「把我的规范格式全刷一遍」，而是「把错的改对」。
+        # 判据直接用**审计器的同一个判定函数** target_number：
+        #   - 它说这个格已经对（在容差内，或就是按约定舍入后的展示）→ **不动**；
+        #   - 它说这个格不对（真正的数字漂移）→ 按约定重写。
+        # 这样两边共用一套「什么算对」的定义，不会出现
+        # 「回填器按自己的规范改一通、审计器按另一套判它对」的来回打架。
+        # 实测过这个坑：42 格差异里**没有一格是真漂移**，全是约定差异
+        # （文档用 U+2212 排版减号、平局舍入取法不同、手写值与重算值差 1ulp），
+        # 早期回填器会把这些正确的格子全部改写一遍。
+        if AUD.target_number(old, want, idx) is not None:
+            continue
+        new_cell = fmt_like(old, want, idx)
         if new_cell != old:
             parts = lines[li].split("|")
             # split 后 parts[0] 与 parts[-1] 是行首行尾的空串，数据格从 1 开始

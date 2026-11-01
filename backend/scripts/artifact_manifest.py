@@ -88,6 +88,11 @@ TRACKED = [
     "multi_asset_p13_long.json",        # P13 长历史 3 窗口
     "multi_asset_p14_main.json",        # P14 Oracle 上界（main）
     "multi_asset_p14_oos.json",         # P14 Oracle 上界（oos）
+    # ── P15：past_j 长历史独立审判（2026-11-01 补登）──
+    # 这一条是**实查出来的洞**：P15 产物既不在 TRACKED 也不在 AUDITED，
+    # 于是一份未提交的中间版脚本可以把它整个覆盖掉，而**没有任何机制发现**
+    # （文档数字还指着它，却没人比对它）。补登记后指纹门开始守它。
+    "multi_asset_p15_long_pastj.json",  # P15 长历史 3 窗口 past_j/oracle_s
     # ── P17：类内选标的 oracle 上界 + 袖套调仓频率 ──
     "multi_asset_p17_single_main.json",
     "multi_asset_p17_single_oos.json",
@@ -160,7 +165,17 @@ AUDITED = [
     "multi_asset_p12_long.json",
     "multi_asset_p12_longw.json",
     "multi_asset_p12_diag.json",
-    # ── P13 / P14（2026-10-31 补登：此前 P13 产物漏登记，等于没有指纹保护）──
+    # ── P13 / P14 / P15（审计器实际读取的产物）──
+    # 2026-11-01：P13/P14/P15 三份文档此前一条表格断言都没有。
+    # 补断言后，P13 main/oos/长历史、P14 main/oos、P15 长历史成了审计器
+    # **真实读取**的产物 → 必须登记进 AUDITED
+    # （否则它们可被静默覆盖，而文档数字还指着它们）。
+    "multi_asset_p13_main.json",
+    "multi_asset_p13_oos.json",
+    "multi_asset_p13_long.json",
+    "multi_asset_p14_main.json",
+    "multi_asset_p14_oos.json",
+    "multi_asset_p15_long_pastj.json",
     "multi_asset_p17_single_main.json",
     "multi_asset_p17_single_oos.json",
     "multi_asset_p17_verify_main.json",
