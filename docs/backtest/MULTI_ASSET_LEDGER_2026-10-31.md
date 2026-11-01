@@ -2037,7 +2037,11 @@ hypothesis 插件每次告警。无害，但值得知道。）
 | 归档 | `~/.hermes/cache/scratch/pytest_full_20261102_postfix.log` |
 | `--collect-only` 交叉核对 | **737 collected** = 737 passed → 无 skip、无 deselect、无 xfail 混进 |
 
-（台账 §12.28 记的是 735；当前代码树 collect 出 737 → 以 **737** 为准。）
+（台账 §12.28 记的 735 与现在的 737 差 **2 条**，归因已查清：不是 §12.29 的加固
+（它只加 `except AssertionError: raise`，**没有新增任何 `def test`**），而是
+`2a37ad97`（11-02 **03:02**，"回测结果混入 NaN → 响应是非法 JSON"）补的 **2 条
+`allow_nan=False` 回归用例**；735 那轮跑在 **02:22** 结束 → 早于该提交，自然没有这 2 条。
+→ 结论：**以 737 为准**，两个数字都对，只是快照时点不同。）
 
 ### C. 新发现：`except Exception` 仍会吞掉 AssertionError（§12.28 修法的残留）
 
