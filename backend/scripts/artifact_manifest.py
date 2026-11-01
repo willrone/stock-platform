@@ -292,21 +292,28 @@ def git_commit() -> str:
 
 
 def doc_cited_artifacts() -> set:
-    """docs/backtest/*.md 正文里点名的 data/backtest 产物（只算真实存在的）。
+    """docs/ 下**所有** markdown 正文里点名的 data/backtest 产物（只算真实存在的）。
 
     为什么需要它：2026-11-01 的篡改实验证明，**文档引用 ≠ 被保护**。
     审计器只校验"文档里写的那几个数字"，清单只保护"自己登记的那几个文件"，
-    两者之间的差集（21 个文档引用件）就是一个合法的静默漂移通道。
+    两者之间的差集（22 个文档引用件）就是一个合法的静默漂移通道。
     → 把"文档点名"变成清单的**自动输入**，差集就再也藏不住。
+
+    扫描范围：docs/**/*.md（含 docs/plans、docs/reports 等）+ 仓库根 md。
+    2026-11-01 扩到全 docs 时新暴露 0 个（55 个引用件已全部在清单），
+    但**范围必须写死在前门里**——否则下次有人在 docs/reports 引用产物又是盲区。
     """
     cited = set()
-    if not os.path.isdir(DOCS_DIR):
-        return cited
-    for md in sorted(glob.glob(os.path.join(DOCS_DIR, "*.md"))):
+    docs_root = os.path.join(ROOT, "docs")
+    paths: List[str] = []
+    if os.path.isdir(docs_root):
+        paths += glob.glob(os.path.join(docs_root, "**", "*.md"), recursive=True)
+    paths += glob.glob(os.path.join(ROOT, "*.md"))
+    for md in sorted(paths):
         try:
             with open(md, "r", encoding="utf-8") as fh:
                 text = fh.read()
-        except OSError:
+        except (OSError, UnicodeDecodeError):
             continue
         for name in re.findall(r"([A-Za-z0-9_\-]+\.json)", text):
             if os.path.exists(os.path.join(DATA_DIR, name)):
