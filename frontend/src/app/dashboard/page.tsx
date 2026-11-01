@@ -49,6 +49,7 @@ import { SafeAreaTop } from '../../components/mobile/SafeAreaTop';
 import { DeltaValue } from '../../components/mobile/DeltaValue';
 import { BOTTOM_NAV_CONTENT_PADDING, MIN_TOUCH_TARGET } from '../../components/mobile/safeArea';
 import { tradingGet, daysSince } from '../../components/mobile/tradingClient';
+import { trackEventOnce } from '@/services/funnel';
 
 /** 后端 /monitoring/health 里单个服务的原始结构 */
 type ServiceHealthRaw = {
@@ -161,6 +162,11 @@ export default function DashboardPage() {
     } finally {
       setTodaySummaryLoading(false);
     }
+  }, []);
+
+  // 漏斗埋点：首屏（每个标签页会话只记一次；埋点失败不影响页面）
+  useEffect(() => {
+    trackEventOnce('first_screen', { path: 'dashboard' });
   }, []);
 
   useEffect(() => {

@@ -42,6 +42,7 @@ import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
 import { SafeAreaTop } from '@/components/mobile/SafeAreaTop';
 import { BOTTOM_NAV_CONTENT_PADDING, MIN_TOUCH_TARGET } from '@/components/mobile/safeArea';
 import { tradingGet, daysSince } from '@/components/mobile/tradingClient';
+import { trackEventOnce } from '@/services/funnel';
 
 type Trade = {
   code: string;
@@ -191,6 +192,8 @@ export default function PaperSignalPage() {
         `/trading/signal?strategy=${encodeURIComponent(STRATEGY)}`
       );
       setData(res);
+      // 漏斗埋点：用户真的看到了纸面信号
+      trackEventOnce('view_signal', { source: 'paper-signal', strategy: STRATEGY });
     } catch (e) {
       setError(e instanceof Error ? e.message : '纸面信号读取失败');
       setErrorDetail((e as { detail?: unknown })?.detail ?? e);

@@ -23,6 +23,7 @@ from app.core.security import (
 )
 from app.models.user_models import User
 from app.services.billing.email_service import send_password_reset_email
+from app.services.funnel import funnel_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -31,6 +32,9 @@ class RegisterRequest(BaseModel):
     email: str = Field(..., examples=["user@example.com"])
     username: str = Field(..., min_length=2, max_length=50, examples=["quant_wang"])
     password: str = Field(..., min_length=6, max_length=128)
+    # 2026-11-01 漏斗埋点：前端生成的匿名设备标识。带上它才能把
+    # "注册前看了价格页" 这类匿名行为归并到注册后的 user_id 上。
+    anon_id: Optional[str] = Field(None, max_length=64)
 
 
 class LoginRequest(BaseModel):
@@ -104,6 +108,18 @@ class ForgotPasswordResponse(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+def _track_funnel(session, event: str, **kwargs) -> None:
+    """记录漏斗事件。**埋点失败绝不影响主流程**（注册/登录必须成功）。"""
+    try:
+        funnel_service.record_event(session, event, **kwargs)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"漏斗埋点失败（忽略）: {exc}")
+        try:
+            session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
 
 
 def _get_user_by_email(session, email: str):
@@ -182,6 +198,15 @@ def register(req: RegisterRequest):
             logger.warning("注册唯一约束冲突: {}", integrity_err)
             raise HTTPException(status_code=409, detail="邮箱或用户名已被使用")
         session.refresh(user)
+        # 漏斗：注册成功（服务端事实，前端不重复上报）
+        _track_funnel(
+            session,
+            funnel_service.EVENT_SIGNUP,
+            user_id=user.id,
+            anon_id=req.anon_id,
+            props={"username": user.username},
+            source="backend",
+        )
         return _auth_response(user, message="注册成功")
     except HTTPException:
         raise
@@ -214,6 +239,13 @@ def login(req: LoginRequest):
         user.last_login_at = datetime.utcnow()
         session.commit()
         session.refresh(user)
+        # 漏斗：登录成功（服务端事实）
+        _track_funnel(
+            session,
+            funnel_service.EVENT_LOGIN,
+            user_id=user.id,
+            source="backend",
+        )
         return _auth_response(user, message="登录成功")
     except HTTPException:
         raise

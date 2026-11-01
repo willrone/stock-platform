@@ -17,6 +17,7 @@ from app.models.commerce_models import (
     UsageEvent,
     UserBalance,
 )
+from app.models.funnel_models import FunnelEvent
 from app.models.strategy_config_models import StrategyConfig
 from app.models.subscription_models import (
     SubscriptionPlan,
@@ -62,4 +63,6 @@ __all__ = [
     "UsageEvent",
     "BillingRecord",
     "CommercePricingRule",
+    # Funnel models
+    "FunnelEvent",
 ]

@@ -51,6 +51,7 @@ import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
 import { BOTTOM_NAV_CONTENT_PADDING, MIN_TOUCH_TARGET } from '@/components/mobile/safeArea';
 import { SafeAreaTop } from '@/components/mobile/SafeAreaTop';
 import { tradingGet, daysSince } from '@/components/mobile/tradingClient';
+import { trackEventOnce } from '@/services/funnel';
 
 type Trade = {
   code: string;
@@ -269,6 +270,8 @@ export default function TodaySignalPage() {
     try {
       const res = await tradingGet<DailySignal>(`/trading/signal?strategy=${encodeURIComponent(active)}`);
       setSignal(res);
+      // 漏斗埋点：用户真的看到了一条信号（不是只进了页面）
+      trackEventOnce('view_signal', { source: 'today-signal', strategy: active });
       // 档位以 /trading/signal 返回的为准（与 strategies 端点同源）
       if (res.tier !== undefined) {
         setTier(res.tier);

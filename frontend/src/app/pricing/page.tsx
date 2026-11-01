@@ -45,6 +45,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import { apiRequest } from '@/services/api';
+import { trackEvent, trackEventOnce } from '@/services/funnel';
 
 type Plan = {
   id: 'free' | 'pro' | 'enterprise';
@@ -157,6 +158,8 @@ export default function PricingPage() {
     const token = window.localStorage.getItem('access_token');
     const storedUser = window.localStorage.getItem('user_info');
     setLoggedIn(Boolean(token));
+    // 漏斗埋点：付费墙触点（价格页）
+    trackEventOnce('view_pricing', { path: 'pricing' });
     if (storedUser) {
       try {
         const user = JSON.parse(storedUser) as { subscription_tier?: Plan['id'] };
@@ -206,6 +209,8 @@ export default function PricingPage() {
   };
 
   const choosePlan = async (plan: Plan) => {
+    // 漏斗埋点：升级意图（点了套餐 CTA）
+    trackEvent('click_upgrade', { plan: plan.id, logged_in: loggedIn, tier: currentTier });
     if (!loggedIn) {
       router.push('/login');
       return;
@@ -283,7 +288,10 @@ export default function PricingPage() {
         {error && (
           <Alert severity="warning" sx={{ mb: 3 }} onClose={() => setError(null)}>
             {error}
-            <Button size="small" sx={{ ml: 1.5 }} onClick={() => router.push('/wallet')}>
+            <Button size="small" sx={{ ml: 1.5 }} onClick={() => {
+              trackEvent('click_upgrade', { plan: 'wallet_recharge', logged_in: loggedIn, tier: currentTier });
+              router.push('/wallet');
+            }}>
               去钱包充值
             </Button>
           </Alert>

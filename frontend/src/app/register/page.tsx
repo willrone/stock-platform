@@ -28,6 +28,7 @@ import {
 import { ArrowLeft, UserPlus } from 'lucide-react';
 
 import { apiRequest } from '@/services/api';
+import { getAnonId } from '@/services/funnel';
 import { normalizeUser, useAppStore } from '@/stores/useAppStore';
 
 type AuthResponse = {
@@ -75,6 +76,9 @@ export default function RegisterPage() {
         email: email.trim(),
         username: username.trim(),
         password,
+        // 漏斗埋点：带上匿名设备标识，后端才能把"注册前看了价格页"
+        // 这类匿名行为归并到注册后的账号上。
+        anon_id: getAnonId(),
       });
 
       if (!data?.access_token) {

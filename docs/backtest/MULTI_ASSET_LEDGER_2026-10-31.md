@@ -925,6 +925,7 @@ pairs_trading / mean_reversion / cointegration / value·momentum·low_vol·multi
 | 纸面盘 6 条线 | ⚠️ **只有 1 个调仓点** | 全部 last_signal=2026-10-23 / last_trade=2026-10-26；**nav_history 0 点** → 净值曲线还没长出来 |
 | 研究结论简报推送 | ❌ **投递失败** | cron `strategy-conclusion-brief`（周二 08:00→微信）上次 `delivery_failed`：iLink session not ready |
 | 多资产线 | ✅ 本轮上线 | 代码+等价性+E2E+parity 全绿；定时任务待用户加载 plist |
+| 真实用户漏斗埋点 | ✅ **本轮上线** | 表 `funnel_events` + `POST /funnel/track` + 报告 CLI/API；口径与证据见 `docs/FUNNEL_TRACKING_2026-11-01.md`（单测 6 / E2E 27 / 前端 6 / tsc / build 全过） |
 
 #### D. 收入现状（`backend/data/app.db`，23 个用户）
 
@@ -951,6 +952,10 @@ pairs_trading / mean_reversion / cointegration / value·momentum·low_vol·multi
    研究简报推不出去（故事讲不出去）、
    0 真实用户（没人看得到这些）。
    这三件事的**边际收益远高于**再抠任何一条线的 0.00x 夏普。
+   → **2026-11-01 已补上"度量"这一环**：漏斗埋点上线（注册/登录/首屏/首条信号/
+   付费墙触点/升级点击/钱包/配额打满 + D1/D7 留存），从此"用户卡在哪一环"有数据可查，
+   不再靠猜。**但漏斗现在还是空的** —— 23 个用户全是 2026-10 之前建的测试号，
+   埋点不回填历史；要看漏斗形状必须等**新的真实用户**进来。
 4. **对用户终极目标（①自己赚钱 ②整改平台 ③吸引付费）的排序**：
    ① 需要一条**能持续走出来的净值曲线**（纸面盘 + 信号闭环）→ 运营闭环；
    ② 大刀阔斧整改的对象应该是**运营闭环**，不是再重写撮合器；

@@ -50,6 +50,7 @@ import {
 } from 'lucide-react';
 
 import { apiRequest } from '@/services/api';
+import { trackEventOnce } from '@/services/funnel';
 import { ResponsiveTable } from '@/components/mobile/ResponsiveTable';
 import { useSnackbarStore } from '@/stores/useSnackbarStore';
 
@@ -204,6 +205,8 @@ export default function WalletPage() {
       router.replace('/login');
       return;
     }
+    // 漏斗埋点：打开钱包 = 走到付费动作
+    trackEventOnce('wallet_open', { path: 'wallet' });
     void loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
