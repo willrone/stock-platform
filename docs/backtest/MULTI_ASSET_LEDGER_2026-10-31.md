@@ -2078,6 +2078,7 @@ except Exception as e:
 | 项 | 结果 |
 |---|---|
 | 正常路径（两文件） | **25 passed**，RC=0 |
+| **当前 HEAD 全量** `tests/unit` | **737 passed / 0 skipped / 0 failed**，RC=0，134.88s（加固前那轮 305s，差异是 hypothesis 库/字节码缓存热了）→ 归档 `~/.hermes/cache/scratch/pytest_full_20261102_head.log`；**0 skipped** = 修复前的症状确已消失 |
 | **探针**：把 `PredictionEngine.predict_single_stock/predict_multiple_stocks` 换成内部抛 `AssertionError` | **RC=1 + 3 FAILED + 0 SKIPPED** → 断言失败**确实变红**，不再被吞成 skip |
 | 探针实现 | **仓库内** `backend/scripts/verify_assertion_guard.py`（pytest 插件，`pytest_configure` 里打桩；**不落 scratch** —— scratch 24h 会清，证据链不能指向会消失的路径） |
 | 探针复现命令 | `cd backend && PROBE_ASSERTION_GUARD=1 env -u PYTHONHOME PYTHONPATH=. .venv-py313/bin/python3 -m pytest tests/unit/prediction/test_prediction_engine_properties.py -p scripts.verify_assertion_guard -p no:cacheprovider -q --tb=no`（`scripts/` 不在 sys.path 根 → 必须用包路径 `-p scripts.verify_assertion_guard`） |
