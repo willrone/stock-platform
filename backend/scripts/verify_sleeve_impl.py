@@ -264,9 +264,15 @@ def main() -> None:
         "combined_product_sleeve": round(sharpe(comb_prod), 4),
         "combined_product_sleeve_maxdd": round(maxdd(comb_prod), 4),
     }
-    with open(os.path.join(os.path.dirname(__file__), "sleeve_verify.json"), "w") as fh:
+    # 2026-11-01：结论产物归位到 data/backtest/（与其它产物同目录）
+    # —— 原来写在 backend/scripts/ 下 → 不在任何指纹清单的覆盖范围内
+    #    （指纹门只管 data/backtest/），等于一份没人守护的结论。
+    out_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "data", "backtest", "sleeve_verify.json")
+    with open(out_path, "w") as fh:
         json.dump(out, fh, ensure_ascii=False, indent=1)
-    print("\n[verify] 结论产物 → backend/scripts/sleeve_verify.json")
+    print("\n[verify] 结论产物 → data/backtest/sleeve_verify.json")
     print(json.dumps(out, ensure_ascii=False, indent=1))
 
 

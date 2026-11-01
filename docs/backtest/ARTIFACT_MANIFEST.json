@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-11-01T19:51:49",
-  "git_commit": "4f8cd202",
+  "generated_at": "2026-11-01T20:02:51",
+  "git_commit": "a87b9c37",
   "data_dir": "data/backtest",
   "sha256_mode": "normalized-json-v2",
   "sha256_excludes": [
@@ -410,6 +410,11 @@
       "sha256": "270afa5768d78fdd97a97eabdc24fc29253c3697f4a137e10ef94f8b716c7bf2",
       "bytes": 29654,
       "mtime": "2026-10-26T11:09:30"
+    },
+    "sleeve_verify.json": {
+      "sha256": "098276bcb2668752265afbc5afcd0c5588b62aa3e8a5d34b088d262ea25d8f8e",
+      "bytes": 542,
+      "mtime": "2026-11-01T20:00:31"
     }
   },
   "missing": [],
@@ -470,6 +475,7 @@
     "p3_recon.json",
     "p5_class_audit.json",
     "pool_partition.json",
+    "sleeve_verify.json",
     "trial_budget.json",
     "turnover_truth.json",
     "verify_10y_pit.json"
