@@ -1,10 +1,14 @@
 {
-  "generated_at": "2026-11-01T15:54:08",
-  "git_commit": "c5d15865",
+  "generated_at": "2026-11-01T19:22:22",
+  "git_commit": "d50b02de",
   "data_dir": "data/backtest",
-  "sha256_mode": "normalized-json-v1",
+  "sha256_mode": "normalized-json-v2",
   "sha256_excludes": [
-    "wall_s"
+    "wall_s",
+    "total_wall_s",
+    "mainloop_sub_progress_update_s",
+    "precompute_sub_build_date_index_s",
+    "generated_at"
   ],
   "files": {
     "ALL_real_lag1_v2.json": {
@@ -253,7 +257,7 @@
       "mtime": "2026-10-31T23:02:56"
     },
     "multi_asset_p15_long_pastj.json": {
-      "sha256": "70152063e32de856ffd69d840ff8886ede3ad7074f0aa8af8fd8cb750771ab5f",
+      "sha256": "7e19db30a97e345dff3120b256f14abd28c6d6ffc84038e5572f420c83dd9430",
       "bytes": 11453,
       "mtime": "2026-11-01T14:19:45"
     },
@@ -296,11 +300,179 @@
       "sha256": "2814b92524c954033882a27f5bf809ec80ce9b6c2b0cccc4df55b04eb65517f8",
       "bytes": 1676,
       "mtime": "2026-11-01T04:19:58"
+    },
+    "_blend_nav_25f.json": {
+      "sha256": "7a992a4e7aa84023e8bdaa00e685a9b89dfd4055ca78075ee1655d0d33be28ec",
+      "bytes": 97466,
+      "mtime": "2026-10-27T01:59:45"
+    },
+    "baseline_final.json": {
+      "sha256": "47b863f9b9bf827a1a63a66bf5faeb2d6fb94c1ddcc65ad8fc1f988c7a873907",
+      "bytes": 2919,
+      "mtime": "2026-10-27T02:08:35"
+    },
+    "deflated_sharpe.json": {
+      "sha256": "457a1300155a1335596c18743f467f6cafbbdc275b66e21dfb4b4092bb24109f",
+      "bytes": 1598,
+      "mtime": "2026-10-27T04:18:16"
+    },
+    "ensemble_correlation.json": {
+      "sha256": "75bfd277756ceba7ed01541603befa2fadfda1258b19ca0713f0d2e58ab21246",
+      "bytes": 1124,
+      "mtime": "2026-10-26T23:26:13"
+    },
+    "full_history_features_progress.json": {
+      "sha256": "23b7ed08b1054cb88d8ddb85312f45ce2c3eb456725fda829d19fe7f017f0d15",
+      "bytes": 566899,
+      "mtime": "2026-10-26T18:19:31"
+    },
+    "full_history_reconcile.json": {
+      "sha256": "d541e4823c2778c2bfd09c218da1788c1a79d929296c1e89eaf7e37c2f46b307",
+      "bytes": 277726,
+      "mtime": "2026-10-26T18:24:29"
+    },
+    "fundamental_ic.json": {
+      "sha256": "30575b3afa2e1247b624ff58acc7c5585d66b3ebac4079ec25176da2ee01f5d2",
+      "bytes": 3457,
+      "mtime": "2026-10-27T04:12:30"
+    },
+    "fundseg_seg3_fund.json": {
+      "sha256": "2d9b759f8da9bcae5136ba382801dbacd50b99a2e5ba8e5148c31554143877f5",
+      "bytes": 2263,
+      "mtime": "2026-10-27T04:39:29"
+    },
+    "gbm_lag1.json": {
+      "sha256": "9b427cb963f45d779274c249ebf8fe50de90dd77ef8a0b7696968262b1c08c3f",
+      "bytes": 2905,
+      "mtime": "2026-10-27T04:56:46"
+    },
+    "gbm_ref_baselines.json": {
+      "sha256": "500e330f8499a3a0a269ea71ded0fe33aff629f04832783e95ec50c760dfc4b5",
+      "bytes": 2736,
+      "mtime": "2026-10-27T03:52:31"
+    },
+    "methods_5y_validation.json": {
+      "sha256": "fdc98880bf33d55227e6d2b4e5f86c14f368bc7f9e836ed875ed6318779abfb9",
+      "bytes": 7761,
+      "mtime": "2026-10-27T02:08:37"
+    },
+    "methods_engine_v2.json": {
+      "sha256": "9386f72cc9e2be3d7668a78db7a85c272e98d419f7b72292527d340a53f9a32c",
+      "bytes": 1584,
+      "mtime": "2026-10-27T01:58:19"
+    },
+    "methods_weights_fixed.json": {
+      "sha256": "56d31b6ee3975919213bfd73ba439bf24952ef21462e94c39acd9036881e5112",
+      "bytes": 7253,
+      "mtime": "2026-10-27T00:41:12"
+    },
+    "multi_asset_leg.json": {
+      "sha256": "979a2d6310f3ae1c1de623fb2a4e73d6e56ac7c7c9b375c8ef062f1cbd4aaef4",
+      "bytes": 9252,
+      "mtime": "2026-10-30T21:23:36"
+    },
+    "multi_asset_leg_oos.json": {
+      "sha256": "a8946d61da2015dddae74f454f0c07de8a98c4753cef757720f9bee1acdc8342",
+      "bytes": 8801,
+      "mtime": "2026-10-30T21:30:58"
+    },
+    "multi_asset_oos_validation.json": {
+      "sha256": "1a51659a01a388f734ff1e552e2d483a3921579c556ea361dc8fa3a317d51b01",
+      "bytes": 7503,
+      "mtime": "2026-10-30T22:13:07"
+    },
+    "multi_asset_p18_oos_smoke.json": {
+      "sha256": "ffe951d45c9dc7d76089b36259531bf82bf93358f417b08ceae9f9106038aa10",
+      "bytes": 18471,
+      "mtime": "2026-11-01T04:26:22"
+    },
+    "multi_asset_robustness.json": {
+      "sha256": "314a4720707dce1743ac2defa47a3635db7318378eddbf351ba40ccf81f5d72d",
+      "bytes": 10455,
+      "mtime": "2026-10-30T16:22:07"
+    },
+    "neut_segments.json": {
+      "sha256": "9b0de3ed9e66efe009386a685bc31c4e75d74b0c60d43e737e616fd2aeea6a1f",
+      "bytes": 1768,
+      "mtime": "2026-10-27T02:43:47"
+    },
+    "pool_partition.json": {
+      "sha256": "7245eb2d2edc7d0b22c33dda3b77c25a643d368153294fe15f587dd9b2cd5a2e",
+      "bytes": 23156,
+      "mtime": "2026-11-01T19:04:58"
+    },
+    "turnover_truth.json": {
+      "sha256": "d7e8180a13ac1cfc2ac83e12b96fa75bb9282e4f547996bb95eb350f46a9fec2",
+      "bytes": 9886,
+      "mtime": "2026-10-28T11:45:21"
+    },
+    "verify_10y_pit.json": {
+      "sha256": "270afa5768d78fdd97a97eabdc24fc29253c3697f4a137e10ef94f8b716c7bf2",
+      "bytes": 29654,
+      "mtime": "2026-10-26T11:09:30"
     }
   },
   "missing": [],
   "expected_missing": {
     "multi_asset_p18_oos.json": "P18 main 被判据(a)否决，按预注册 §10.2/§11.6 不跑 oos"
   },
-  "uncovered_audited": []
+  "uncovered_audited": [],
+  "doc_cited": [
+    "ALL_real_lag1_v2.json",
+    "_blend_nav_25f.json",
+    "baseline_final.json",
+    "deflated_sharpe.json",
+    "ensemble_correlation.json",
+    "full_history_features_progress.json",
+    "full_history_reconcile.json",
+    "fundamental_ic.json",
+    "fundseg_seg3_fund.json",
+    "gbm_lag1.json",
+    "gbm_ref_baselines.json",
+    "methods_5y_validation.json",
+    "methods_engine_v2.json",
+    "methods_weights_fixed.json",
+    "multi_asset_controls.json",
+    "multi_asset_final_robustness.json",
+    "multi_asset_final_robustness_oos.json",
+    "multi_asset_l3.json",
+    "multi_asset_l3_oos.json",
+    "multi_asset_leg.json",
+    "multi_asset_leg_oos.json",
+    "multi_asset_long_history.json",
+    "multi_asset_oos_validation.json",
+    "multi_asset_p11_alpha.json",
+    "multi_asset_p11_stats.json",
+    "multi_asset_p12_diag.json",
+    "multi_asset_p12_long.json",
+    "multi_asset_p12_longw.json",
+    "multi_asset_p12_main.json",
+    "multi_asset_p12_oos.json",
+    "multi_asset_p13_long.json",
+    "multi_asset_p13_main.json",
+    "multi_asset_p13_oos.json",
+    "multi_asset_p15_long_pastj.json",
+    "multi_asset_p18_main.json",
+    "multi_asset_p18_oos_smoke.json",
+    "multi_asset_p2_attrib.json",
+    "multi_asset_p2_main.json",
+    "multi_asset_p3_long.json",
+    "multi_asset_p3_main.json",
+    "multi_asset_p3_oos.json",
+    "multi_asset_p9_main.json",
+    "multi_asset_p9_oos.json",
+    "multi_asset_robustness.json",
+    "multi_asset_xclass.json",
+    "multi_asset_xclass_long_history.json",
+    "multi_asset_xclass_oos.json",
+    "neut_segments.json",
+    "p3_bond_recon.json",
+    "p3_recon.json",
+    "p5_class_audit.json",
+    "pool_partition.json",
+    "trial_budget.json",
+    "turnover_truth.json",
+    "verify_10y_pit.json"
+  ],
+  "uncovered_doc_cited": []
 }

@@ -22,9 +22,11 @@
 """
 from __future__ import annotations
 
+import glob
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime
@@ -34,6 +36,7 @@ BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 ROOT = os.path.abspath(os.path.join(BACKEND_DIR, ".."))
 DATA_DIR = os.path.join(ROOT, "data", "backtest")
 MANIFEST = os.path.join(ROOT, "docs", "backtest", "ARTIFACT_MANIFEST.json")
+DOCS_DIR = os.path.join(ROOT, "docs", "backtest")
 
 # 关键产物：文档数字全部依赖这些文件
 TRACKED = [
@@ -107,6 +110,40 @@ TRACKED = [
     "multi_asset_p18_oos.json",
     # ── 试验预算账本（只增不减；register 后由 trial_budget.py 自动重建清单）──
     "trial_budget.json",
+    # ── 文档引用件（2026-11-01 补）────────────────────────────────
+    # 背景：实证发现**文档正文引用的 21 个产物此前一份都没有指纹保护**。
+    # 篡改实验：改 pool_partition.json 的 baseline_sharpe/universe_size →
+    #   指纹门 ✅ 通过（不归它管）＋ 文档审计 ✅ 也通过（它只查被引用的那几个数）
+    #   → 引用得保护、清单不保护 = 静默漂移的合法通道。
+    # 处置：凡是 docs/backtest/*.md 正文点名的产物，一律纳入指纹。
+    #（`uncovered_doc_cited` 闸门保证以后新文档引用新产物时会自动报错）
+    "_blend_nav_25f.json",
+    "baseline_final.json",
+    "deflated_sharpe.json",
+    "ensemble_correlation.json",
+    "full_history_features_progress.json",
+    "full_history_reconcile.json",
+    "fundamental_ic.json",
+    "fundseg_seg3_fund.json",
+    "gbm_lag1.json",
+    "gbm_ref_baselines.json",
+    "methods_5y_validation.json",
+    "methods_engine_v2.json",
+    "methods_weights_fixed.json",
+    "multi_asset_leg.json",
+    "multi_asset_leg_oos.json",
+    "multi_asset_oos_validation.json",
+    "multi_asset_p18_oos_smoke.json",
+    "multi_asset_robustness.json",
+    "neut_segments.json",
+    "pool_partition.json",
+    "turnover_truth.json",
+    # ── 闸门自检件（2026-11-01 §12.23 D）────────────────────────────
+    # 这份产物原本既不在 TRACKED、也不被任何文档引用 → 不受任何门保护。
+    # 我在台账 §12.23 正文里**点了它的名字**（本想举例）→ 它当场变成
+    # 「文档引用件」→ 新闸门立刻报「文档新引用了未登记产物」并让 verify 变红。
+    # → 这就是闸门设计意图的直接实证：**差集藏不住，而且当场就藏不住**。
+    "verify_10y_pit.json",
 ]
 
 # ── 预期缺失（故意不产出的产物）──────────────────────────────────
@@ -196,10 +233,24 @@ AUDITED = [
 # 其余全部逐位一致 → 引擎数值是确定性的，不稳定源只有耗时。
 #
 # 因此：JSON 产物先剔除易变字段再算规范化 sha256；非 JSON 走整文件字节。
-# 易变字段白名单必须**最窄** —— 扫过全部 49 个产物，只有 wall_s 命中，
-# `duration`/`seconds`/`timestamp` 等没有命中（避免误剔业务字段，如交易日数）。
-VOLATILE_KEYS = ("wall_s",)
-SHA256_MODE = "normalized-json-v1"
+# 易变字段白名单必须**最窄** —— 逐个产物扫过，只收"墙钟耗时/生成时刻"类字段，
+# 绝不误剔业务字段（如交易日数、样本区间）。
+# 2026-11-01 扩到 21 个文档引用件后补到 5 个：
+#   wall_s / total_wall_s / mainloop_sub_progress_update_s /
+#   precompute_sub_build_date_index_s → 墙钟耗时（同一实验重跑只差这些）
+#   generated_at                        → 运行时刻戳
+# 其余（如 candidate_main_best_rule_arm、candidate_selected_on）是**确定性选择元信息**，
+# 不剥 —— 剥了就等于放弃对"选中了哪条规则"的保护。
+VOLATILE_KEYS = (
+    "wall_s",
+    "total_wall_s",
+    "mainloop_sub_progress_update_s",
+    "precompute_sub_build_date_index_s",
+    "generated_at",
+)
+# 指纹算法版本：**白名单变了 → 版本必须变**，否则旧清单（少剥几个字段）
+# 算出的哈希与新算法不一致，会被误读成"产物被覆盖"。
+SHA256_MODE = "normalized-json-v2"
 
 
 def _strip_volatile(obj: Any) -> Any:
@@ -240,6 +291,29 @@ def git_commit() -> str:
         return "unknown"
 
 
+def doc_cited_artifacts() -> set:
+    """docs/backtest/*.md 正文里点名的 data/backtest 产物（只算真实存在的）。
+
+    为什么需要它：2026-11-01 的篡改实验证明，**文档引用 ≠ 被保护**。
+    审计器只校验"文档里写的那几个数字"，清单只保护"自己登记的那几个文件"，
+    两者之间的差集（21 个文档引用件）就是一个合法的静默漂移通道。
+    → 把"文档点名"变成清单的**自动输入**，差集就再也藏不住。
+    """
+    cited = set()
+    if not os.path.isdir(DOCS_DIR):
+        return cited
+    for md in sorted(glob.glob(os.path.join(DOCS_DIR, "*.md"))):
+        try:
+            with open(md, "r", encoding="utf-8") as fh:
+                text = fh.read()
+        except OSError:
+            continue
+        for name in re.findall(r"([A-Za-z0-9_\-]+\.json)", text):
+            if os.path.exists(os.path.join(DATA_DIR, name)):
+                cited.add(name)
+    return cited
+
+
 def build() -> int:
     entries: Dict[str, Any] = {}
     missing: List[str] = []
@@ -258,6 +332,11 @@ def build() -> int:
         }
     # 覆盖完整性：审计器读的每个产物都必须在 TRACKED 里（否则它可被静默覆盖）
     uncovered = [n for n in AUDITED if n not in TRACKED]
+    # 覆盖完整性（2026-11-01 新增）：**文档正文点名的产物**也必须在 TRACKED 里。
+    # 审计器只查"文档里写的那几个数"；清单只护"自己登记的文件"。
+    # 两者差集 = 合法静默漂移通道（已用 pool_partition.json 篡改实验实证）。
+    doc_cited = doc_cited_artifacts()
+    uncovered_doc = sorted(n for n in doc_cited if n not in TRACKED)
     manifest = {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "git_commit": git_commit(),
@@ -269,6 +348,8 @@ def build() -> int:
         "expected_missing": {k: v for k, v in EXPECTED_MISSING.items()
                              if not os.path.exists(os.path.join(DATA_DIR, k))},
         "uncovered_audited": uncovered,
+        "doc_cited": sorted(doc_cited),
+        "uncovered_doc_cited": uncovered_doc,
     }
     os.makedirs(os.path.dirname(MANIFEST), exist_ok=True)
     with open(MANIFEST, "w", encoding="utf-8") as fh:
@@ -294,6 +375,13 @@ def verify() -> int:
     # 覆盖完整性：清单必须覆盖审计器依赖的全部产物
     for n in manifest.get("uncovered_audited", []):
         bad.append(f"{n}: 审计依赖但未纳入指纹清单")
+    # 覆盖完整性（2026-11-01 新增）：文档正文点名的产物必须都在指纹清单里。
+    # 两个口径（清单自报 + 当场按文档重算）都查：
+    #   自报 → build 当时就漏了；重算 → 清单生成后文档又引用了新产物。
+    for n in manifest.get("uncovered_doc_cited", []):
+        bad.append(f"{n}: 文档引用但未纳入指纹清单")
+    for n in sorted(doc_cited_artifacts() - set(TRACKED)):
+        bad.append(f"{n}: 文档新引用了未登记产物 → 需登记进 TRACKED 并重新 build")
     for name, meta in manifest.get("files", {}).items():
         p = os.path.join(DATA_DIR, name)
         if not os.path.exists(p):
