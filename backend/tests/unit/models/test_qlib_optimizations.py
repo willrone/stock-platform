@@ -535,6 +535,9 @@ class TestIntegration:
                 validation_split=0.2,
                 config=config,
             )
+        except AssertionError:
+            # 断言失败属于**被测行为违规**，不是环境问题 —— 必须让它红，不能当 skip 吞掉。
+            raise
         except Exception as e:
             # 如果因为Qlib不可用等原因失败，这是可以接受的
             pytest.skip(f"集成测试跳过（可能是Qlib不可用）: {e}")

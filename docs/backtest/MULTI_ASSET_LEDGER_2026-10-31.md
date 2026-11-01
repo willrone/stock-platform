@@ -2017,3 +2017,80 @@ hypothesis 插件每次告警。无害，但值得知道。）
   "功能静默消失"——所以未来告警要当**红线**查，不是噪音。
 - 修法要分层：**源头**（不该产生 NaN）+ **边界**（万一还有别的口子）。只在源头修，
   下次换个路径又会漏；只在边界修，内部口径仍是脏的。
+
+## 12.29 残留"假绿"口子：`except Exception` 仍会吞掉被测代码内部的 AssertionError（2026-11-02）
+
+### A. 触发
+
+一条**迟到的全量单测回执**（`proc_4a9afb9c206e`，日志 mtime `11-02 00:01`）到达时，
+§12.28 的修复（commit `c28e5f9e`，`11-02 02:45`）**还没提交** → 那条回执里的
+`SKIPPED [1] 置信区间测试跳过: 模型信息不存在: test_model` 属于**修复前**的状态。
+先按 §12.28 的时间线核对（回执时间 00:01 < 修复 commit 02:45）再定性，避免把旧状态当成回归。
+
+### B. 补测：修复后的全量单测落盘
+
+修复后那次 735 passed 的运行**没有留日志**，证据链缺一环 → 重跑并存档：
+
+| 项 | 结果 |
+|---|---|
+| 全量 `tests/unit`（修复后） | **737 passed / 0 skipped / 0 failed**，RC=0，305.45s |
+| 归档 | `~/.hermes/cache/scratch/pytest_full_20261102_postfix.log` |
+| `--collect-only` 交叉核对 | **737 collected** = 737 passed → 无 skip、无 deselect、无 xfail 混进 |
+
+（台账 §12.28 记的是 735；当前代码树 collect 出 737 → 以 **737** 为准。）
+
+### C. 新发现：`except Exception` 仍会吞掉 AssertionError（§12.28 修法的残留）
+
+§12.28 把"断言移出 try"做到了位，但保留的仍是 `except Exception as e: pytest.skip(...)`：
+
+```python
+try:
+    result = self.prediction_engine.predict_single_stock(...)   # ← 调用在 try 内
+except Exception as e:
+    pytest.skip(f"置信区间测试跳过: {e}")
+```
+
+try 里只有"调用"，看似安全；但**被测代码内部自己抛的 `AssertionError` 也会落进这个 except**
+→ 生产代码里的断言失效被降级成"跳过" → **套件照样绿**。这不是 §12.28 的原病灶（那是"断言写在 try 里"），
+但属于同一族：**skip 只该覆盖环境性失败，不该覆盖被测行为违规**。
+
+同类还有两处 `except Exception` 里的"错误信息断言"（`特征提取失败` / `缺失` / `数据` 字样判定），
+它们会捕获 try 体内的 AssertionError，再用错误文案做二次判断 → 若断言文案里含"数据/缺失"字样，
+**真失败会被误判成"预期的错误信息"而放行**。
+
+### D. 修法
+
+7 处（`test_prediction_engine_properties.py` 6 处 + `test_qlib_optimizations.py` 1 处）
+统一加一道**先于** `except Exception` 的守卫：
+
+```python
+except AssertionError:
+    # 断言失败属于**被测行为违规**，不是环境问题 —— 必须让它红，不能当 skip 吞掉。
+    raise
+except Exception as e:
+    pytest.skip(...)
+```
+
+`AssertionError` 是 `Exception` 的子类 → 必须**排在前面**才有效（`raise` 是裸重抛，保持原栈）。
+
+### E. 验证（探针必须是**红的**）
+
+| 项 | 结果 |
+|---|---|
+| 正常路径（两文件） | **25 passed**，RC=0 |
+| **探针**：把 `PredictionEngine.predict_single_stock/predict_multiple_stocks` 换成内部抛 `AssertionError` | **RC=1 + 3 FAILED + 0 SKIPPED** → 断言失败**确实变红**，不再被吞成 skip |
+| 探针实现 | `~/.hermes/cache/scratch/probe_plugin.py`（pytest 插件，`pytest_configure` 里打桩） |
+
+注意：探针下**只有 3 个测试变红**而不是 4 个 —— `test_error_handling_and_fallback`
+走的是 `error_handler.handle_prediction_error`，没被引擎打桩影响 → 证明探针不是"无差别全红"，
+而是被打桩的那条路径精确变红。
+
+### F. 教训
+
+- **修完假绿要留"红的证据"**：没有探针的全绿证明不了"该红时真的会红"。
+  §12.28 的探针是"放一个必失败用例"（验证断言能被上报）；这次的探针是"让被测代码内部抛断言"
+  （验证**异常传播路径**不被 skip 吃掉）—— 两种探针查的是不同的洞。
+- **`except Exception` + `pytest.skip` 这个组合天然危险**：它表达的是"任何异常都可以不算数"。
+  正确形态是"**只有环境性异常可以不算数**" → `except AssertionError: raise` 是最低成本的收口。
+- **迟到回执必须先做时间线核对**（回执日志 mtime vs 修复 commit 时间），否则会把"已修的旧状态"
+  当成回归去查——查到最后什么也查不出来，还可能把好代码改坏。

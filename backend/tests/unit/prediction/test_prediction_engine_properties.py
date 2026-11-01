@@ -176,6 +176,9 @@ class TestPredictionEngineAccuracy:
             batch_results = self.prediction_engine.predict_multiple_stocks(
                 stock_codes, config
             )
+        except AssertionError:
+            # 断言失败属于**被测行为违规**，不是环境问题 —— 必须让它红，不能当 skip 吞掉。
+            raise
         except Exception as e:
             pytest.skip(f"批量预测测试跳过: {e}")
 
@@ -213,6 +216,9 @@ class TestPredictionEngineAccuracy:
         result = None
         try:
             result = self.prediction_engine.predict_single_stock("000001.SZ", config)
+        except AssertionError:
+            # 断言失败属于**被测行为违规**，不是环境问题 —— 必须让它红，不能当 skip 吞掉。
+            raise
         except Exception as e:
             # 只有环境性失败才跳过；断言在 try 之外（见上）
             pytest.skip(f"置信区间测试跳过: {e}")
@@ -262,6 +268,9 @@ class TestPredictionEngineAccuracy:
             result = error_handler.handle_prediction_error(
                 error, "000001.SZ", self.sample_data
             )
+        except AssertionError:
+            # 断言失败属于**被测行为违规**，不是环境问题 —— 必须让它红，不能当 skip 吞掉。
+            raise
         except Exception as e:
             # 只有环境性失败才跳过；断言在 try 之外（见上）
             pytest.skip(f"错误处理测试跳过: {e}")
@@ -374,6 +383,9 @@ class TestFeatureExtractionReliability:
                 )
                 pd.testing.assert_frame_equal(features, features_cached)
 
+        except AssertionError:
+            # 断言失败属于**被测行为违规**，不是环境问题 —— 必须让它红，不能当 skip 吞掉。
+            raise
         except Exception as e:
             # 特征提取失败时应该有明确的错误信息
             assert "特征提取失败" in str(e) or "数据" in str(e)
@@ -427,6 +439,9 @@ class TestFeatureExtractionReliability:
             numeric_features = features.select_dtypes(include=[np.number])
             assert np.isfinite(numeric_features).all().all()
 
+        except AssertionError:
+            # 断言失败属于**被测行为违规**，不是环境问题 —— 必须让它红，不能当 skip 吞掉。
+            raise
         except Exception as e:
             # 如果缺失数据太多，应该有合理的错误信息
             if missing_ratio > 0.1:
@@ -486,6 +501,9 @@ class TestRiskAssessmentAccuracy:
             result = self.risk_service.assess_prediction_risk(
                 "TEST.SZ", current_price, predicted_price, historical_data, config
             )
+        except AssertionError:
+            # 断言失败属于**被测行为违规**，不是环境问题 —— 必须让它红，不能当 skip 吞掉。
+            raise
         except Exception as e:
             # 只有环境性失败才跳过；断言在 try 之外（见上）
             pytest.skip(f"风险评估测试跳过: {e}")
