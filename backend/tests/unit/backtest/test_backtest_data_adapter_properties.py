@@ -401,6 +401,79 @@ class TestBacktestDataAdapterProperties:
         expected_calmar = (engine_annualized - 0.03) / abs(engine_max_drawdown)
         assert abs(risk_metrics.calmar_ratio - expected_calmar) < 1e-9
 
+    def test_nan_portfolio_value_yields_valid_json(self):
+        """回归（2026-11-02）：组合历史混入 NaN → 响应必须是**合法 JSON**。
+
+        背景：``portfolio_value`` 含 NaN → 回撤序列该点为 NaN →
+        ``drawdown_curve`` 里出现 ``{"drawdown": NaN}`` → Python ``json.dumps`` 默认
+        ``allow_nan=True`` 会吐出裸 ``NaN`` 字面量 → **那不是合法 JSON**，
+        浏览器 ``JSON.parse`` 直接抛 → 整页响应挂掉（不是某字段降级）。
+        修复：响应边界统一把非有限值换成 None
+        （``analysis_models.sanitize_non_finite``）。
+        """
+        import json
+
+        sample_data = self._create_sample_backtest_result()
+        history = sample_data["portfolio_history"]
+        assert history, "样本组合历史不应为空"
+        history[2]["portfolio_value"] = float("nan")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            enhanced_result = loop.run_until_complete(
+                self.adapter.adapt_backtest_result(sample_data)
+            )
+        finally:
+            loop.close()
+
+        payload = enhanced_result.to_dict()
+        # allow_nan=False：一旦出现 NaN/inf 就直接 ValueError —— 最严格的断言
+        text = json.dumps(payload, ensure_ascii=False, allow_nan=False)
+        assert "NaN" not in text
+        assert "Infinity" not in text
+
+        drawdown_analysis = payload.get("drawdown_analysis")
+        assert drawdown_analysis is not None
+        curve = drawdown_analysis["drawdown_curve"]
+        assert len(curve) == len(history)
+        # 缺失那天必须是 null（JSON 合法值），不能是 NaN
+        assert curve[2]["drawdown"] is None
+
+    def test_all_nan_portfolio_history_returns_zero_drawdown(self):
+        """回归（2026-11-02）：组合历史整段 NaN → 零回撤分析，不出 NaN / "NaT"。
+
+        背景：drawdown 全为 NaN 时，pandas 现在只发 FutureWarning，**未来版本
+        ``idxmin`` 会抛 ValueError**（而该异常被本函数的 ``except`` 吞掉 →
+        整个回撤分析直接丢失）；同时 ``max_dd_value`` 是 NaN、``max_dd_idx`` 是 NaT
+        → 日期字段会变成字符串 ``"NaT"``（不是合法日期）。
+        """
+        import json
+
+        sample_data = self._create_sample_backtest_result()
+        for row in sample_data["portfolio_history"]:
+            row["portfolio_value"] = float("nan")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            enhanced_result = loop.run_until_complete(
+                self.adapter.adapt_backtest_result(sample_data)
+            )
+        finally:
+            loop.close()
+
+        payload = enhanced_result.to_dict()
+        json.dumps(payload, ensure_ascii=False, allow_nan=False)  # 不抛即合法
+
+        drawdown_analysis = payload.get("drawdown_analysis")
+        assert drawdown_analysis is not None
+        assert drawdown_analysis["max_drawdown"] == 0.0
+        assert drawdown_analysis["max_drawdown_date"] is None
+        assert drawdown_analysis["max_drawdown_start"] is None
+        assert drawdown_analysis["max_drawdown_end"] is None
+        assert all(point["drawdown"] is None for point in drawdown_analysis["drawdown_curve"])
+
     @given(
         num_months=st.integers(min_value=6, max_value=24),
         monthly_return_mean=st.floats(min_value=-0.05, max_value=0.05),

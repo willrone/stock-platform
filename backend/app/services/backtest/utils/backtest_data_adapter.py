@@ -478,6 +478,25 @@ class BacktestDataAdapter:
             peak = values.expanding().max()
             drawdown = (values - peak) / peak
 
+            # 回撤序列全为 NaN（portfolio_value 整段缺失）时：
+            #   - pandas 现在只发 FutureWarning，未来版本 idxmin 会**抛 ValueError**
+            #     （且该异常被本函数的 except 吞掉 → 整个回撤分析丢失）；
+            #   - max_dd_value 会是 NaN → 进 JSON 就是**非法字面量**。
+            # 这里显式判掉：无可用回撤数据时返回全 0 的分析，绝不让 NaN 外泄。
+            if len(drawdown) == 0 or drawdown.notna().sum() == 0:
+                logger.warning("回撤序列全为 NaN（组合历史含缺失值），返回空回撤分析")
+                return DrawdownAnalysis(
+                    max_drawdown=0.0,
+                    max_drawdown_date=None,
+                    max_drawdown_start=None,
+                    max_drawdown_end=None,
+                    max_drawdown_duration=0,
+                    drawdown_curve=[
+                        {"date": date.isoformat(), "drawdown": None}
+                        for date in drawdown.index
+                    ],
+                )
+
             # 找到最大回撤期间
             max_dd_idx = drawdown.idxmin()
             max_dd_value = drawdown.min()
@@ -501,9 +520,12 @@ class BacktestDataAdapter:
                     max_dd_end = drawdown.index[i]
                     break
 
-            # 构建回撤曲线数据
+            # 构建回撤曲线数据（缺失值用 None，不用 NaN —— NaN 不是合法 JSON）
             drawdown_curve = [
-                {"date": date.isoformat(), "drawdown": float(dd)}
+                {
+                    "date": date.isoformat(),
+                    "drawdown": float(dd) if pd.notna(dd) else None,
+                }
                 for date, dd in drawdown.items()
             ]
 

@@ -1969,3 +1969,51 @@ hypothesis 插件每次告警。无害，但值得知道。）
 - 判据：`except Exception` 里只允许包"调用"，**不允许包"断言"**（`AssertionError` 是 `Exception` → 会被吞）。
 - 环境开关（`GITHUB_ACTIONS`）会让本地与 CI 覆盖不同代码路径 → 性质测试必须**两端都能跑**，
   否则本地永远在空跑，而"本地全绿"是假象。
+
+## 12.29 回测结果里混进 NaN → 响应是**非法 JSON**（前端整页挂掉，2026-11-02）
+
+### A. 发现（来自一条旧回执里夹带的 `FutureWarning`）
+
+`Series.idxmin with all-NA values ... is deprecated. In a future version this will raise ValueError`
+（`backtest_data_adapter.py:479`）→ 顺着这条告警查下去，发现的是**当下就存在的真缺陷**：
+
+| 环节 | 修前 |
+|---|---|
+| `portfolio_history` 里混进一个 NaN（某天组合估值缺失） | 回撤序列该点为 NaN → `drawdown_curve` 里出现 `{"drawdown": NaN}` |
+| `json.dumps` | Python 默认 `allow_nan=True` → 吐出**裸的 `NaN` 字面量** |
+| 那是不是合法 JSON | **不是**。浏览器 `JSON.parse` 直接抛 → **整个响应页挂掉**（不是某个字段降级） |
+| 若整段历史全为 NaN | 未来 pandas `idxmin` 抛 `ValueError` → 被本函数 `except Exception` 吞掉 → **整个回撤分析直接丢失**；且 `max_dd_idx` 是 `NaT` → 日期字段变成字符串 `"NaT"`（不是合法日期） |
+
+复现（探针，非推测）：`portfolio_history` 第 3 天 `portfolio_value=NaN` →
+`json.dumps(payload)` 产出 `..."drawdown": NaN...` → `allow_nan=False` 直接 `ValueError`。
+
+### B. 修法（源头 + 边界两层）
+
+1. **源头**（`backtest_data_adapter._analyze_drawdowns`）：
+   - 回撤序列全 NaN / 为空 → 显式返回**零回撤分析**（`max_drawdown=0.0`、日期/起止为 `None`），
+     不让 NaN 外泄，也避开未来 pandas 的 `ValueError`；
+   - 曲线里缺失的点写 `None`（JSON `null`）而不是 NaN。
+2. **边界**（`analysis_models.sanitize_non_finite` + `EnhancedBacktestResult.to_dict()`）：
+   递归把**非有限浮点**（NaN / ±inf）换成 `None`。`to_dict()` 正是最终 JSON 的来源
+   （调用方 `data=enhanced_result.to_dict()`），这一层兜住**当下与将来**所有泄漏口。
+   只在响应边界做，**不改中间计算口径** —— 数值本身仍是 NaN，只是不再以非法 JSON 出网。
+   整数保持 `int`（不变成 `3.0`），`bool` 不被当成数值。
+
+### C. 验证
+
+| 项 | 修前 | 修后 |
+|---|---|---|
+| 探针：含 NaN 的历史 → `json.dumps(payload)` | 含裸 `NaN`（**非法 JSON**） | **合法**（该点为 `null`） |
+| 探针：整段全 NaN | `NaN` / 日期 `"NaT"` / 未来 pandas 抛错 | `max_drawdown=0.0`、日期 `None`、曲线全 `null` |
+| 新增回归用例 | — | 2 条（`allow_nan=False` 严格断言） |
+| 适配器测试文件 | 7 passed | **9 passed** |
+| 常数净值（σ=0）路径 | 已安全（0/0 被兜住，不出 inf） | 不变（未动） |
+
+### D. 教训
+
+- **非法 JSON 比数值错更致命**：NaN 让整页响应挂掉，而它只是某一个交易日缺了个估值。
+  边界层必须有一条"**输出必须是合法 JSON**"的硬约束（`allow_nan=False` 就能当断言用）。
+- `except Exception` 兜住一切，会把**未来版本的行为变更**（pandas 改成抛错）降级成
+  "功能静默消失"——所以未来告警要当**红线**查，不是噪音。
+- 修法要分层：**源头**（不该产生 NaN）+ **边界**（万一还有别的口子）。只在源头修，
+  下次换个路径又会漏；只在边界修，内部口径仍是脏的。

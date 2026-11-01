@@ -2,8 +2,41 @@
 分析相关的数据模型
 """
 
+import math
 from dataclasses import asdict, dataclass
+from numbers import Real
 from typing import Any, Dict, List, Optional
+
+
+def sanitize_non_finite(obj: Any) -> Any:
+    """把 NaN / ±inf 递归换成 None —— **JSON 规范不允许 NaN / Infinity 字面量**。
+
+    Python 的 ``json.dumps`` 默认 ``allow_nan=True``，会吐出裸的 ``NaN`` / ``Infinity``；
+    FastAPI 的 JSONResponse 走的就是这条路径 → 那不是合法 JSON，浏览器的
+    ``JSON.parse`` 直接抛异常 → 整个响应页挂掉（不是某个字段降级，是全挂）。
+
+    真实触发路径：``portfolio_history`` 里混进一个 NaN（例如某天组合估值缺失）→
+    回撤序列该点为 NaN → ``drawdown_curve`` 里出现 ``{"drawdown": NaN}``。
+    实测（backend/tests/unit/backtest/test_backtest_data_adapter_properties.py
+    的回归用例）：修复前 ``json.dumps(payload)`` 产出 ``NaN`` 裸字面量，
+    ``allow_nan=False`` 直接 ValueError；修复后合法。
+
+    只在**响应边界**（to_dict）做，不改动中间计算口径 —— 数值本身仍然是 NaN，
+    只是不再以非法 JSON 的形式出网。
+    """
+
+    if isinstance(obj, bool):
+        return obj
+    if isinstance(obj, int):
+        return obj  # 整数必然有限，且要保住 int 类型（不能变成 3.0）
+    if isinstance(obj, Real):  # float / np.float64 / np.float32 ...
+        value = float(obj)
+        return value if math.isfinite(value) else None
+    if isinstance(obj, dict):
+        return {key: sanitize_non_finite(value) for key, value in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [sanitize_non_finite(item) for item in obj]
+    return obj
 
 
 @dataclass
@@ -106,7 +139,9 @@ class DrawdownAnalysis:
 
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
-        return asdict(self)
+        # 非有限值（NaN/±inf）→ None：这里的曲线会直接落库/出网，
+        # 而 NaN 不是合法 JSON（见模块级 sanitize_non_finite 的说明）
+        return sanitize_non_finite(asdict(self))
 
 
 @dataclass
@@ -173,4 +208,7 @@ class EnhancedBacktestResult:
         if self.drawdown_analysis:
             result["drawdown_analysis"] = self.drawdown_analysis.to_dict()
 
-        return result
+        # **响应边界**：非有限值（NaN / ±inf）一律换成 None。
+        # 这里就是最终 JSON 的来源（调用方 data=enhanced_result.to_dict()），
+        # 不做这一步 → 裸的 NaN 字面量出网 → 前端 JSON.parse 直接抛。
+        return sanitize_non_finite(result)
