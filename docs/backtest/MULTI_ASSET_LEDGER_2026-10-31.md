@@ -2079,7 +2079,10 @@ except Exception as e:
 |---|---|
 | 正常路径（两文件） | **25 passed**，RC=0 |
 | **探针**：把 `PredictionEngine.predict_single_stock/predict_multiple_stocks` 换成内部抛 `AssertionError` | **RC=1 + 3 FAILED + 0 SKIPPED** → 断言失败**确实变红**，不再被吞成 skip |
-| 探针实现 | `~/.hermes/cache/scratch/probe_plugin.py`（pytest 插件，`pytest_configure` 里打桩） |
+| 探针实现 | **仓库内** `backend/scripts/verify_assertion_guard.py`（pytest 插件，`pytest_configure` 里打桩；**不落 scratch** —— scratch 24h 会清，证据链不能指向会消失的路径） |
+| 探针复现命令 | `cd backend && PROBE_ASSERTION_GUARD=1 env -u PYTHONHOME PYTHONPATH=. .venv-py313/bin/python3 -m pytest tests/unit/prediction/test_prediction_engine_properties.py -p scripts.verify_assertion_guard -p no:cacheprovider -q --tb=no`（`scripts/` 不在 sys.path 根 → 必须用包路径 `-p scripts.verify_assertion_guard`） |
+| 探针**默认惰性** | 不设 `PROBE_ASSERTION_GUARD=1` 时插件什么也不做（实测 RC=0 / 0 FAILED）→ 可以安全入库、被 `-p` 加载，**不会误伤 CI**；只显式开环境变量才打桩（此时测试故意变红） |
+| 为什么不叫 `probe_*.py` | `.gitignore:518` 有既有规则 `backend/scripts/probe_*.py`（一次性探针不入库）→ 改名为"守门验证工具"且默认惰性，既绕过 ignore 又不留误伤隐患 |
 
 注意：探针下**只有 3 个测试变红**而不是 4 个 —— `test_error_handling_and_fallback`
 走的是 `error_handler.handle_prediction_error`，没被引擎打桩影响 → 证明探针不是"无差别全红"，
