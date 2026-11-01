@@ -37,7 +37,10 @@ import os
 import sys
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+if TYPE_CHECKING:  # 仅供类型注解用（字符串注解在运行时不求值）
+    import pandas as pd
 
 BACKEND_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "backend"))
 if not os.path.isdir(BACKEND_ROOT):

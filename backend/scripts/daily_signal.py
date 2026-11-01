@@ -19,7 +19,7 @@ import os
 import time
 from datetime import datetime
 
-from typing import Dict, Optional
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd

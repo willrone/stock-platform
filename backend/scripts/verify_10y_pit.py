@@ -29,7 +29,7 @@ import os
 import sys
 import time
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 BACKEND = "/Users/rone/Projects/stock-platform/backend"
 ROOT = "/Users/rone/Projects/stock-platform"

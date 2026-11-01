@@ -216,7 +216,14 @@ def score_gbm_voltgt(frames, master, panel=None, rebalance_day=None) -> pd.DataF
         "rebalance_days": "weekly",
         "rebalance_weekday": 4,   # 周五
         "horizon": 1,
-        "limit_up": LIMIT_UP,
+        # ⚠️ 2026-11-01 删掉 "limit_up": LIMIT_UP（**NameError: LIMIT_UP 未定义**）：
+        #   commit 3d3e34e5 删了 `LIMIT_UP = 0.095` 硬编码（可成交性检查下沉引擎），
+        #   却漏删这一处引用 → 纸面盘跑到 gbm_voltgt 这条线就崩（RC=1），
+        #   **同一次运行里后面的 multi_asset_final 旗舰线根本轮不到执行**。
+        #   删掉它与「最后一次能跑的状态」**逐位等价**：当时传的就是 0.095，
+        #   而 GbmVoltgtStrategy 自己的默认值也是 0.095。
+        #   注：gbm 侧现在走 limit_up_mask_matrix（逐票按板块判定），
+        #   这个 config 只用于日志打印，不参与掩码计算。
         "panel_dir": os.path.join(ROOT, "data", "qlib_data", "features", "day"),
         "n_estimators": 100,
         "max_depth": 3,

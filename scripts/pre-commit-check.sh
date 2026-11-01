@@ -98,5 +98,39 @@ if [ -n "$1" ]; then
     fi
 fi
 
+# ── 未定义名闸门（F821/F811，零基线）────────────────────────────────
+# 为什么单独挂：check-code-quality.sh 的 flake8 只覆盖 app/，
+# 而 cron/launchd 实际执行的是 scripts/ → 这一类必崩的错误没人看。
+# 2026-11-01 实测：scripts/paper_portfolio.py 引用已删除的 LIMIT_UP →
+# 纸面盘整轮崩（RC=1）→ 同一次运行里后面的 multi_asset_final 旗舰线轮不到执行。
+echo "🔤 检查未定义名 (F821/F811)..."
+UNDEF_RC=0
+for PYBIN in backend/.venv/bin/python3 backend/.venv-py313/bin/python3 backend/venv/bin/python3; do
+    if [ -x "$PYBIN" ]; then
+        env -u PYTHONPATH -u PYTHONHOME "$PYBIN" backend/scripts/check_undefined_names.py || UNDEF_RC=$?
+        break
+    fi
+done
+if [ "$UNDEF_RC" -ne 0 ]; then
+    echo "❌ 未定义名检查未通过（新增 F821/F811 会导致运行时 NameError）"
+    exit 1
+fi
+
+# ── 闸门自身可运行性体检 ─────────────────────────────────────────────
+# 门禁的门也必须是能跑的：pre-commit-check.sh / quick-check.sh 曾经是
+# CRLF 行尾 → bash 语法错误 → 脚本第一行都没执行，却一直"存在"着。
+echo "🚪 检查闸门自身可运行性..."
+GATES_RC=0
+for PYBIN in backend/.venv/bin/python3 backend/.venv-py313/bin/python3 backend/venv/bin/python3; do
+    if [ -x "$PYBIN" ]; then
+        env -u PYTHONPATH -u PYTHONHOME "$PYBIN" backend/scripts/check_gates_runnable.py || GATES_RC=$?
+        break
+    fi
+done
+if [ "$GATES_RC" -ne 0 ]; then
+    echo "❌ 闸门可运行性体检未通过"
+    exit 1
+fi
+
 echo "✅ 所有检查通过！"
 echo "🚀 可以安全提交代码"
