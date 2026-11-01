@@ -157,6 +157,51 @@ TRACKED = [
     "diag_sleeve_class_order.json",
 ]
 
+# ── 跨目录证据件（键 = 相对 ROOT 的路径）──────────────────────────
+# 2026-11-01：台账之外的旧文档（BASELINE_CORRECTION / CONCLUSION /
+# METHODS_RESEARCH 等）还引用了 26 个**不在 data/backtest/ 下**的产物
+# （多在 data/strategy_baseline/）→ 同样"文档引用 ≠ 被保护"。
+# 键用相对 ROOT 的路径，避免与 data/backtest 的 basename 键空间撞键。
+TRACKED_EXTRA = [
+    # ── data/strategy_baseline/：A 股腿基线/IC/DSR/随机对照等研究证据 ──
+    "data/strategy_baseline/baseline_full_market_3y.json",
+    "data/strategy_baseline/expanded_legs_10y.json",
+    "data/strategy_baseline/factor_ranking_10y_fixed.json",
+    "data/strategy_baseline/ic_composite_10y_execution_ab.json",
+    "data/strategy_baseline/ic_composite_10y_hygiene.json",
+    "data/strategy_baseline/ic_composite_10y_registered_topk.json",
+    "data/strategy_baseline/ic_composite_10y_signfix.json",
+    "data/strategy_baseline/ic_composite_rolling_walkforward.json",
+    "data/strategy_baseline/ic_composite_walkforward.json",
+    "data/strategy_baseline/moving_average_fix_3y.json",
+    "data/strategy_baseline/portfolio_vol_experiment.json",
+    "data/strategy_baseline/quality_weight_10y.json",
+    "data/strategy_baseline/risk_parity_10y_dsr_final.json",
+    "data/strategy_baseline/risk_parity_10y_experiment.json",
+    "data/strategy_baseline/risk_parity_3y_control.json",
+    "data/strategy_baseline/risk_parity_dsr_final.json",
+    "data/strategy_baseline/sharpe_overlay_experiment.json",
+    "data/strategy_baseline/sharpe_serial_verify.json",
+    "data/strategy_baseline/sharpe_vol_sweep.json",
+    "data/strategy_baseline/sharpe_vol_sweep_serial.json",
+    "data/strategy_baseline/stochastic_signal_fullmarket.json",
+    "data/strategy_baseline/stochastic_signal_fullmarket_yearly.json",
+    "data/strategy_baseline/stochastic_signal_grid.json",
+    # ── 静态定义件（应当永不静默变化）──
+    "data/etf/etf_universe.json",
+    "data/industry/industry_map.json",
+    "data/stocks/st_names.json",
+]
+
+# ── 活状态：明确**不**做指纹化（会天天重写，指纹化等于让门天天红）──
+# 它们的可复现性由各自管道的幂等性保证（纸面盘同成交日重跑不重复下单、
+# 信号按日重生成），不是靠哈希锁。
+LIVE_STATE_PREFIXES = (
+    "data/paper/",       # 纸面盘持仓/账本/快照：每周一重写
+    "data/signals/",     # 每日信号产出：每天重写
+    "data/tdx_daily/",   # 行情管道状态：每天重写
+)
+
 # ── 预期缺失（故意不产出的产物）──────────────────────────────────
 # 语义区分：**产物从不存在**（按预注册不跑）vs **产物本来存在但丢了**（真故障）。
 # 两类混在一个 `missing` 列表里 → verify 每次都打同一条 ⚠️ 假警报，
@@ -302,19 +347,29 @@ def git_commit() -> str:
         return "unknown"
 
 
-def doc_cited_artifacts() -> set:
-    """docs/ 下**所有** markdown 正文里点名的 data/backtest 产物（只算真实存在的）。
+def _key_for(path: str) -> str:
+    """清单键：data/backtest/ **直属**文件用 basename，其余用相对 ROOT 的路径。
 
-    为什么需要它：2026-11-01 的篡改实验证明，**文档引用 ≠ 被保护**。
-    审计器只校验"文档里写的那几个数字"，清单只保护"自己登记的那几个文件"，
-    两者之间的差集（22 个文档引用件）就是一个合法的静默漂移通道。
-    → 把"文档点名"变成清单的**自动输入**，差集就再也藏不住。
-
-    扫描范围：docs/**/*.md（含 docs/plans、docs/reports 等）+ 仓库根 md。
-    2026-11-01 扩到全 docs 时新暴露 0 个（55 个引用件已全部在清单），
-    但**范围必须写死在前门里**——否则下次有人在 docs/reports 引用产物又是盲区。
+    为什么不用一种键：data/backtest 下有同名风险（子目录与顶层可能撞名），
+    而跨目录证据件本来就得靠路径区分 → 混用两种键，但**键里带 "/" 的一定是路径**，
+    不会与 basename 撞键。
     """
-    cited = set()
+    parent = os.path.dirname(os.path.abspath(path))
+    if parent == os.path.abspath(DATA_DIR):
+        return os.path.basename(path)
+    return os.path.relpath(os.path.abspath(path), ROOT).replace(os.sep, "/")
+
+
+def _resolve(key: str) -> str:
+    """键 → 绝对路径（basename 键在 data/backtest 下，其余相对 ROOT）。"""
+    if "/" in key:
+        return os.path.join(ROOT, key.replace("/", os.sep))
+    return os.path.join(DATA_DIR, key)
+
+
+def _doc_mentioned_json_names() -> set:
+    """docs/ 下所有 markdown 正文里出现过的 json 文件名（只取名字，不判存在）。"""
+    names = set()
     docs_root = os.path.join(ROOT, "docs")
     paths: List[str] = []
     if os.path.isdir(docs_root):
@@ -326,10 +381,36 @@ def doc_cited_artifacts() -> set:
                 text = fh.read()
         except (OSError, UnicodeDecodeError):
             continue
-        for name in re.findall(r"([A-Za-z0-9_\-]+\.json)", text):
-            if os.path.exists(os.path.join(DATA_DIR, name)):
-                cited.add(name)
+        names.update(re.findall(r"([A-Za-z0-9_\-]+\.json)", text))
+    return names
+
+
+def doc_cited_artifacts() -> set:
+    """docs/ 下**所有** markdown 正文点名的 data/ 产物（键空间与清单一致）。
+
+    为什么需要它：2026-11-01 的篡改实验证明，**文档引用 ≠ 被保护**。
+    审计器只校验"文档里写的那几个数字"，清单只保护"自己登记的那几个文件"，
+    两者的差集就是一个合法的静默漂移通道。
+    → 把"文档点名"变成清单的**自动输入**，差集就再也藏不住。
+
+    扫描范围：整个 data/ 树（实测只有 322 个 json，扫全树很便宜）
+    —— **不用目录白名单**：白名单会重犯"没被列到的就没人管"的原罪。
+    活状态目录（data/paper、data/signals、data/tdx_daily）由
+    LIVE_STATE_PREFIXES 显式排除，理由写在那个常量旁边。
+    """
+    cited = set()
+    names = _doc_mentioned_json_names()
+    if not names:
+        return cited
+    for path in glob.glob(os.path.join(ROOT, "data", "**", "*.json"), recursive=True):
+        if os.path.basename(path) in names:
+            cited.add(_key_for(path))
     return cited
+
+
+def _is_live_state(key: str) -> bool:
+    """该键是否属于显式排除的活状态目录（不要求指纹保护）。"""
+    return any(key.startswith(pref) for pref in LIVE_STATE_PREFIXES)
 
 
 def build() -> int:
@@ -348,13 +429,27 @@ def build() -> int:
             "bytes": st.st_size,
             "mtime": datetime.fromtimestamp(st.st_mtime).isoformat(timespec="seconds"),
         }
+    # 跨目录证据件（键 = 相对 ROOT 的路径）
+    for rel in TRACKED_EXTRA:
+        p = os.path.join(ROOT, rel.replace("/", os.sep))
+        if not os.path.exists(p):
+            missing.append(rel)
+            continue
+        st = os.stat(p)
+        entries[rel] = {
+            "sha256": sha256(p),
+            "bytes": st.st_size,
+            "mtime": datetime.fromtimestamp(st.st_mtime).isoformat(timespec="seconds"),
+        }
     # 覆盖完整性：审计器读的每个产物都必须在 TRACKED 里（否则它可被静默覆盖）
     uncovered = [n for n in AUDITED if n not in TRACKED]
-    # 覆盖完整性（2026-11-01 新增）：**文档正文点名的产物**也必须在 TRACKED 里。
+    # 覆盖完整性（2026-11-01 新增）：**文档正文点名的产物**也必须被保护。
     # 审计器只查"文档里写的那几个数"；清单只护"自己登记的文件"。
     # 两者差集 = 合法静默漂移通道（已用 pool_partition.json 篡改实验实证）。
     doc_cited = doc_cited_artifacts()
-    uncovered_doc = sorted(n for n in doc_cited if n not in TRACKED)
+    tracked_keys = set(TRACKED) | set(TRACKED_EXTRA)
+    uncovered_doc = sorted(n for n in doc_cited
+                           if n not in tracked_keys and not _is_live_state(n))
     manifest = {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "git_commit": git_commit(),
@@ -368,6 +463,7 @@ def build() -> int:
         "uncovered_audited": uncovered,
         "doc_cited": sorted(doc_cited),
         "uncovered_doc_cited": uncovered_doc,
+        "live_state_excluded": list(LIVE_STATE_PREFIXES),
     }
     os.makedirs(os.path.dirname(MANIFEST), exist_ok=True)
     with open(MANIFEST, "w", encoding="utf-8") as fh:
@@ -393,15 +489,18 @@ def verify() -> int:
     # 覆盖完整性：清单必须覆盖审计器依赖的全部产物
     for n in manifest.get("uncovered_audited", []):
         bad.append(f"{n}: 审计依赖但未纳入指纹清单")
-    # 覆盖完整性（2026-11-01 新增）：文档正文点名的产物必须都在指纹清单里。
+    # 覆盖完整性（2026-11-01 新增）：文档正文点名的产物必须都被保护。
     # 两个口径（清单自报 + 当场按文档重算）都查：
     #   自报 → build 当时就漏了；重算 → 清单生成后文档又引用了新产物。
     for n in manifest.get("uncovered_doc_cited", []):
         bad.append(f"{n}: 文档引用但未纳入指纹清单")
-    for n in sorted(doc_cited_artifacts() - set(TRACKED)):
-        bad.append(f"{n}: 文档新引用了未登记产物 → 需登记进 TRACKED 并重新 build")
+    tracked_keys = set(TRACKED) | set(TRACKED_EXTRA)
+    for n in sorted(doc_cited_artifacts() - tracked_keys):
+        if _is_live_state(n):
+            continue  # 活状态：显式排除（理由见 LIVE_STATE_PREFIXES）
+        bad.append(f"{n}: 文档新引用了未登记产物 → 需登记进 TRACKED/TRACKED_EXTRA 并重新 build")
     for name, meta in manifest.get("files", {}).items():
-        p = os.path.join(DATA_DIR, name)
+        p = _resolve(name)
         if not os.path.exists(p):
             bad.append(f"{name}: 文件丢失")
             continue

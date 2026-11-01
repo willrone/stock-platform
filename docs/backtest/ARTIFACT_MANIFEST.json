@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-11-01T20:56:35",
-  "git_commit": "d13e402f",
+  "generated_at": "2026-11-01T21:10:57",
+  "git_commit": "a545ea2d",
   "data_dir": "data/backtest",
   "sha256_mode": "normalized-json-v2",
   "sha256_excludes": [
@@ -430,6 +430,136 @@
       "sha256": "a1a3af143d9f4ca57469a18bc62688444071b272b8a5d83b91882a6234bf4f40",
       "bytes": 353094,
       "mtime": "2026-11-01T06:30:04"
+    },
+    "data/strategy_baseline/baseline_full_market_3y.json": {
+      "sha256": "94149f230b11f1316d01f8caae033960e0235b569f426fbf532f91e53866b386",
+      "bytes": 43522,
+      "mtime": "2026-10-12T23:04:58"
+    },
+    "data/strategy_baseline/expanded_legs_10y.json": {
+      "sha256": "4bffb0c0db2381eb7ba401729de21c79ee23fb3653ed1c5ac30b6f4b9f08eb69",
+      "bytes": 812714,
+      "mtime": "2026-10-13T18:23:38"
+    },
+    "data/strategy_baseline/factor_ranking_10y_fixed.json": {
+      "sha256": "eddbffcc5b1db781cfcb1f5d930a59c893a6fe181a192e61faf83cfeefb2242b",
+      "bytes": 570,
+      "mtime": "2026-10-14T09:37:45"
+    },
+    "data/strategy_baseline/ic_composite_10y_execution_ab.json": {
+      "sha256": "475f8d9739d220a5eeb3a89141a8910b02c70382e6cefebff234a87ad320946b",
+      "bytes": 4070,
+      "mtime": "2026-10-19T21:34:20"
+    },
+    "data/strategy_baseline/ic_composite_10y_hygiene.json": {
+      "sha256": "ca6f803396998d51341ae985ae29be24aff00977d3eb81fbba611a847efa564b",
+      "bytes": 3815,
+      "mtime": "2026-10-19T20:25:11"
+    },
+    "data/strategy_baseline/ic_composite_10y_registered_topk.json": {
+      "sha256": "d03c515977669d5b359d5ba00c5d27f7c2a550423e31aa8cdd4fc3b2dbabf5d2",
+      "bytes": 2833,
+      "mtime": "2026-10-19T20:14:13"
+    },
+    "data/strategy_baseline/ic_composite_10y_signfix.json": {
+      "sha256": "85c0d901aa0d9c04679c8ea7e8080c0eb53d9c161812414a89979fbf99962ae2",
+      "bytes": 5829,
+      "mtime": "2026-10-25T11:14:26"
+    },
+    "data/strategy_baseline/ic_composite_rolling_walkforward.json": {
+      "sha256": "654623fb00df05ab807996f349a4a09eb95ed80894bb36ee79864fed673c5bed",
+      "bytes": 7089,
+      "mtime": "2026-10-19T22:16:45"
+    },
+    "data/strategy_baseline/ic_composite_walkforward.json": {
+      "sha256": "ee411e6e5ddab7421f9100b3a1190ea9c3c9f039fb9277c2bf36739b5708a8a6",
+      "bytes": 6686,
+      "mtime": "2026-10-19T21:45:10"
+    },
+    "data/strategy_baseline/moving_average_fix_3y.json": {
+      "sha256": "cd2d3a08bb31584712b0ae9b00d9a5f1dc2c8c07f56ae4bf844c38616e9c0bfa",
+      "bytes": 2061,
+      "mtime": "2026-10-25T16:20:21"
+    },
+    "data/strategy_baseline/portfolio_vol_experiment.json": {
+      "sha256": "3900f571fd05159cae5370f812d04ebe67f835122ada588964fcbf84d9b8ef3f",
+      "bytes": 3492,
+      "mtime": "2026-10-12T17:43:54"
+    },
+    "data/strategy_baseline/quality_weight_10y.json": {
+      "sha256": "59681a24f6a885eff35e9f18ff2fef9c07cc11e3bd40ce59d1fa54d2b4bb2ad1",
+      "bytes": 345569,
+      "mtime": "2026-10-13T13:46:13"
+    },
+    "data/strategy_baseline/risk_parity_10y_dsr_final.json": {
+      "sha256": "d6c5dff6191661928b62075dbc53771e5702e53787b2f27a45df0a6b4a843bf5",
+      "bytes": 1907,
+      "mtime": "2026-10-13T11:16:36"
+    },
+    "data/strategy_baseline/risk_parity_10y_experiment.json": {
+      "sha256": "44b3b80b511e927e0906819aba7ddcc5314f3967181cb9b761323354be023977",
+      "bytes": 779445,
+      "mtime": "2026-10-13T11:12:13"
+    },
+    "data/strategy_baseline/risk_parity_3y_control.json": {
+      "sha256": "a638e1c1fd3fa560468636be079f8f2914618501528bf2950303aa7c606f99c1",
+      "bytes": 232733,
+      "mtime": "2026-10-13T11:10:38"
+    },
+    "data/strategy_baseline/risk_parity_dsr_final.json": {
+      "sha256": "7d6373463855626792778e52d3e37276ffe9c7c3878f9f5a11a703803170a99a",
+      "bytes": 274450,
+      "mtime": "2026-11-01T21:10:11"
+    },
+    "data/strategy_baseline/sharpe_overlay_experiment.json": {
+      "sha256": "bda90596df635fbb6c419f4a8055ac6163cbe3d7d4a226ad1d0fab0668c8b0c2",
+      "bytes": 18043,
+      "mtime": "2026-10-12T15:21:11"
+    },
+    "data/strategy_baseline/sharpe_serial_verify.json": {
+      "sha256": "7752e66b65b8cfd45f136dd0ab7760a1efe8c96effc8eaf0a2397f4f690ad61c",
+      "bytes": 2137,
+      "mtime": "2026-10-12T15:38:09"
+    },
+    "data/strategy_baseline/sharpe_vol_sweep.json": {
+      "sha256": "cb5b4b3eb7728900d8fc463dc9112add24542d26827105a4da3eeda69f5f3a5a",
+      "bytes": 2074,
+      "mtime": "2026-10-12T15:24:39"
+    },
+    "data/strategy_baseline/sharpe_vol_sweep_serial.json": {
+      "sha256": "899c3c9ef44b85223ec761482968130244ed3c1bcf7b7d188bbc9202850e90de",
+      "bytes": 2020,
+      "mtime": "2026-10-12T15:44:36"
+    },
+    "data/strategy_baseline/stochastic_signal_fullmarket.json": {
+      "sha256": "58974a29dd59f8ae97576fcba85ba1aaad59208f28179ad91038883cee0f1631",
+      "bytes": 2092,
+      "mtime": "2026-10-12T19:22:40"
+    },
+    "data/strategy_baseline/stochastic_signal_fullmarket_yearly.json": {
+      "sha256": "ae7844be368395fcd5dc73e1d4b93f1b1d5ca43b4937dd4a7867a366dc375a48",
+      "bytes": 3020,
+      "mtime": "2026-10-12T19:39:30"
+    },
+    "data/strategy_baseline/stochastic_signal_grid.json": {
+      "sha256": "f5b72c8e9d4fb08a50d3c258f9934ecfa30b0a9bf85bc5cea0c5350016b4a042",
+      "bytes": 7854,
+      "mtime": "2026-10-12T19:06:18"
+    },
+    "data/etf/etf_universe.json": {
+      "sha256": "87e3375800f78b4a30518f17c80f4712f26ce4c07db20991e92ef14b791f2c3b",
+      "bytes": 154800,
+      "mtime": "2026-10-30T21:55:13"
+    },
+    "data/industry/industry_map.json": {
+      "sha256": "bf216630ac2c407ba85b1976ad45fc8b1978914868c54a30f63416340fe9dfd0",
+      "bytes": 151975,
+      "mtime": "2026-10-26T08:10:23"
+    },
+    "data/stocks/st_names.json": {
+      "sha256": "0f3df0934f60ec48265fd2ae1ff7dcf28bfdc4839cb261fe1d7420519559d62c",
+      "bytes": 737707,
+      "mtime": "2026-10-26T14:27:58"
     }
   },
   "missing": [],
@@ -441,6 +571,37 @@
     "ALL_real_lag1_v2.json",
     "_blend_nav_25f.json",
     "baseline_final.json",
+    "data/etf/etf_universe.json",
+    "data/industry/industry_map.json",
+    "data/paper/portfolio.json",
+    "data/signals/paper_holdings.json",
+    "data/signals/paper_holdings_42f.json",
+    "data/signals/signal_2026-10-16.json",
+    "data/stocks/st_names.json",
+    "data/strategy_baseline/baseline_full_market_3y.json",
+    "data/strategy_baseline/expanded_legs_10y.json",
+    "data/strategy_baseline/factor_ranking_10y_fixed.json",
+    "data/strategy_baseline/ic_composite_10y_execution_ab.json",
+    "data/strategy_baseline/ic_composite_10y_hygiene.json",
+    "data/strategy_baseline/ic_composite_10y_registered_topk.json",
+    "data/strategy_baseline/ic_composite_10y_signfix.json",
+    "data/strategy_baseline/ic_composite_rolling_walkforward.json",
+    "data/strategy_baseline/ic_composite_walkforward.json",
+    "data/strategy_baseline/moving_average_fix_3y.json",
+    "data/strategy_baseline/portfolio_vol_experiment.json",
+    "data/strategy_baseline/quality_weight_10y.json",
+    "data/strategy_baseline/risk_parity_10y_dsr_final.json",
+    "data/strategy_baseline/risk_parity_10y_experiment.json",
+    "data/strategy_baseline/risk_parity_3y_control.json",
+    "data/strategy_baseline/risk_parity_dsr_final.json",
+    "data/strategy_baseline/sharpe_overlay_experiment.json",
+    "data/strategy_baseline/sharpe_serial_verify.json",
+    "data/strategy_baseline/sharpe_vol_sweep.json",
+    "data/strategy_baseline/sharpe_vol_sweep_serial.json",
+    "data/strategy_baseline/stochastic_signal_fullmarket.json",
+    "data/strategy_baseline/stochastic_signal_fullmarket_yearly.json",
+    "data/strategy_baseline/stochastic_signal_grid.json",
+    "data/tdx_daily/state.json",
     "deflated_sharpe.json",
     "diag_sleeve_class_order.json",
     "diag_sleeve_drift.json",
@@ -498,5 +659,10 @@
     "turnover_truth.json",
     "verify_10y_pit.json"
   ],
-  "uncovered_doc_cited": []
+  "uncovered_doc_cited": [],
+  "live_state_excluded": [
+    "data/paper/",
+    "data/signals/",
+    "data/tdx_daily/"
+  ]
 }
