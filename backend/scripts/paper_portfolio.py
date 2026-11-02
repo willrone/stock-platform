@@ -40,7 +40,9 @@ import csv
 import importlib.util
 import json
 import os
+import shutil
 import sys
+import time
 from datetime import date, datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -678,14 +680,80 @@ def line_observation_metrics(strategy: str, line: Dict[str, Any],
     }
 
 
+# ── ledger 列契约（§12.48）──────────────────────────────────────────────
+# 固定 15 列 = SELL 行与 BUY 行键集的并集。
+#
+# 为什么不能继续用 list(rows[0].keys())：
+#   fieldnames 由**本批次首行**决定，而表头只在文件不存在时写一次 →
+#   ① 首次是 BUY(13 键)、后来追加 SELL(15 键) → 新行 15 列、表头仍 13 列
+#      → csv.DictReader 按列名读会**静默错位**：cash_after 读到 cost_amount、
+#        portfolio_value 读到 realized_pnl，脏值直接进净值曲线。
+#   ② 首次是 SELL(15 键)、后来追加 BUY(13 键) → 新行 13 列，比表头少 2 列。
+#   ③ 最隐蔽：列数取决于**批次内首行是谁** → 同一批代码，行数可能不同。
+#   （这三条已在 §12.48 用合成数据复现；当前磁盘上还是 13/13 整齐，
+#    因为现存 SELL 行是老代码写的 13 键版本 —— **下一次有卖出的调仓即触发**。）
+LEDGER_FIELDS = [
+    "date", "action", "code", "name", "price", "shares", "amount",
+    "commission", "stamp_tax", "slippage", "score",
+    "cost_amount", "realized_pnl", "cash_after", "portfolio_value",
+]
+
+
+def _normalize_ledger_file(path: str) -> bool:
+    """把旧 ledger 迁移到固定的 LEDGER_FIELDS 列契约。返回是否发生了迁移。
+
+    · 旧表头缺列 → 对应列补空串（老 SELL 行本来就没写 cost_amount/realized_pnl）
+    · 旧行长度不齐 → 按**表头位置**取值，多余列丢弃、缺失列补空
+    · 先备份原文件到 <path>.bak，再 os.replace 原子替换
+    """
+    try:
+        with open(path, newline="") as fh:
+            rows = list(csv.reader(fh))
+    except (OSError, csv.Error):
+        return False
+    if not rows:
+        return False
+    header = [h.strip() for h in rows[0]]
+    if header == LEDGER_FIELDS:
+        return False
+    idx = {name: i for i, name in enumerate(header)}
+    out_rows: List[List[str]] = []
+    for r in rows[1:]:
+        if not r:
+            continue
+        out_rows.append([
+            (r[idx[f]] if f in idx and idx[f] < len(r) else "")
+            for f in LEDGER_FIELDS
+        ])
+    tmp = f"{path}.tmp.{os.getpid()}"
+    try:
+        with open(tmp, "w", newline="") as fh:
+            w = csv.DictWriter(fh, fieldnames=LEDGER_FIELDS)
+            w.writeheader()
+            for r in out_rows:
+                w.writerow(dict(zip(LEDGER_FIELDS, r)))
+        shutil.copy2(path, f"{path}.bak")
+        os.replace(tmp, path)
+    except OSError:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        return False
+    return True
+
+
 def append_ledger(strategy: str, rows: List[Dict[str, Any]]) -> None:
     if not rows:
         return
     os.makedirs(PAPER_DIR, exist_ok=True)
     p = ledger_path(strategy)
     exists = os.path.exists(p)
+    if exists:
+        # 旧文件表头与列契约不一致 → 先原子迁移，避免追加出长短不一的行
+        _normalize_ledger_file(p)
     with open(p, "a", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
+        w = csv.DictWriter(fh, fieldnames=LEDGER_FIELDS, restval="", extrasaction="ignore")
         if not exists:
             w.writeheader()
         w.writerows(rows)

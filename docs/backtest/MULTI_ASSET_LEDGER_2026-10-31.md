@@ -3582,3 +3582,110 @@ GET /trading/strategies               → 200  7 条线
 - `next.config` 的兜底端口仍指向 8000（splash）→ 建议改成 18082（**行为变更，等拍板**）
 - 浏览器实测截图在本轮没做成：`Page.captureScreenshot` 两次都 60s 超时
   （页面 2804px 高 + dev server 首次编译）；方案 B 验收必须解决这个（用视口截图 + 等编译完成）
+
+
+---
+
+## §12.48 ledger 列契约定时炸弹（子代理审计发现 → 核实 → 修复）—— 2026-11-03
+
+### A. 审计结论的核实（子代理说的 ≠ 事实，逐条验）
+
+派出两个只读子代理审计纸面盘（① 持仓/账本字段语义 ② 并发写入口），
+子代理给了 4 条"坑"，**逐条实测后有 2 条不成立、1 条部分成立、1 条属实**：
+
+| 子代理结论 | 实测 | 判定 |
+|---|---|---|
+| 坑1：ledger 表头 13 列、数据行 15 列（DictReader 错位，`cash_after` 读到 `cost_amount`） | 现存 8 个 ledger **全是 13/13 整齐**；22f 最后一行 `cash_after=31360.00` / `portfolio_value=978982.94`（**正是 nav_daily 末点**），`_ledger_cash_timeline` 读出的 31360 就是真值 | **不成立**（但机制真实，见 B） |
+| 坑2：`portfolio_value` 是 `adj_ratio=1.0` 的冻结值 | 22f 末日 pv=978,982.94 = nav_daily 末点，完全一致；A 腿 pv=cash+Σ(shares×cost) 也与 holdings.last_value 相符 | **不成立** |
+| 坑3：`multi_asset_final_holdings.json` 的 leg=a 段是过期快照 | 属实：60/60 只 `adj_cost=NaN`、`buy_date=2026-10-30`（信号日，错）、无 `adj_cost_date`；A 腿真值 `adj_cost=9.621902`、`buy_date=2026-11-02`（成交日，对） | **属实**，但**不污染估值**（`:1593` 合并时读的是 A 腿**文件**，不是合并文件里的副本）；合并值实测 499,225.89+499,800.07=**999,025.96**，与 portfolio.json 完全一致 |
+| R2：`fix_adj_cost_backfill.py` 直接调 `pp.save_holdings()`、绕过 `main()` → **不取进程互斥锁** | 属实。排期层已两重堵死（单一责任源 + `acquire_run_lock()`），但这是**唯一还能真并发写 holdings/portfolio.json 的路径** | **属实，待修** |
+
+> **教训**：子代理报告是**线索不是结论**。它给的行号很准，但它**没有跑数据**，
+> 所以"13 vs 15 列"这种一眼能验的事它仍然报错了。审计结论必须自己复核一遍再动手。
+
+### B. 但坑1的**机制**是真的 —— 一个即将触发的定时炸弹
+
+`append_ledger`（`paper_portfolio.py:681-691`）：
+
+```python
+w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))   # ← fieldnames 来自本批次首行
+if not exists: w.writeheader()                            # ← 表头只在文件不存在时写
+```
+
+而行的键集**不统一**：SELL 行 15 键（多 `cost_amount` / `realized_pnl`，`:1221-1222`），
+BUY 行 13 键（`:1225-1232`）。于是：
+
+| 场景 | 后果 |
+|---|---|
+| 首行 BUY(13) → 后来追加 SELL(15) | 新行 **15 列**、表头仍 **13 列** → `csv.DictReader` **静默错位**：`cash_after` 读到 `cost_amount`、`portfolio_value` 读到 `realized_pnl` → 脏值进净值曲线 |
+| 首行 SELL(15) → 后来追加 BUY(13) | 新行 **13 列**，比表头少 2 列 → 后两列填 `None` |
+| 最隐蔽 | 列数取决于**批次内首行是谁** → 同一份代码，行长可能不同 |
+
+`csv.DictWriter` **不校验旧文件**，所以追加时**不报错**，错位是静默的。
+现存文件整齐是因为**现存 SELL 行是老代码写的 13 键版本** —— 现在代码的 SELL 行固定 15 键
+⇒ **下一次有卖出的调仓就当场踩中**（周一 17:40 那档）。
+
+合成数据已复现两种错位（13头+15数据行 / 15头+13数据行）。
+
+### C. 修复（`paper_portfolio.py`）
+
+1. 新增**固定列契约** `LEDGER_FIELDS`（15 列 = SELL∪BUY 键集）：
+   `date, action, code, name, price, shares, amount, commission, stamp_tax,
+   slippage, score, cost_amount, realized_pnl, cash_after, portfolio_value`
+2. `append_ledger` 改用固定 `fieldnames`（`restval=""`, `extrasaction="ignore"`）
+   → **无论批次首行是谁，行长恒为 15**
+3. 新增 `_normalize_ledger_file(path)`：**追加前**检测表头是否 == `LEDGER_FIELDS`，
+   不符则**按旧表头位置取值**重排到 15 列（缺列补空），写临时文件 → `os.replace` 原子替换，
+   原文件备份为 `<path>.bak`
+   ⇒ **旧文件自动迁移**，读侧（`_ledger_cash_timeline`、`extract_nav_from_trades`、
+   `paper_daily_nav.py`）继续按列名读即可，**无需改动**
+4. 幂等：已是 15 列 → 直接返回，不产生无谓写盘
+
+### D. 真实产物迁移（已执行，零值差异）
+
+8 个 ledger（22f / factor_ranking / gbm_voltgt / honest_42f / honest_42f_neu /
+rsi_71421 / multi_asset_final_a / multi_asset_final_sleeve）13 → 15 列：
+
+```
+file                                  migrated    rows cols_before cols_after  value_diffs
+22f_ledger.csv                        True          66          13          15  NONE
+factor_ranking_ledger.csv             True          97          13          15  NONE
+gbm_voltgt_ledger.csv                 True          39          13          15  NONE
+honest_42f_ledger.csv                 True         148          13          15  NONE
+honest_42f_neu_ledger.csv             True          77          13          15  NONE
+multi_asset_final_a_ledger.csv        True          60          13          15  NONE
+multi_asset_final_sleeve_ledger.csv   True           9          13          15  NONE
+rsi_71421_ledger.csv                  True          66          13          15  NONE
+有值差异的文件: 无
+```
+
+**迁移判定标准**：旧表的每个列、每一行、每个值逐一比对 → **零差异**（只新增两列空值）。
+每个文件留 `.bak`。
+
+### E. 新增门禁 `tests/unit/trading/test_ledger_column_contract.py`（9+2 用例）
+
+1. 新建文件表头 == `LEDGER_FIELDS`（15 列）
+2. **首行是 SELL** 时表头也是完整 15 列（不是 13）
+3. BUY→SELL 两批追加后**所有行宽 == 表头宽**
+4. SELL→BUY 两批追加后同样等宽
+5. **核心**：13 列旧文件追加 SELL → 迁移后按列名读出**正确的** `cash_after`/`portfolio_value`
+   （修复前会读到 `cost_amount`）
+6. 迁移时写 `.bak`
+7. `_normalize_ledger_file` 幂等
+8. 行里出现未知键不炸（`extrasaction='ignore'`）
+9. **真实产物**：所有 ledger 行宽一致 + 已迁移到 15 列契约
+   （合并账本 `multi_asset_final_ledger.csv` 走全量重写路径、多一列 `leg`，不在此门禁内）
+
+### F. 回归
+
+`test_ledger_column_contract` + `test_ledger_nav_columns` + `test_paper_daily_nav` +
+`test_paper_portfolio_observation` + `test_paper_rebuild_guard` → **42 passed**。
+
+### G. 遗留（待修，本轮未动）
+
+- **R2**：`fix_adj_cost_backfill.py` 直接调 `pp.save_holdings()` 重写 holdings/portfolio.json，
+  **绕过 `main()` 不取互斥锁** → 与周一 17:40 那档重叠时会真并发写。
+  修法：把它也接到 `acquire_run_lock()`（或改走 `main()`）—— 属行为变更，等拍板。
+- **R4**：`signal_quality.py` 读 ledger 时若另一实例正在追加 → 统计数字可能偏差（账本本身不损坏）。
+- **R3**：`paper_daily_nav.py` 不取锁，但只写 `<strategy>_nav_daily.json`（独立文件）→ 最多读到半写的 holdings。
+- **R6**：三个一次性脚本此前未入库 → 已随前序提交入库（`git status` 现为干净）。
