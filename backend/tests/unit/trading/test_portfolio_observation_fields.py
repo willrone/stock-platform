@@ -78,3 +78,30 @@ def test_rebuild_portfolio_lines_exists_and_returns_all_lines():
     for name, ln in lines.items():
         gap = [k for k in REQUIRED_KEYS if k not in ln]
         assert not gap, f"{name} 缺字段 {gap}"
+
+
+def test_observation_gates_script_passes_on_current_artifact():
+    """产物级门禁脚本对**当前落盘产物**必须通过（2026-11-03 §12.40 建议：挂进常规回归）。
+
+    之前门禁是手动跑的 —— 它坏了（§12.39 那次 21 条全挂）没人知道，
+    是靠一条过期通知才被牵出来的。这里把它接进 `tests/unit`：
+    每次跑单测都会验一遍门禁脚本对产物的判定。
+    """
+    import subprocess
+    import sys
+
+    script = BACKEND_ROOT / "scripts" / "verify_paper_observation_gates.py"
+    if not script.exists():
+        pytest.skip(f"门禁脚本不存在: {script}")
+    if not PORTFOLIO.exists():
+        pytest.skip(f"没有 {PORTFOLIO}（未跑过纸面盘）")
+
+    proc = subprocess.run(
+        [sys.executable, str(script)],
+        capture_output=True, text=True, timeout=120,
+        cwd=str(BACKEND_ROOT),
+    )
+    assert proc.returncode == 0, (
+        "产物级门禁没过（verify_paper_observation_gates.py 退出码 "
+        f"{proc.returncode}）：\n{proc.stdout}\n{proc.stderr}")
+

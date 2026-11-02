@@ -2847,3 +2847,91 @@ def rebuild_portfolio_lines(capital=1_000_000.0, strict=True) -> Dict[str, Any]:
    自己拼一份 dict → 必然缺字段。**凡是会写同一份产物的路径，都要过同一个函数。**
 3. **产物级门禁要覆盖"字段存在性"**，不只是"数值自洽" ——
    本次门禁挂掉反而是好事：它暴露了字段缺失，而不是默默放过。
+
+## 12.40 既有缺陷：两个 Alpha158 测试**永远失败**（与策略无关，2026-11-03，已修）
+
+### A. 触发
+
+台账 §12.36 记了 `tests/` 全量里两个既有失败（当时是 segfault 打断了，没拿到名单），
+本轮用 `--collect-only` + 单文件复跑把身份定位出来：
+
+| 编号 | 文件 | 报错 |
+|---|---|---|
+| F1 | `backend/tests/scripts/test_alpha158_handler.py` | `FileNotFoundError`（路径） |
+| F2 | `backend/tests/scripts/test_alpha158_quick.py` | `AssertionError: 所有158个因子都应该能计算出来，但失败了15个` |
+
+### B. F1 根因：**硬编码别人机器的路径** + **副作用污染生产数据**
+
+原文件里写着：
+
+```python
+sys.path.insert(0, "/Users/ronghui/Documents/GitHub/willrone/backend")   # ← 别人的机器
+sample_file = Path("/Users/ronghui/Documents/GitHub/willrone/backend/data/parquet/stock_data/000001_SZ.parquet")
+```
+
+→ 本机必然 `FileNotFoundError`；更糟的是它**把样本写进生产
+`qlib_data/features/day/` 并改写 `instruments/all.txt`** → 跑一次测试就污染生产数据集。
+
+改法：
+1. 项目根从 `Path(__file__).resolve().parents[2]` 解析；
+2. 样本从 `data/parquet/baostock_daily/` **动态找一只真实票**，找不到就 `skip`
+   （测试该报"环境缺数据"，不是"代码错了"）；
+3. **不再往生产目录写任何东西**。
+
+### C. F2 根因：**测试数据退化**（引擎本身没错）
+
+原合成数据：
+
+```python
+test_data["$close"] = test_data["$close"].cumsum()   # ← 严格单调递增
+```
+
+`$close` 单调递增 ⇒ `IdxMax($high, N)` **恒等于窗口最后一位** ⇒ 归一化后**恒为 0**；
+`Sum(Greater(...), N)`、`Sum(Less(...), N)` 这类**计数/求和**因子在单调数据上同样退化
+⇒ 恰好 **15 个**（IMAX/CNTN/SUMN × 5 个窗口）全 0 ⇒ 断言必挂。
+
+**取证：引擎是对的。** 用真实行情（000001_SZ，1411 行）跑同一引擎
+→ **158 个因子全部非零，全 0 因子 = 0**。
+即"158 个因子算不出来"是**测试数据的性质**，不是引擎缺陷。
+
+改法：合成数据换成**有涨有跌的随机游走**（`cumprod(1+r)`，固定种子 42），
+顺便把原来无种子的 `np.random.uniform` 固定住（否则每次跑结果可能不同）。
+
+### D. 顺带查清：handler 路径在本机**无法自建数据集** → 显式 skip
+
+想把 handler 路径也测起来，实测走了四步，全部踩空：
+
+| 尝试 | 结果 |
+|---|---|
+| 手写 `features/day/*.parquet`（单层 DatetimeIndex） | `D.features()` → **0 行** |
+| 手写 parquet（MultiIndex(stock_code, date)） | `D.features()` → **0 行** |
+| 只加 `calendars/day.txt` + `instruments/all.txt` | handler 从 "can't find a freq" 变成 "**返回空数据**" |
+| `qlib.data.dump_bin` 造标准 bin 数据集 | **本机 qlib 0.9.8.dev31 没有这个模块** |
+
+核对生产格式（`data/qlib_data/features/day/000001_SZ.parquet`）：
+MultiIndex(stock_code, date) + 列名带 `$` 前缀 + **已经含 158 个因子列**
+（RET1…VSUMD60）+ 自定义列 + LABEL0 → 说明生产上 handler 路径是通的，
+但**它需要一整套合法的 qlib 数据集**，本机在临时目录里造不出来。
+
+→ 该路径**显式 `skip` 并在 skip 原因里写清**（含 qlib 版本、失败尝试），
+不假装能测；改测**表达式引擎路径**（真跑，断言 158 因子全非零）。
+表达式引擎路径的真要求也查清了：**入参必须是 MultiIndex(stock_code, date)**，
+单层 index 会报"数据格式不支持"。
+
+### E. 改动 + 验证
+
+| 文件 | 改动 |
+|---|---|
+| `tests/scripts/test_alpha158_quick.py` | 退化数据 → 有涨有跌随机游走（固定种子）；文件头写清根因 |
+| `tests/scripts/test_alpha158_handler.py` | 去硬编码路径；样本动态取；**改测表达式引擎**（真跑）；handler 路径显式 skip 并写明理由；加"生产 qlib_data 未被改动"指纹断言 |
+
+结果：**3 passed / 1 skipped**（`pytest tests/scripts/test_alpha158_handler.py tests/scripts/test_alpha158_quick.py`）。
+
+### F. 教训
+
+1. **"因子算不出来"先分清是引擎还是数据** —— 拿真实数据跑一遍再下结论；
+   本次差点把"合成数据单调"当成引擎 bug 去改引擎。
+2. **测试自己写进生产数据目录 = 隐形的回归源** —— 就算测试"通过"，也在改生产数据。
+   现在有指纹断言兜底。
+3. **skip 要写清"为什么不能测"**（版本、尝试过什么），
+   否则半年后没人知道这条路到底测没测过。

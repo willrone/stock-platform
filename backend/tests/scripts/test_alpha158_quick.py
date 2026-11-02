@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
-"""
-快速测试Alpha158表达式引擎
+"""快速测试Alpha158表达式引擎
 只测试关键功能，不运行完整测试套件
+
+2026-11-03 修（既有缺陷，详见台账 §12.40）：原合成数据用 `$close = cumsum()`
+—— **严格单调递增**，导致 `IdxMax($high, N)` 恒为窗口最后一位（归一化后恒为 0），
+`Sum(Greater(...), N)` 这类计数/求和因子也随之退化 → 15 个因子全 0，
+断言"158 个因子都能算出来"必然失败。
+**引擎本身没错**：用真实行情（000001_SZ，1411 行）跑同一引擎，158 个因子全部非零。
+→ 数据换成有涨有跌的随机游走（固定种子），见 `_make_data()`。
 """
 
 import os
@@ -17,6 +23,36 @@ import pandas as pd
 
 from app.services.qlib.enhanced_qlib_provider import Alpha158Calculator
 
+SEED = 42
+N_DAYS = 200
+
+
+def _make_data() -> pd.DataFrame:
+    """有涨有跌的随机游走日频数据（固定种子）。
+
+    2026-11-03（详见台账 §12.40）：原合成数据用 `$close = cumsum()` ——
+    **严格单调递增**，于是 `IdxMax($high, N)` 恒为窗口最后一位（归一化后恒为 0），
+    `Sum(Greater(...), N)` 这类计数/求和因子也随之退化 → 全 0。
+    断言"158 个因子都能算出来"必然失败（实测失败 15 个：IMAX/CNTN/SUMN × 5 窗）。
+
+    **这不是引擎的 bug**：用真实行情（000001_SZ，1411 行）跑同一引擎，
+    158 个因子**全部非零**（全 0 因子 = 0）→ 引擎是对的，是测试数据退化。
+
+    顺带把随机数固定住（原来 `np.random.uniform` 无种子，每次结果可能不同）。
+    """
+    rng = np.random.default_rng(SEED)
+    dates = pd.date_range("2020-01-01", periods=N_DAYS, freq="D")
+    ret = rng.normal(0.0005, 0.02, N_DAYS)
+    close = 20.0 * np.cumprod(1.0 + ret)
+    open_ = close * (1.0 + rng.normal(0.0, 0.004, N_DAYS))
+    high = np.maximum(open_, close) * (1.0 + np.abs(rng.normal(0.0, 0.006, N_DAYS)))
+    low = np.minimum(open_, close) * (1.0 - np.abs(rng.normal(0.0, 0.006, N_DAYS)))
+    volume = rng.integers(1_000_000, 10_000_000, N_DAYS)
+    return pd.DataFrame(
+        {"$open": open_, "$high": high, "$low": low, "$close": close, "$volume": volume},
+        index=dates,
+    )
+
 
 def test_basic_functions():
     """测试基础函数"""
@@ -25,21 +61,7 @@ def test_basic_functions():
     print("=" * 60)
 
     calculator = Alpha158Calculator()
-    dates = pd.date_range("2020-01-01", periods=100, freq="D")
-    test_data = pd.DataFrame(
-        {
-            "$open": np.random.uniform(10, 20, 100),
-            "$high": np.random.uniform(20, 30, 100),
-            "$low": np.random.uniform(5, 15, 100),
-            "$close": np.random.uniform(10, 20, 100),
-            "$volume": np.random.uniform(1000000, 10000000, 100),
-        },
-        index=dates,
-    )
-    test_data["$close"] = test_data["$close"].cumsum()
-    test_data["$high"] = test_data["$close"] * 1.1
-    test_data["$low"] = test_data["$close"] * 0.9
-    test_data["$open"] = test_data["$close"] * 0.95
+    test_data = _make_data()
 
     # 测试Ref函数
     print("1. 测试Ref函数...")
@@ -104,21 +126,7 @@ def test_all_factors():
 
     print(f"找到 {len(calculator.alpha_fields)} 个因子表达式")
 
-    dates = pd.date_range("2020-01-01", periods=100, freq="D")
-    test_data = pd.DataFrame(
-        {
-            "$open": np.random.uniform(10, 20, 100),
-            "$high": np.random.uniform(20, 30, 100),
-            "$low": np.random.uniform(5, 15, 100),
-            "$close": np.random.uniform(10, 20, 100),
-            "$volume": np.random.uniform(1000000, 10000000, 100),
-        },
-        index=dates,
-    )
-    test_data["$close"] = test_data["$close"].cumsum()
-    test_data["$high"] = test_data["$close"] * 1.1
-    test_data["$low"] = test_data["$close"] * 0.9
-    test_data["$open"] = test_data["$close"] * 0.95
+    test_data = _make_data()
 
     import time
 
