@@ -61,6 +61,36 @@ DAILY_LINES = ["22f", "honest_42f", "rsi_71421", "factor_ranking",
 NAV_BASIS = "total_return@trade_day (paper_portfolio.total_return_portfolio_value)"
 
 
+def acquire_lock() -> int:
+    """取纸面盘互斥锁（与 `paper_portfolio.main()` **同一把**）。
+
+    ## 为什么本脚本也要取锁
+
+    它**只写** `<strategy>_nav_daily.json`（不碰账本）→ 不会损坏账本；
+    但它**要读** `holdings` 与 `ledger`（`pp.load_holdings` / `read_ledger`）
+    → **读到被并发写的半成品就会产出错误的净值点**，
+    而净值点一旦写进 `nav_daily.json` 就是"看起来正常的错数据"。
+
+    ## 为什么 dry-run 也取锁（与 `fix_adj_cost_backfill` 不同）
+
+    那个脚本 dry-run 时**既不读也不写**盘 → 不取锁合理；
+    本脚本 dry-run **照样读** holdings/ledger → 同样会读到半成品
+    → **两种模式都必须取锁**。
+
+    取锁失败（超时）→ `pp.acquire_run_lock()` 走 `sys.exit(75)`（EX_TEMPFAIL），
+    由排期脚本记日志、次日补齐序列（`scripts/daily_nav.sh`）。
+
+    ## 为什么超时只给 120 秒（不是默认的 1800 秒）
+
+    `scripts/daily_nav.sh` **在脚本外面已经等过同一把锁**（最多 40 分钟）。
+    脚本内部再等 30 分钟是**双层等待冗余** —— 最坏情况 cron 任务会挂 70 分钟。
+    正常路径下 shell 刚探测过锁空闲，本脚本立刻就能拿到；
+    真正会等到的只有 TOCTOU 窗口（shell 探测通过后、排期实例恰好抢先），
+    那时**宁可今天不算、次日补齐，也不要产出错净值**。
+    """
+    return pp.acquire_run_lock(timeout_s=120)
+
+
 # ── 账本读取 ──────────────────────────────────────────────────────────
 def read_ledger(strategy: str) -> List[Dict[str, str]]:
     p = pp.ledger_path(strategy)
@@ -315,6 +345,13 @@ def main() -> None:
                     help="只保留最近 N 个交易日（默认全量）")
     ap.add_argument("--strategies", nargs="*", default=DAILY_LINES)
     args = ap.parse_args()
+
+    # ── 互斥锁（§12.52）───────────────────────────────────────────
+    # 必须在**加载行情之前**取锁 —— 那 2~4 分钟里排期实例完全可能已经开跑，
+    # 而本脚本读 holdings/ledger 算净值，读到半成品就是错的净值点。
+    lock_fd = acquire_lock()
+    print(f"✅ 已取得纸面盘互斥锁（fd={lock_fd}）", flush=True)
+    # lock_fd 必须保持引用直到进程结束（fcntl.flock 随进程退出自动释放）
 
     print("加载行情与后复权价格（较慢，约 2~4 分钟）……", flush=True)
     codes = pp.ds.list_universe()

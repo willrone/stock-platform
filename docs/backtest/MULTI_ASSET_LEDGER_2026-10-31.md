@@ -3955,3 +3955,167 @@ gateway 不重启就不会重载 Python 进程 → `mcp__stock_platform__*` 全�
 `export DYLD_LIBRARY_PATH=/opt/homebrew/opt/libomp/lib` —— 即 §12.50 认定的"催化剂"。
 目前 OMP=1 使其无害，但这是**主动引入风险**的动作，历史原因未记录。
 暂未删除（可能另有依赖），但已在守卫落地后由 OMP 锁兜底。
+
+## §12.51 pytest「假红」辨伪：hypothesis DeadlineExceeded 超时 vs 真断言失败 —— 2026-11-03
+
+### A. 症状
+
+全量回归第一次跑出 `exit code 1`、`1 failed`：
+
+```
+tests/unit/tasks/test_task_management_properties.py::test_task_statistics_integrity
+```
+
+红的位置在**任务统计**模块，与本轮改动的（ledger 列契约 / OpenMP / 互斥锁）
+**毫无关系** → 第一反应是"我改坏了"。
+
+### B. 根因：不是断言失败，是 hypothesis **超时**假红
+
+```
+hypothesis.errors.DeadlineExceeded
+  Deadline of 200ms exceeded, example:
+    task_statistics_integrity(n=5, tasks=[...])
+  FlakyFailure: `flaky` (failure only exhibited on this run)
+```
+
+| 证据 | 数值 |
+|---|---|
+| 首跑该 example 耗时 | **343.83 ms** |
+| 默认 deadline | 200 ms |
+| 重放同一 example | **7.82 ms**（远低于阈值） |
+
+同一个输入两次耗时差 **44 倍** → 首跑慢是**机器负载**（全量并行 + 首次 import），
+不是该测试有问题。hypothesis 把"超时"也记成 failed。
+
+### C. 处置：全仓统一给 `@settings` 补 `deadline=None`
+
+- 提交 `2efaff65`（11-03 05:33）：**4 个文件 29 处** `@settings(...)` 统一补 `deadline=None`
+- 改后连跑 3 次全绿
+
+**为什么是 `deadline=None` 而不是调大阈值**：deadline 的意义是"单 example 超时说明
+代码有非确定性的慢路径"。本仓库的 property 测试大多是**纯计算 + mock**，
+慢只来自 CI/本机负载噪声 → deadline 在这里**只制造假红**，不制造真信号。
+留 `deadline=None` 后，若真有死循环/性能塌方，会由**整体超时**（pytest 层面）兜住。
+
+### D. 顺带修掉的另一个事故：`patch` 插错位置造成的 SyntaxError
+
+上一提交（`003ff160` 之前那次）用 `patch` 改 `signal_service.py` 时
+**插到了错误的缩进层** → 该文件 SyntaxError → 全量 pytest
+**7 个文件 collection error**（`Interrupted: 7 errors during collection`，EXIT=2）。
+
+**"7 个文件同时 collection error"看着像 7 个 bug，实际只有 1 个根因**：
+import `app.services.trading.signal_service` 失败 → 其余 6 个测试文件
+importlib 报错 → 连锁报错。
+
+**排查法（已固化进 skill）**：多个文件同时 collection error → **先看是不是同一个
+import 根因**（看第一个 error 的 traceback 指向谁），而不是逐个文件去修。
+修复提交 `003ff160`。
+
+### E. 权威结果
+
+```
+2026-11-03 06:36  pytest tests/ -v
+909 passed / 1 skipped / 0 failed    EXIT=0
+```
+
+对比修复前的 888 → 909，多出的 21 条是本轮新增门禁
+（`test_ledger_column_contract.py` 12 + `test_root_conftest_omp_guard.py` 5 + 其他）。
+唯一的 SKIPPED 是 `test_alpha158_handler.py:119`（qlib 0.9.8.dev31 无 dump_bin）
+—— 合法跳过。
+
+### F. 固化：hypothesis 假红三步辨伪法（写进 skill）
+
+| 异常类型 | 判定 | 处置 |
+|---|---|---|
+| `DeadlineExceeded` | **超时假红**（配置问题，与业务无关） | 看首跑/重放耗时差；补 `deadline=None` |
+| `AssertionError` + 共享 setup | example 隔离问题 | 检查共享可变状态 |
+| 以上都不是 | 疑似真回归 | `git stash` 与基线比对 |
+
+**第一步永远是看异常类型**，不是看断言文本。
+
+---
+
+## §12.52 `paper_daily_nav.py` 接进同一把互斥锁：消除 shell 探测 → python 执行之间的 TOCTOU 窗口 —— 2026-11-03
+
+### A. 背景
+
+§12.49 把 `fix_adj_cost_backfill.py` 接进了互斥锁后，还剩最后一个读侧风险：
+
+```
+scripts/daily_nav.sh（Hermes cron，工作日 18:20）
+  ├─ while 探测锁空闲（flock + LOCK_UN，**不持有**）   ← 最多等 40 分钟
+  └─ python backend/scripts/paper_daily_nav.py          ← ←── TOCTOU 窗口在这里
+```
+
+探测与执行之间存在窗口：探测刚判空闲 → 周频调仓实例
+（`com.rone.paper-portfolio` 周一 17:40）恰好抢到锁并开始改写
+`holdings` / `ledger` → 日频脚本在**半写状态**上算净值。
+
+### B. 为什么"只读不写"也必须取锁
+
+`paper_daily_nav.py` **只写** `<strategy>_nav_daily.json`，**不碰账本**
+→ 不会损坏账本。但它**要读** holdings 与 ledger：
+
+- `pp.load_holdings(...)`（`scripts/paper_daily_nav.py:333`）
+- `read_ledger(strategy)`（`:65`）
+
+读到半成品 → 算出**错的净值点**。而净值点一旦写进 `nav_daily.json`，
+就是"**看起来正常的错数据**"：有日期、有单调性、门禁还可能过
+→ **比直接失败更难发现**。
+
+### C. 与 `fix_adj_cost_backfill` 的**故意差异**：dry-run 也要取锁
+
+| | `fix_adj_cost_backfill.py` | `paper_daily_nav.py` |
+|---|---|---|
+| dry-run 时读盘？ | 否（只打印计划） | **是**（照样读 holdings/ledger） |
+| dry-run 取锁？ | 否 | **是** |
+
+那条"dry-run 不取锁"不能照抄过来 —— **本脚本 dry-run 同样会读到半成品**。
+
+### D. 超时给 120 秒（不是默认 1800）：避免双层等待冗余
+
+`daily_nav.sh` **在脚本外面已经等过同一把锁**（最多 40 分钟）。
+脚本内部再等 30 分钟是**双层等待** → 最坏情况一个 cron 任务挂 70 分钟。
+
+正常路径：shell 刚探测过锁空闲 → 本脚本**立刻**拿到。
+真正会等到的只有 TOCTOU 窗口（shell 探测通过后、排期实例恰好抢先），
+那时**宁可今天不算、次日补齐**，也不要产出错净值。
+
+取锁失败 → `pp.acquire_run_lock()` 走 `sys.exit(75)`（EX_TEMPFAIL），
+由 `daily_nav.sh` 记 `exit=75` → 次日补齐序列。
+
+### E. 实现与门禁
+
+**实现**（`backend/scripts/paper_daily_nav.py`）：
+- `acquire_lock()`（`:64`）→ `pp.acquire_run_lock(timeout_s=120)`
+- `main()` 内**加载行情之前**取锁（`:344`）——
+  那 2~4 分钟里排期实例完全可能已经开跑，取晚了等于没取
+- `lock_fd` 保持引用直到进程结束（fcntl.flock 随 fd 关闭/进程退出释放，
+  fd 被 GC 掉会让锁**提前释放**）
+
+**门禁**（`backend/tests/unit/trading/test_paper_daily_nav_lock.py`，7 条全绿）：
+
+| 门禁 | 守什么 |
+|---|---|
+| `test_takes_lock` | 真的调 `pp.acquire_run_lock()` |
+| `test_uses_short_timeout` | 超时必须是 120s（防双层等待回归） |
+| `test_dry_run_also_takes_lock` | dry-run 也取锁（防照抄 fix_adj 的那条） |
+| `test_uses_same_lock_path_as_main_flow` | 与主流程同一把锁 |
+| `test_lock_taken_before_market_data_load` | 源码顺序门禁：取锁 < `load_data` |
+| `test_lock_fd_kept_alive_until_exit` | fd 不被 GC 掉 |
+| `test_blocks_when_other_process_holds_lock` | 跨进程真互斥 |
+
+**monkeypatch 必须打在 `pdn.pp` 上**：`paper_daily_nav.py` 用 importlib 加载
+paper_portfolio（模块名 `paper_portfolio_mod`），**与 `from scripts import paper_portfolio`
+不是同一个模块对象**（§12.49 的"双模块对象"坑）→ 打错对象会让测试
+"通过但没测到东西"。
+
+### F. 端到端验证
+
+```
+[2026-11-03 06:44:07] 纸面盘锁空闲（已等 00 秒）
+✅ 已取得纸面盘互斥锁（fd=3）      ← 立即拿到，与 shell 探测不冲突（不持有）
+```
+
+shell 的探测是 `flock` 后立刻 `LOCK_UN` → **不持有** → 本脚本能立刻拿到，
+**无死锁**。
