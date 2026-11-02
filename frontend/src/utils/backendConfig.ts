@@ -3,6 +3,7 @@
  *
  * 统一管理后端服务器地址配置，用于WebSocket等需要直接连接后端的场景
  */
+import { DEFAULT_BACKEND_PORT, DEFAULT_BACKEND_HTTP_URL, DEFAULT_BACKEND_WS_URL } from '@/config/backend';
 
 /**
  * 获取后端WebSocket地址
@@ -18,12 +19,12 @@ export function getBackendWebSocketUrl(): string {
   if (typeof window !== 'undefined') {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const hostname = window.location.hostname;
-    const port = process.env.NEXT_PUBLIC_BACKEND_PORT || '8000';
+    const port = process.env.NEXT_PUBLIC_BACKEND_PORT || DEFAULT_BACKEND_PORT;
     return `${protocol}//${hostname}:${port}/ws`;
   }
 
   // 服务端：使用默认值
-  return 'ws://localhost:8000/ws';
+  return DEFAULT_BACKEND_WS_URL;
 }
 
 /**
@@ -41,10 +42,10 @@ export function getBackendHttpUrl(): string {
   if (typeof window !== 'undefined') {
     const protocol = window.location.protocol;
     const hostname = window.location.hostname;
-    const port = process.env.NEXT_PUBLIC_BACKEND_PORT || '8000';
+    const port = process.env.NEXT_PUBLIC_BACKEND_PORT || DEFAULT_BACKEND_PORT;
     return `${protocol}//${hostname}:${port}`;
   }
 
   // 服务端：使用默认值
-  return 'http://localhost:8000';
+  return DEFAULT_BACKEND_HTTP_URL;
 }

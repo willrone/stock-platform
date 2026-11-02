@@ -1,4 +1,5 @@
 import { logger } from '@/utils/logger';
+import { DEFAULT_BACKEND_WS_URL } from '@/config/backend';
 /**
  * 训练进度WebSocket客户端
  *
@@ -39,7 +40,7 @@ export class TrainingProgressWebSocket {
       this.wsUrl = `${protocol}//${hostname}:${port}/ws`;
     } else {
       // 服务端：使用默认值
-      this.wsUrl = 'ws://localhost:8000/ws';
+      this.wsUrl = DEFAULT_BACKEND_WS_URL;
     }
   }
 

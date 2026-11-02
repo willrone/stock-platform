@@ -19,6 +19,7 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import type { PersistStorage, StateStorage, StorageValue } from 'zustand/middleware';
+import { DEFAULT_BACKEND_WS_URL } from '@/config/backend';
 
 export interface User {
   id: string;
@@ -179,7 +180,7 @@ const appStorage: PersistStorage<PersistedAppState> = {
 
 const defaultWsUrl = (): string => {
   if (typeof window === 'undefined') {
-    return process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000/ws';
+    return process.env.NEXT_PUBLIC_WS_URL || DEFAULT_BACKEND_WS_URL;
   }
   const envUrl = process.env.NEXT_PUBLIC_WS_URL;
   if (envUrl) {

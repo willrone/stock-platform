@@ -21,7 +21,7 @@ const nextConfig = {
     // 如果未设置，使用 localhost（本地开发）或从 NEXT_PUBLIC_API_URL 提取
     const backendHost = process.env.NEXT_PUBLIC_BACKEND_HOST || 
                        process.env.NEXT_PUBLIC_API_URL?.replace(/^https?:\/\//, '').replace(/\/api\/v1.*$/, '') ||
-                       'localhost:8000';
+                       '127.0.0.1:18082';
     
     // 确保有协议前缀
     const backendUrl = backendHost.startsWith('http') 
