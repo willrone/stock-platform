@@ -143,6 +143,7 @@ def fix_merged_line(adj_close: pd.DataFrame, as_of: pd.Timestamp,
         a_positions, float(a_paper.get("cash") or 0.0), adj_close, as_of)
 
     s_value = None
+    s_err: str | None = None
     # ETF 代码直接取袖套持仓文件（权威：实际持有哪些就取哪些）
     etf_codes = sorted(s_positions.keys())
     try:
@@ -150,11 +151,19 @@ def fix_merged_line(adj_close: pd.DataFrame, as_of: pd.Timestamp,
         s_value = (float(s_paper.get("cash") or 0.0)
                    + sleeve_positions_value(s_positions, bars, as_of))
     except Exception as e:  # noqa: BLE001
-        print(f"⚠️ 袖套估值失败（不影响 A 腿修复）：{e}", flush=True)
+        # 守卫：袖套估值失败 → 合并线不可信 → 整条线拒绝写盘，绝不写"只剩 A 腿"的半残市值
+        s_err = f"{type(e).__name__}: {e}"
+        print(f"❌ 袖套估值失败：{s_err}", flush=True)
 
-    total = a_value + (s_value or 0.0)
+    if s_value is None:
+        # 提前返回，不触碰 merged；调用方据此中止整轮写盘
+        return {"strategy": MERGED, "n_pos": len(merged.get("positions") or {}),
+                "fixed": 0, "date_fixed": 0, "failed": True, "error": s_err,
+                "value": None, "value_before": merged.get("last_value")}
+
+    total = a_value + s_value
     value_before = merged.get("last_value")
-    if not dry and s_value is not None:
+    if not dry:
         merged["last_value"] = round(total, 2)
         merged["value_as_of"] = str(as_of.date())
         merged["nav_value_basis"] = "total_return@trade_day (A腿) + etf_fq(trade_day) (袖套)"
@@ -170,7 +179,7 @@ def fix_merged_line(adj_close: pd.DataFrame, as_of: pd.Timestamp,
         pp.save_holdings(MERGED, merged)
 
     return {"strategy": MERGED, "n_pos": len(merged.get("positions") or {}),
-            "fixed": 0, "date_fixed": 0,
+            "fixed": 0, "date_fixed": 0, "failed": False,
             "value": round(total, 2), "value_before": value_before}
 
 
@@ -198,6 +207,12 @@ def main() -> None:
                   f"市值 {r['value_before']} → {r['value']}", flush=True)
     rows.append(fix_merged_line(adj_close, as_of, args.dry_run))
     m = rows[-1]
+    if m.get("failed"):
+        # 守卫：合并线（含袖套腿）估值失败 → 整轮中止，绝不把"只剩 A 腿"的半残市值
+        # 写进 portfolio.json。单线 holdings 可能已落盘，portfolio.json 保持旧值待重跑。
+        print("\n❌ 合并线估值失败 → 已中止本轮写盘，portfolio.json 未重建", flush=True)
+        print(f"   原因：{m.get('error')}", flush=True)
+        sys.exit(1)
     print(f"  [{MERGED}] {m['n_pos']} 只 | 市值 {m['value_before']} → {m['value']}",
           flush=True)
 
@@ -213,11 +228,18 @@ def main() -> None:
         with open(pp_path) as fh:
             existing = json.load(fh) or {}
     merged_lines = dict(existing.get("lines") or {})
+    rebuild_failed = []
     for name in list(pp.STRATEGIES.keys()):
         try:
             merged_lines[name] = pp.rebuild_line_from_files(name, 1_000_000.0)
         except Exception as e:  # noqa: BLE001
-            print(f"  重建 {name} 失败（保留旧值）: {e}", flush=True)
+            # 守卫：任一条线重建失败 → 不写 portfolio.json（避免"半份快照"）
+            rebuild_failed.append(f"{name}: {type(e).__name__}: {e}")
+    if rebuild_failed:
+        print("\n❌ portfolio.json 重建失败 → 已中止，未写盘：", flush=True)
+        for f in rebuild_failed:
+            print(f"   {f}", flush=True)
+        sys.exit(1)
     existing["lines"] = merged_lines
     with open(pp_path, "w") as fh:
         json.dump(existing, fh, ensure_ascii=False, indent=1)
