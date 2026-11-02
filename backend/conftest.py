@@ -20,11 +20,16 @@
 pytest 收集阶段如果**先** import 了 qlib / lightgbm / numpy（某些测试模块顶层就 import），
 `app` 还没被 import → setdefault 来得太晚 → OpenMP 多线程已初始化 → 段错误。
 
-**症状极具迷惑性**：进度条跑到 100%，然后在收尾阶段（atexit / 线程清理）崩掉，
-**pytest 的最终汇总行（"N passed"）永远打不出来** → 只看进度条会误判成"测试通过"。
+**真实的崩溃形态**：进程 SIGSEGV / SIGABRT → **exit code 139 / 134**，
+并在 `~/Library/Logs/DiagnosticReports/Python-*.ips` 里留下 `libomp.dylib` 崩溃报告。
 
-2026-11-03 实测：两次全量回归都这样崩（`~/Library/Logs/DiagnosticReports/Python-2026-11-03-*.ips`
-里一串 `libomp.dylib` SIGSEGV）。而同一份代码加上 `OMP_NUM_THREADS=1` 就正常。
+2026-11-03 实测：修复前多次全量回归在收尾阶段崩溃（`.ips` 报告时间戳全部早于 05:13 的修复，
+05:13 之后再无新崩溃报告）。加了 `OMP_NUM_THREADS=1` 后，同一份代码 exit code 0。
+
+**判据（本项目只认这三条）**：exit code + `-v` 的最终计数行 + `.ips` 崩溃报告。
+
+> 注意：`pytest -q` 在 **pytest 9.0.3** 下**本来就不打印最终计数行**（新 reporter 行为），
+> 这跟崩不崩无关。排查时务必用 `-v` 跑一个小集合交叉验证，别拿 `-q` 的输出当通过/失败判据。
 
 ## 这里的做法
 
