@@ -244,8 +244,8 @@ def load_nav_daily(strategy: str) -> Dict[str, Any]:
         "initial_capital": raw.get("initial_capital"),
         "points": points,
         "note": (
-            "note": "日频盯市（total_return 口径，与周频 nav_basis 是两套口径）；"
-                "由 cron 0294eb16149f 工作日 18:20 产出，updated_at 即数据新鲜度",
+            "日频盯市（total_return 口径，与周频 nav_basis 是两套口径）；"
+            "由 cron 0294eb16149f 工作日 18:20 产出，updated_at 即数据新鲜度"
         ),
     }
 
