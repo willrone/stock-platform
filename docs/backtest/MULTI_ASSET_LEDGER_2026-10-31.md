@@ -3846,3 +3846,28 @@ for _var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
 `app/__init__.py` 的 setdefault 抢先生效 → OMP=1；单跑（尤其带 DYLD）时
 `app` 还没 import → OMP 没锁 → 崩。**同一个测试，两种跑法两种结果** ——
 这正是"缺根级 conftest"的典型症状，也说明"全量绿"覆盖不到单跑场景。
+
+
+### H. 时间线闭合：两条修复互补，不重复（2026-11-03 06:20 核实）
+
+`git log -S 'OMP_NUM_THREADS' -- backend/app/__init__.py` → 唯一命中 `59778c6f 11-03 05:13`。
+
+| 时刻 | 事件 | 结果 |
+|---|---|---|
+| 04:41 | 直接跑 `python tests/scripts/test_qlib_integration.py`（无 DYLD） | **EXIT=139** |
+| 04:44 | 同上 + `DYLD_LIBRARY_PATH=.../libomp/lib` | **EXIT=139** |
+| **05:13** | `59778c6f`（§12.44）给 `app/__init__.py:18` 加 OMP 锁 | 覆盖所有 `import app.*` 入口 |
+| **06:14** | `c7d99d8e`（§12.50）新建根级 `backend/conftest.py` | 覆盖 pytest 收集期（app 尚未 import） |
+| 06:16 | 直接跑同一脚本（现代码） | **3/3 通过，EXIT=0** ✓ |
+| 06:12 | pytest 单测 + DYLD（最恶劣组合） | **1 passed, EXIT=0** ✓ |
+
+→ 04:41/04:44 那两次崩溃发生在 **`app/__init__.py` 还没有 OMP 锁**的时候 ——
+**不是"直接跑这条路没被覆盖"**，而是那会儿**整条路都没锁**。
+现在两把锁各管一段，**互补且不重复**：
+
+- `app/__init__.py` → 管**所有 `import app.*` 的入口**（含直接 `python xxx.py` 运行）
+- `backend/conftest.py` → 管**pytest collection 最早期**（此时 app 可能还没被 import）
+
+**教训**：`git log -S` 查"这行代码什么时候加的"比任何推测都可靠 ——
+我一度以为"直接跑路径没被 conftest 覆盖 = 我的修复有缺口"，
+实际是那两次崩溃发生在修复之前。时间线一对上，缺口不存在。
