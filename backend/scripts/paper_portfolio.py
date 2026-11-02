@@ -373,6 +373,130 @@ def save_holdings(strategy: str, data: Dict[str, Any]) -> None:
         json.dump(data, fh, ensure_ascii=False, indent=1)
 
 
+def last_valid_adj(adj_close: Optional[pd.DataFrame], code: str,
+                   as_of: Any) -> Tuple[Optional[float], Optional[str]]:
+    """取 **≤ as_of 的最后一个有效后复权价** → (值, 价格日期字符串)。
+
+    为什么需要"最后有效"而不是 `adj_close.at[as_of, code]`（2026-11-02 实测）：
+      后复权价由**交易所口径涨跌幅**合成（`load_adjusted_close`），
+      而当日涨跌幅要等 **baostock（T+1）** 或 **TDX raw 包** 同步到位
+      —— 实测 2026-11-02 当天 sync_pct_chg 报「没有可用的 TDX raw 分区」
+      → adj_close 最后一行**整行 NaN**。
+      若直接取 at[as_of] → NaN → 比值兜底成 1.0 → **该票市值被冻结在买入
+      金额、永不反映涨跌**（实测 2026-11-02 首跑：multi_asset_final 69/69 只、
+      其余各线 3~12 只中招）。
+      → 统一改成「≤ as_of 的最后有效价」（停牌期价格本就不变，语义正确）。
+
+    三处复用（口径单一来源）：买入成本、adj_cost 回填、组合估值。
+    """
+    if adj_close is None or code not in adj_close.columns:
+        return None, None
+    try:
+        s_ = adj_close.loc[:as_of, code].dropna()
+    except (KeyError, TypeError, ValueError):
+        return None, None
+    if not len(s_):
+        return None, None
+    try:
+        v = float(s_.iloc[-1])
+        d = str(pd.Timestamp(s_.index[-1]).date())
+    except (TypeError, ValueError):
+        return None, None
+    if not np.isfinite(v) or v <= 0:
+        return None, None
+    return v, d
+
+
+# ── 总回报口径估值（**周频与日频共用的唯一实现**，2026-11-02）──────────
+# 为什么提取成模块级：日频盯市（paper_daily_nav.py）必须与周频调仓**逐位一致**
+# —— 方案书 §3 门禁 a 把这条定为"不过就不许上线"的硬门禁。
+# 若两边各写一份估值，口径迟早漂移（台账 P13：袖套指标 ≠ 组合指标；
+# P12：w 曲线不可识别 —— 口径漂移是本项目最贵的错误类型）。
+# → 口径**只实现一次**，周频与日频都调它。
+#
+# 口径本身（与原 run_line 内闭包 _pos_value 完全等价）：
+#   持仓市值 = 买入金额(shares × cost) × 后复权比值(adj_close[as_of] / adj_cost)
+#   组合市值 = 现金 + Σ 持仓市值
+# 注意：**不是**「股数 × 当前未复权价 × 复权因子」—— 那会把跌幅算两次
+# （原代码注释实测：会让所有线的净值凭空少 1%）。
+
+def total_return_portfolio_value(
+    positions: Dict[str, Any],
+    cash: float,
+    adj_close: Optional[pd.DataFrame],
+    as_of: Any,
+) -> Tuple[float, List[Dict[str, Any]]]:
+    """总回报口径的组合市值 + 逐只明细（**只实现一次**，周频/日频共用）。
+
+    参数：
+      positions  {code: {shares, cost, adj_cost, ...}}
+      cash       现金
+      adj_close  后复权价矩阵（行=交易日）
+      as_of      估值日（矩阵行索引）
+
+    返回：(总市值, 明细列表)
+      明细项：code / shares / cost / adj_ratio / market_value / stale_price
+      `stale_price=True` 表示该票在 as_of 当日**没有后复权价**
+      （停牌/数据缺失）→ 估值按**买入金额**计价（ratio=1.0），
+      这与周频 `_adj_ratio` 的兜底**完全一致**（不能另立口径）。
+
+    ⚠️ 浮点运算顺序与原闭包保持一致（sh * cost * ratio）→ 逐位相等。
+    """
+    total = float(cash)
+    details: List[Dict[str, Any]] = []
+    for code, p in (positions or {}).items():
+        p = p or {}
+        sh = float(p.get("shares", 0) or 0)
+        cost = float(p.get("cost", 0) or 0)
+        if sh <= 0 or cost <= 0:
+            continue
+        ratio = 1.0
+        stale = False
+        price_date = None
+        if adj_close is not None and code in adj_close.columns:
+            try:
+                a_cost = float(p.get("adj_cost", 0) or 0)
+            except (TypeError, ValueError):
+                a_cost = 0.0
+            # ⚠️ 2026-11-02 修正（第二个真 bug）：分子不能用 `adj_close.at[as_of, code]`
+            #   —— 当日没有有效后复权价时（停牌；或**交易所口径涨跌幅还没同步**，
+            #   实测 2026-11-02 当天 sync_pct_chg 报"没有可用的 TDX raw 分区"
+            #   → adj_close 最后一行整行 NaN）→ 旧代码落到 ratio=1.0
+            #   → **该票市值被冻结在买入金额，永不反映涨跌**。
+            #   现在改成：取 **≤ as_of 的最后一个有效后复权价**
+            #   （方案书 §2.2 的 last_valid_close 兜底；停牌期价格本就不变）。
+            a_now, price_date = last_valid_adj(adj_close, code, as_of)
+            if a_now is None:
+                a_now = float("nan")
+                price_date = None
+            if not np.isfinite(a_now):
+                ratio = 1.0
+                stale = True
+            elif np.isfinite(a_cost) and a_cost > 0:
+                ratio = a_now / a_cost
+                # 用了**滞后**的价格（停牌 / 涨跌幅未同步 → 最后有效价早于 as_of）
+                # → 必须标记 stale（方案书 §2.6）：否则"用旧价冒充当日价"，
+                # 会造出假的 0 收益点 → 压低波动、稀释夏普。
+                stale = (price_date != str(pd.Timestamp(as_of).date()))
+            else:
+                ratio = 1.0
+                stale = True
+        else:
+            stale = True
+        mv = sh * cost * ratio
+        total += mv
+        details.append({
+            "code": code,
+            "shares": sh,
+            "cost": cost,
+            "adj_ratio": ratio,
+            "market_value": mv,
+            "stale_price": stale,
+            "price_date": price_date,
+        })
+    return total, details
+
+
 # ── 进程互斥锁（2026-11-02）──────────────────────────────────────────
 # 为什么要：纸面盘今天有**三个排期**都会调 scripts/paper_portfolio.py
 #   ① launchd com.rone.tdx-update  16:05（daily_tdx_update.sh 第 5 步，周一）
@@ -430,6 +554,36 @@ def acquire_run_lock(timeout_s: int = 1800, poll_s: float = 5.0) -> int:
     os.lseek(fd, 0, os.SEEK_SET)
     os.write(fd, f"pid={os.getpid()} started={_time.strftime('%F %T')}\n".encode())
     return fd
+
+
+def ledger_buy_dates(strategy: str) -> Dict[str, str]:
+    """从 ledger.csv 取每只票**最近一次买入的成交日**（{code: "YYYY-MM-DD"}）。
+
+    为什么需要（2026-11-02）：ledger 的 `date` 列记的是**成交日**（权威），
+    而持仓文件里的 `buy_date` 在 2026-11-02 之前记的是**信号日**
+    （lag1 口径下买入发生在成交日）→ 用它回填 adj_cost 会取错日期 →
+    后复权比值失真。现在统一以 ledger 为准。
+    """
+    out: Dict[str, str] = {}
+    p = ledger_path(strategy)
+    if not os.path.exists(p):
+        return out
+    try:
+        import csv as _csv
+        with open(p, newline="") as fh:
+            for r in _csv.DictReader(fh):
+                if str(r.get("action") or "").upper() != "BUY":
+                    continue
+                code = str(r.get("code") or "")
+                d = str(r.get("date") or "").strip()
+                if not code or not d:
+                    continue
+                # ledger 按时间顺序写入 → 后面出现的 BUY 覆盖前面的（最近一次买入）
+                if d >= out.get(code, ""):
+                    out[code] = d
+    except Exception:  # noqa: BLE001
+        return out
+    return out
 
 
 # ── 观测口径层（方案书附录 A，2026-11-02）────────────────────────────
@@ -701,21 +855,39 @@ def run_line(
     # 字段之前建的，从 ledger.csv 的买入记录回填。
     if adj_close is not None:
         _filled = 0
+        _lbd = ledger_buy_dates(strategy)
         for _code, _pos in positions.items():
-            if _pos.get("adj_cost"):
-                continue
-            _bd = _pos.get("buy_date")
+            # ⚠️ 2026-11-02 修正：原来用 truthy 判断 —— **NaN 是 truthy**
+            #   → adj_cost 是 NaN 的持仓永远被跳过回填 → 永远修不好。
+            #   现在判"是否有效"（非空且有限）。
+            # buy_date 应是**成交日**（2026-11-02 起修）；老数据里它记的是
+            # 信号日 → 优先用 ledger 的成交日（权威），没有才退回 buy_date。
+            _bd = _lbd.get(_code) or _pos.get("buy_date")
             if not _bd:
                 continue
             try:
                 _ts = pd.Timestamp(_bd)
-                if _ts in adj_close.index and _code in adj_close.columns:
-                    _v = float(adj_close.at[_ts, _code])
-                    if np.isfinite(_v) and _v > 0:
-                        _pos["adj_cost"] = round(_v, 6)
-                        _filled += 1
-            except (KeyError, TypeError, ValueError):
+            except (TypeError, ValueError):
                 continue
+            # ⚠️ 2026-11-02 再修正：原来"adj_cost 是有效值就跳过" ——
+            #   但旧值可能是**信号日**写的（日期错位，分子分母不同日）→
+            #   跳过后永远修不好 → 日频/周频对账实测差 300~850 元。
+            #   现在：只有当 adj_cost 的**价格日**就是成交日才跳过。
+            _ac = _pos.get("adj_cost")
+            _acd = str(_pos.get("adj_cost_date") or "")
+            if (_ac is not None and np.isfinite(float(_ac))
+                    and _acd == str(_ts.date())):
+                continue
+            # ⚠️ 用「≤ 买入**成交日**的最后有效后复权价」，不是 at[_ts] ——
+            #   ① 买入日当天可能还没涨跌幅（见 last_valid_adj 的说明）；
+            #   ② 旧代码建仓时按**信号日**写 adj_cost → 分子分母落在不同日期。
+            #   → 一律按成交日重算（不看旧值是否"有效"）。
+            _v, _vd = last_valid_adj(adj_close, _code, _ts)
+            if _v is not None:
+                _pos["adj_cost"] = round(_v, 6)
+                if _vd:
+                    _pos["adj_cost_date"] = _vd
+                _filled += 1
         if _filled:
             print(f"  [{strategy}] 回填 adj_cost: {_filled} 只持仓", flush=True)
 
@@ -781,26 +953,25 @@ def run_line(
     #     - 有送转（10 送 10，价腰斩）→ 后复权比值 = 1.0（pct_chg 已调整）
     #       → 市值不变 → 正确（送转后股数翻倍，总市值不变）
     def _adj_ratio(code: str) -> float:
-        """当前后复权价 / 买入日后复权价。"""
-        if adj_close is None or code not in adj_close.columns:
-            return 1.0
-        try:
-            a_now = float(adj_close.at[latest, code])
-            a_cost = float(positions.get(code, {}).get("adj_cost", 0) or 0)
-        except (KeyError, TypeError, ValueError):
-            return 1.0
-        if not np.isfinite(a_now) or not np.isfinite(a_cost) or a_cost <= 0:
-            return 1.0
-        return a_now / a_cost
+        """成交日后复权价 / 买入日后复权价（口径见 total_return_portfolio_value）。
+
+        ⚠️ 2026-11-02 修正：原来分子用的是 `latest`（**信号日**）→ 净值滞后
+        一个交易日（lag1 口径下买入在成交日，分子却停在信号日）。
+        """
+        _v, _d = total_return_portfolio_value(
+            {code: positions.get(code) or {}}, 0.0, adj_close, trade_day)
+        return float(_d[0]["adj_ratio"]) if _d else 1.0
 
     def _pos_value(code: str) -> float:
-        """总回报口径的持仓市值 = 买入金额 × 后复权比值。"""
-        p = positions.get(code) or {}
-        sh = float(p.get("shares", 0) or 0)
-        cost = float(p.get("cost", 0) or 0)
-        if sh <= 0 or cost <= 0:
-            return 0.0
-        return sh * cost * _adj_ratio(code)
+        """总回报口径的持仓市值 = 买入金额 × 后复权比值。
+
+        2026-11-02：改为调**模块级** total_return_portfolio_value ——
+        日频盯市（paper_daily_nav.py）必须与周频**逐位一致**，
+        两边各写一份估值迟早漂移（方案书 §3 门禁 a）。
+        """
+        _v, _d = total_return_portfolio_value(
+            {code: positions.get(code) or {}}, 0.0, adj_close, trade_day)
+        return float(_d[0]["market_value"]) if _d else 0.0
 
     def px(c: str) -> float:
         v = close.get(c, np.nan)
@@ -869,13 +1040,26 @@ def run_line(
         a_cost = None
         if adj_close is not None and c in adj_close.columns:
             try:
-                a_cost = float(adj_close.at[latest, c])
+                # ⚠️ 2026-11-02 修正（真 bug，污染了今晚的账本）：
+                #   原来取 `latest`（**信号日**）的后复权价，但买入发生在**成交日**
+                #   （lag1 口径）→ 分子分母落在不同日期 → 比值失真；
+                #   更糟的是信号日该票没有后复权价时得到 NaN，
+                #   而 `if a_cost else None` 里 **NaN 是 truthy** → NaN 被写进持仓
+                #   → `_adj_ratio` 因 `not np.isfinite(a_cost)` 恒返回 1.0
+                #   → **该票市值被冻结在买入金额，永不反映涨跌**。
+                #   实测 2026-11-02 首跑：multi_asset_final **69/69 只**、
+                #   其余各线 3~12 只的 adj_cost 无效 → 那条线当时显示的
+                #   "-0.10%" 其实是**手续费损耗**，不含任何市场波动。
+                #   现在统一用**成交日** trade_day。
+                a_cost, _a_date = last_valid_adj(adj_close, c, trade_day)
             except (KeyError, TypeError, ValueError):
                 a_cost = None
         positions[c] = {"shares": shares, "cost": round(p, 3),
-                        "buy_date": str(latest.date()),
-                        # 买入日的后复权价 —— 用于计算持有期的真实收益（无除权跳空）
-                        "adj_cost": round(a_cost, 6) if a_cost else None}
+                        "buy_date": str(trade_day.date()),
+                        # 买入日（**成交日**）的后复权价 —— 持有期真实收益（无除权跳空）
+                        "adj_cost": (round(a_cost, 6)
+                                     if a_cost is not None and np.isfinite(a_cost)
+                                     else None)}
         buys.append({"code": c, "name": names.get(c, ""), "price": p,
                      "shares": shares, "amount": round(gross, 2),
                      "commission": round(commission, 2), "stamp_tax": 0.0,
@@ -1621,6 +1805,75 @@ def _tofloat(v) -> float:
         return 0.0
     return f if f == f else 0.0
 
+
+# ── 等 TDX 当日数据落地（2026-11-02 新增）─────────────────────────────
+# 项目根 = backend/scripts/ → 上三级（backend/scripts → backend → 项目根）
+RAW_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "data", "tdx_daily", "raw")
+
+
+def _raw_partitions() -> List[str]:
+    """raw 分区里的日期字符串（升序）—— TDX 包落地就会多一个分区。"""
+    try:
+        names = os.listdir(RAW_DIR)
+    except OSError:
+        return []
+    out = []
+    for n in names:
+        if n.startswith("date="):
+            out.append(n.split("=", 1)[1])
+    return sorted(out)
+
+
+def wait_for_trade_data(signal_day: pd.Timestamp, max_min: int = 45) -> str:
+    """等"信号日的下一个交易日"的 TDX 包落地。
+
+    为什么需要（2026-11-02 实测排期竞态）：
+      · 纸面盘排期 `com.rone.paper-portfolio` 是 **周一 17:40**；
+      · TDX 当日日线包实测 **~17:30~18:00 才落地**（今天 17:35 到位，运气好）；
+      · 数据更新脚本已改为"≥17:00 失败则每 30 分钟重试，最晚 18:30"；
+      · 若 17:40 时数据还没到 → `run_line` 会 `SystemExit`
+        → **这一周的调仓直接作废**（只能等周二 09:20 兜底，用滞后数据）。
+
+    做法：只等 **raw 分区里出现晚于 signal_day 的日期**（= TDX 包落地的标志），
+    每 3 分钟查一次，最多 max_min 分钟。
+    触发条件收紧（避免非交易日白等）：
+      · 当前是**周一~周五**（调仓日）；
+      · 当前时间在 **17:00~19:30**（盘后数据落地窗口）；
+      · raw 分区里目前**还没有**晚于 signal_day 的日期。
+    返回 "ready"（本来就绪）/ "waited"（等到）/ "timeout"（超时）。
+    """
+    import datetime as _dt
+    import time as _time
+    now = _dt.datetime.now()
+    if not (1 <= now.weekday() <= 5):          # 0=周一
+        return "ready"
+    if not (17 <= now.hour <= 19):
+        return "ready"
+    today = now.date().isoformat()
+    last = str(pd.Timestamp(signal_day).date())
+    parts = _raw_partitions()
+    if last >= today or any(p >= today for p in parts):
+        return "ready"                     # 当天数据已到位 → 不用等
+    deadline = _time.time() + max(0, max_min) * 60
+    waited = 0
+    while _time.time() < deadline:
+        parts = _raw_partitions()
+        if any(p > last for p in parts):
+            print(f"  [wait] TDX 数据已到位（最新分区 {max(parts)}，"
+                  f"等了 {waited // 60} 分钟）", flush=True)
+            return "waited"
+        if waited == 0:
+            print(f"  [wait] 当日（{today}）的 TDX 日线包还没落地，"
+                  f"最多等 {max_min} 分钟（排期 17:40 vs 包落地 ~17:30~18:00）",
+                  flush=True)
+        _time.sleep(180)
+        waited += 180
+    print(f"  [wait] 等待超时（{max_min} 分钟）→ 数据仍缺，本次可能拒绝成交", flush=True)
+    return "timeout"
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="多策略纸面盘（每策略一条独立线）")
     ap.add_argument("--strategies", nargs="*", default=list(STRATEGIES))
@@ -1634,6 +1887,20 @@ def main() -> None:
 
     codes = ds.list_universe()
     frames, panel, master = ds.load_data(codes)
+
+    # ── 等当日 TDX 数据落地（2026-11-02 新增）──────────────────────
+    #   排期 17:40 vs TDX 包落地 ~17:30~18:00 → 数据没到时 run_line 会
+    #   直接 SystemExit → **这一周的调仓作废**（等周二 09:20 兜底用滞后数据）。
+    #   → 这里等到包落地后**重新加载**，让成交日/价格用上最新数据。
+    _wait_min = int(os.environ.get("PAPER_WAIT_DATA_MIN", "45") or 0)
+    if _wait_min > 0:
+        _st = wait_for_trade_data(master, max_min=_wait_min)
+        if _st == "waited":
+            _f2, _p2, _m2 = ds.load_data(codes)
+            if len(_m2) > len(master):
+                frames, panel, master = _f2, _p2, _m2
+                print(f"  [wait] 已重新加载数据，最新日 {master[-1].date()}", flush=True)
+
     names = load_name_map()
 
     # 2026-10-25：加载 baostock 附加字段（交易所口径涨跌幅 / 成交额 / 停牌 / ST）
