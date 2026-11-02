@@ -5,6 +5,7 @@
 import requests
 import json
 import time
+from pathlib import Path
 
 # 基线任务配置
 config = {
@@ -110,7 +111,9 @@ if response.status_code == 200:
     print()
     
     # 保存 task_id 到文件
-    with open("/Users/ronghui/Documents/GitHub/willrone/backend/phase3_task_id.txt", "w") as f:
+    # 输出到本文件所在目录（旧机器硬编码路径在本机无效）
+    task_id_file = Path(__file__).resolve().parent / "phase3_task_id.txt"
+    with open(task_id_file, "w") as f:
         f.write(task_id)
     
     print("=" * 60)

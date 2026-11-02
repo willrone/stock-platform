@@ -6,12 +6,14 @@
 
 import sys
 import traceback
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 # 添加项目路径
-sys.path.insert(0, "/Users/ronghui/Documents/GitHub/willrone/backend")
+# 从本文件位置解析 backend 根（旧机器硬编码路径在本机无效）
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 try:
     from app.services.qlib.enhanced_qlib_provider import EnhancedQlibDataProvider
