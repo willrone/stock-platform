@@ -221,24 +221,20 @@ def main() -> None:
         return
 
     # 重建 portfolio.json（读修正后的 holdings.last_value）
+    # **必须走共享函数**：它同时做 rebuild + 观测口径层（exposure/invested_return_pct/
+    # pnl_display/status/as_of）。之前这里只调 rebuild_line_from_files → 字段全丢
+    # → 门禁 a/b/c 读到 None 全挂（2026-11-03 回归，详见台账 §12.39）。
     import json
     pp_path = os.path.join(pp.PAPER_DIR, "portfolio.json")
     existing = {}
     if os.path.exists(pp_path):
         with open(pp_path) as fh:
             existing = json.load(fh) or {}
-    merged_lines = dict(existing.get("lines") or {})
-    rebuild_failed = []
-    for name in list(pp.STRATEGIES.keys()):
-        try:
-            merged_lines[name] = pp.rebuild_line_from_files(name, 1_000_000.0)
-        except Exception as e:  # noqa: BLE001
-            # 守卫：任一条线重建失败 → 不写 portfolio.json（避免"半份快照"）
-            rebuild_failed.append(f"{name}: {type(e).__name__}: {e}")
-    if rebuild_failed:
-        print("\n❌ portfolio.json 重建失败 → 已中止，未写盘：", flush=True)
-        for f in rebuild_failed:
-            print(f"   {f}", flush=True)
+    try:
+        merged_lines = pp.rebuild_portfolio_lines(1_000_000.0)
+    except Exception as e:  # noqa: BLE001
+        # 守卫：任一条线重建失败 → 不写 portfolio.json（避免"半份快照"）
+        print(f"\n❌ portfolio.json 重建失败 → 已中止，未写盘：{e}", flush=True)
         sys.exit(1)
     existing["lines"] = merged_lines
     with open(pp_path, "w") as fh:

@@ -1798,6 +1798,34 @@ def rebuild_line_from_files(strategy: str, capital: float) -> Dict[str, Any]:
     }
 
 
+def rebuild_portfolio_lines(capital: float = 1_000_000.0,
+                            strict: bool = True) -> Dict[str, Any]:
+    """从持仓文件 + ledger 重建**所有线**的展示数据，并补齐观测口径层。
+
+    **为什么单独抽出来**（2026-11-03）：重建路径与周频主路径曾各走各的 ——
+    周频主路径会 `update(line_observation_metrics(...))` 补
+    `exposure / invested_return_pct / pnl_display / status / as_of`，
+    而重建路径只调 `rebuild_line_from_files` → **字段全丢**，
+    门禁 a/b/c 读到 None 全挂、前端 `signal_service` 的暴露度/投入段收益也变 None。
+    → 同套逻辑必须只留一份（台账 §12.28 的共错教训）。
+
+    strict=True：任一条线重建/观测失败 → **抛异常**（守卫：结果不可信就别出数）。
+    """
+    out: Dict[str, Any] = {}
+    for name in list(STRATEGIES.keys()):
+        try:
+            ln = rebuild_line_from_files(name, capital)
+            ln.update(line_observation_metrics(name, ln, capital))
+        except Exception as e:  # noqa: BLE001
+            if strict:
+                raise RuntimeError(
+                    f"重建 {name} 失败：{type(e).__name__}: {e}") from e
+            print(f"  重建 {name} 失败（保留旧值）: {e}", flush=True)
+            continue
+        out[name] = ln
+    return out
+
+
 def _tofloat(v) -> float:
     try:
         f = float(v)

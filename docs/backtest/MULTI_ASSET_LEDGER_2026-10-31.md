@@ -2770,3 +2770,80 @@ done
 **pytest 的 "773 passed" 那行会被吞掉** → 只能靠 `^FAILED` 行判断成败，
 极易误判（本次有两次"grep passed 抓不到 → 以为没跑"）。
 → **查结果用 `-v` 或直接看 `$?`**，别靠 grep "passed"。
+
+## 12.39 **回归**：portfolio.json 的观测口径字段被重建路径抹掉（2026-11-03，已修）
+
+### A. 触发
+
+一条**过期通知**（`paper_daily_nav.py` 19:59 的那次跑，输出 22f 931,400 / -6.86%）
+把两件事串了起来：
+
+1. 那次跑是**写盘 2（20:37）之前**的旧跑，数字是修复前的；
+   而落盘的 `nav_daily.json` mtime = 20:39 → **已被修复后的重跑覆盖，当前是对的**。
+   逐条核对日频 vs 周频残差：0.01 / 0.00 / -0.02 / 0.00 / 0.00 / 0.00 → **最大 0.02 元**
+   （门禁 a 阈值 **0.05 元**，脚本注释写明"逐票 round(value,2) 的舍入累积，实测最大 0.02 元"）。
+2. 顺手跑 `scripts/verify_paper_observation_gates.py` → **21 条门禁全挂**，
+   且全是 `exposure=None ≠ 1−cash/value=0.919...` 这种
+   → **不是数值错，是字段根本没读到**。
+
+### B. 根因（**我引入的回归**）
+
+两条路径写 portfolio.json 的 line dict，**逻辑不一样**：
+
+| 路径 | 代码 | 写的字段 |
+|---|---|---|
+| 周频主路径 | `paper_portfolio.py:2113-2121` → `ln.update(line_observation_metrics(...))` | value / cash / **exposure / invested_return_pct / pnl_display / status / as_of / n_trades / n_trade_days** |
+| **我这次写盘用的重建路径** | `fix_adj_cost_backfill.py` → 只调 `pp.rebuild_line_from_files(...)` | value / cash / n_positions / buys / sells / holds / blocked_* |
+
+`rebuild_line_from_files` **只返回基础字段**，观测口径层是**另一个函数**
+`line_observation_metrics` 补的 → 我那条路径**漏了这一步** →
+`portfolio.json` 被覆盖成"没有观测字段"的版本。
+
+**影响面**：
+- 产物级门禁 `verify_paper_observation_gates.py` 的 **a/b/c 全挂**（读到 None）
+- 前端 `app/services/trading/signal_service.py:225-227, 329-357` 读的
+  `exposure` / `invested_return_pct` / `pnl_display` / `status` **变 None**
+  → 用户页面上的"暴露度 / 投入段收益"消失
+- `paper_portfolio.py:2161-2163` 的汇总也读这些字段
+
+### C. 修法：**收口成一个共享函数**（不是各补各的）
+
+```python
+# paper_portfolio.py（新增）
+def rebuild_portfolio_lines(capital=1_000_000.0, strict=True) -> Dict[str, Any]:
+    for name in list(STRATEGIES.keys()):
+        ln = rebuild_line_from_files(name, capital)
+        ln.update(line_observation_metrics(name, ln, capital))   # ← 关键：补观测层
+    ...
+```
+`fix_adj_cost_backfill.py` 改为调它；`strict=True` → 任一条线失败**抛异常**，
+调用方 `sys.exit(1)` 不写盘（沿用 §12.37 的守卫）。
+
+→ 符合 `line_observation_metrics` 自己的注释承诺：
+**"只实现一次：重建路径与新跑路径的行 dict 都交给它 → 口径不会漂移"** ——
+**这次回归恰恰是承诺没兑现**，现在才真正兑现。
+
+### D. 测试（盯**产物**，不是函数）
+
+`backend/tests/unit/trading/test_portfolio_observation_fields.py` — 3 条：
+
+1. 落盘 portfolio.json 的**每条线**必须带齐 7 个观测字段（缺就报出是哪条线缺哪些）
+2. `exposure` 必须等于 `1 − cash/value`（门禁 a 口径）
+3. `rebuild_portfolio_lines` 存在、覆盖全部策略、产出字段齐全
+
+> 为什么盯产物：这次回归的形态正是"**函数是对的，但写盘路径绕过了它**"，
+> 只测函数永远测不出来。加上原守卫 3 条 → **6 passed**。
+
+### E. 恢复
+
+用 `rebuild_portfolio_lines` 重建一次 portfolio.json（只读 holdings + ledger，秒级）→
+门禁 a/b/c **全过** → 前端 13000 真实链路返回
+`exposure=0.919362 / invested_return_pct=-2.3351 / pnl_display=-2.10%`（22f）✓
+
+### F. 教训
+
+1. **"共用函数"写在注释里 ≠ 真的共用** —— 必须有一条路径级证据（这里就是门禁脚本能跑过）。
+2. **降级/旁路路径是回归的高发区**：主路径正确、旁路（重建、修复脚本、迁移脚本）
+   自己拼一份 dict → 必然缺字段。**凡是会写同一份产物的路径，都要过同一个函数。**
+3. **产物级门禁要覆盖"字段存在性"**，不只是"数值自洽" ——
+   本次门禁挂掉反而是好事：它暴露了字段缺失，而不是默默放过。
