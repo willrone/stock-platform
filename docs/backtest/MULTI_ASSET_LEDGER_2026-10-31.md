@@ -3885,9 +3885,24 @@ for _var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
 | `pytest ... -q --tb=line -p no:warnings` | **没有** |
 | `pytest ... -v --tb=line` | `===== 10 passed, 1 warning in 0.22s =====` ✓ |
 
-→ **pytest 9.0.3 的新终端 reporter 在 quiet 模式（`-q`）下本来就省略最终计数行。**
-我此前所有回归都用 `-q` 跑 → 从来没有过最终行 → 我把**正常行为**误读成了"崩溃特征"，
-还据此在 `backend/conftest.py` 的 docstring 里写下了"症状极具迷惑性"那段 —— **全是错的**。
+→ **根因是 `-qq`，跟 pytest 9 无关。**
+`backend/pyproject.toml:63` 的 `addopts = "-ra -q --strict-markers"` **已经含一个 `-q`**，
+我命令行又写 `-q` → 叠成 `-qq` → pytest 把最终计数行整个吞掉。
+
+实测三种跑法（同一份代码、同 10 个测试）：
+
+| 跑法 | 实际 q 级数 | 最终计数行 |
+|---|---|---|
+| `-o addopts= -q` | `-q` | `10 passed, 1 warning in 0.22s` ✓ |
+| 默认（不加 -q） | `-q`（来自 addopts） | `10 passed, 1 warning in 0.23s` ✓ |
+| `-q`（我的习惯写法） | **`-qq`** | **没有** ❌ |
+
+我此前所有回归都写成 `-q` → 永远是 `-qq` → 从来没有过最终行 →
+我把**正常行为**误读成了"崩溃特征"，还据此在 `backend/conftest.py` 的 docstring 里
+写下了"症状极具迷惑性"那段 —— **全是错的**。
+
+（Mem0 里 2026-11-03 早就存过这条教训："addopts 已含 -q，命令行再写 -q 变 -qq → summary 被吞"。
+**我记录过这个坑，然后自己又踩了一整天。**）
 
 **正确的崩溃判据（本项目 henceforth 只认这三条）**：
 1. **exit code**：139 = SIGSEGV，134 = SIGABRT，0 = 正常退出；
