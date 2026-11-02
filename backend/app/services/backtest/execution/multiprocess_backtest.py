@@ -264,9 +264,11 @@ def run_multiprocess_backtest(
 
     from .data_loader import DataLoader
 
-    # 使用传入的数据目录或默认绝对路径
+    # 使用传入的数据目录；缺省交给 DataLoader 自己的默认（"data"，由它按项目根解析）
+    # ⚠️ 原来这里硬编码旧机器路径 "/Users/ronghui/Documents/GitHub/willrone/data"，
+    #    本机根本不存在 → 多进程回测一启动就失败。§12.44
     if data_dir is None:
-        data_dir = "/Users/ronghui/Documents/GitHub/willrone/data"
+        data_dir = "data"
 
     logger.info(f"数据目录: {data_dir}")
     data_loader = DataLoader(data_dir=data_dir, max_workers=num_workers)
