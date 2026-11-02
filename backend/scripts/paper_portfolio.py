@@ -1463,6 +1463,27 @@ def rebuild_line_from_files(strategy: str, capital: float) -> Dict[str, Any]:
     这里从 ledger 的最近一个成交日取买卖明细，从持仓文件取现金/市值。
     """
     spec = STRATEGIES.get(strategy) or {}
+
+    # ── 守卫（2026-11-02）：ledger 有成交、但 holdings 文件缺失 → 拒绝重建 ──
+    # 为什么必须挡：load_holdings() 在文件缺失时返回**空壳**
+    # （cash=capital、positions={}），而"没有 holdings 文件"对 multi_asset_final
+    # 来说是**合法状态**（它从没建过仓）→ 对这两件事必须区别对待：
+    #   · ledger 也没有成交 → 空壳是对的（真的没建仓）；
+    #   · ledger **有**成交 → holdings 文件丢了 = 数据残缺，
+    #     照空壳重建会让这条线在 portfolio.json 里被静默改成"未建仓"
+    #     （展示层看起来像"这条线没做过"，实际它做过，ledger 还在）。
+    # → 抛异常：上层 main 循环会打印告警并**保留 portfolio.json 里的旧值**，
+    #   ledger / 其它文件一概不动（可人工从 ledger 恢复）。
+    _hp = holdings_path(strategy)
+    if not os.path.exists(_hp):
+        _st = ledger_stats(strategy)
+        if _st.get("n_trades"):
+            raise RuntimeError(
+                f"holdings 文件缺失但 ledger 有 {_st['n_trades']} 笔成交"
+                f"（{os.path.basename(_hp)} 不存在）→ 拒绝重建，"
+                f"保留 portfolio.json 旧值；请从 ledger 恢复持仓文件"
+            )
+
     h = load_holdings(strategy, capital)
     positions = h.get("positions") or {}
     cash = float(h.get("cash", capital))

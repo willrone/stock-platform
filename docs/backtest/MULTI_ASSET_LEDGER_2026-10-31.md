@@ -2316,3 +2316,67 @@ FAILED tests/unit/scripts/test_tmp_oldseed.py::test_seed_strategy_configs_is_ide
 - **截图超时≠不能验证**：DOM 坐标量法比肉眼看图更硬（可重复、能判"分行"）。
 - **视觉改动必须量**：MUI 变体的默认 display（`caption` → inline span）不看渲染看不出来。
 
+## 12.33 重建路径的**静默降级**守卫（ledger 有成交 + holdings 缺失 → 拒绝重建，2026-11-02）
+
+### A. 触发
+
+§12.32 治理的是"**展示层**把事实读反"；本条治的是"**重建路径**把数据残缺
+悄悄降级成没发生过"。两者同源：**静默降级比报错更贵**。
+
+### B. 根因（机制级，不是猜）
+
+`load_holdings()` 在 holdings 文件**不存在**时返回**空壳**：
+`{cash: capital, positions: {}, initial_capital: capital}`。
+而重建路径 `rebuild_line_from_files()` 直接用它 → 一条
+「ledger 里明明有 60 笔成交、只是 holdings 文件丢了」的线，
+会被重建为 `cash=100万 / 0 持仓` → 在 `portfolio.json` 里变成
+**"未建仓"** → 前端读起来像**"这条线从没做过"**。
+
+关键难点：**"holdings 文件不存在"有两种性质完全不同的情况**
+
+| 情况 | 判定 | 该怎么办 |
+|---|---|---|
+| ledger 也没有成交 | 合法空壳（`multi_asset_final` 至今的真实状态） | 正常重建为空壳 |
+| ledger **有**成交 | **数据残缺**（持仓文件丢了） | **拒绝重建**，保留旧值 + 告警 |
+
+不区分这两者，就必然会误伤合法空壳，或者放过数据残缺 —— 二者必居其一。
+
+### C. 修法（守卫，只挡降级、不改口径）
+
+在 `rebuild_line_from_files()` 开头加判据：
+**holdings 文件缺失 且 `ledger_stats(strategy)["n_trades"] > 0` → 抛 `RuntimeError`**。
+上层 main 循环已有的 `except` 会打印告警并**保留 `portfolio.json` 里的旧值**，
+ledger / 其它文件一概不动（可人工从 ledger 恢复）。
+
+- 不改任何字段口径、不改展示层、不改交易逻辑；
+- 合法空壳照旧能重建（`multi_asset_final` 不受影响）；
+- 守卫触发时**不写任何文件**（有测试锁死）。
+
+### D. 验证
+
+- 门禁：`tests/unit/trading/test_paper_rebuild_guard.py`（5 条）——
+  ①ledger 有成交+holdings 缺失 → 抛异常且消息含笔数/文件名；
+  ②ledger 不存在 → 合法空壳照常重建（value=100 万，**不是 0**）；
+  ③ledger 只有表头 → 不拦；
+  ④holdings 存在 → 一律正常重建（守卫不误伤）；
+  ⑤守卫触发时 ledger 内容不变、holdings 不被凭空造出。
+- **真实数据体检**（7 条线逐条判定，无一误触发）：
+
+  | 线 | holdings | ledger 笔数 | 守卫判定 |
+  |---|---|---|---|
+  | 22f | 有 | 60 | 不触发 |
+  | honest_42f | 有 | 140 | 不触发 |
+  | rsi_71421 | 有 | 60 | 不触发 |
+  | factor_ranking | 有 | 87 | 不触发 |
+  | gbm_voltgt | 有 | 24 | 不触发 |
+  | honest_42f_neu | 有 | 58 | 不触发 |
+  | multi_asset_final | 无 | 0 | 不触发（合法空壳） |
+
+- 门禁 d：全量 `tests/unit` 通过（752 + 5 = 757）。
+
+### E. 教训
+
+- **"文件不存在"要先分清是"没发生过"还是"丢了"**，再决定回落还是报错；
+  回落（fallback）是最容易埋雷的写法。
+- 守卫要有**反向测试**：不只测"该拦的拦住了"，还要测"不该拦的没被拦"
+  （合法空壳）——否则守卫会变成新的静默故障源。

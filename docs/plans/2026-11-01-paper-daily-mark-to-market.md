@@ -341,9 +341,9 @@ UI 侧用 headless Chrome 出图 + DOM 取值逐卡核对（7/7）：
 
 ### A.8.6 门禁 d 自查
 
-全量 `tests/unit`：**752 passed / 0 failed**（394s，RC=0）。
+全量 `tests/unit`：**757 passed / 0 failed**（162s，RC=0）。
 拆账：基线 737 + 恢复采集 3（`tests/unit/scripts/` 一直被 `norecursedirs=["scripts"]`
-排除，见台账 §12.31）+ 观测口径层 9 + 空壳线回落 3 = 752。
+排除，见台账 §12.31）+ 观测口径层 9 + 空壳线回落 3 + 重建守卫 5 = 757。
 
 > 注：`pytest -q` 与仓库 `addopts` 里的 `-q` 叠加会变成 `-qq` → **最终计数行不打印**
 > （台账 §12.29 D 已记过）。查计数时**不要自己再加 `-q`**。
@@ -355,6 +355,29 @@ UI 侧用 headless Chrome 出图 + DOM 取值逐卡核对（7/7）：
 - 消费方（前端 `/api/v1/trading/signal`、MCP `paper_portfolio`）字段只增不改 ✓；
 - 全量 `tests/unit` 通过（见 §A.8.6）；
 - 零策略风险：不成交、不改持仓、不碰 ledger、不改任何回测产物。
+
+### A.8.8 追加：重建路径的静默降级守卫（2026-11-02）
+
+附录 A 治的是"**展示层**读反事实"；紧跟着补的这条治"**重建路径**把数据残缺
+悄悄降级成没发生过"——同源：**静默降级比报错更贵**。
+
+机制：`load_holdings()` 在 holdings 文件不存在时返回**空壳**
+（`cash=capital / positions={}`），重建路径直接用它 →
+一条「ledger 里明明有 60 笔成交、只是 holdings 文件丢了」的线会被重建成
+`0 持仓` → `portfolio.json` 里变成"未建仓" → 前端读起来像**"这条线从没做过"**。
+
+难点：**"holdings 文件不存在"有两种性质完全不同的情况**
+——`multi_asset_final` 这种「从没建仓」是**合法空壳**（照常重建），
+「ledger 有成交但 holdings 丢了」是**数据残缺**（拒绝重建 + 保留旧值 + 告警）。
+不区分就必然误伤或放过。
+
+守卫判据（`rebuild_line_from_files()` 开头）：
+**holdings 缺失 且 `ledger_stats()["n_trades"] > 0` → 抛 `RuntimeError`**；
+上层已有的 `except` 会打印告警并保留 `portfolio.json` 旧值，**不写任何文件**。
+
+门禁：`tests/unit/trading/test_paper_rebuild_guard.py`（5 条，含**反向测试**
+——合法空壳不被误拦）+ 真实数据体检（7 条线逐条判定，无一误触发）。
+详见台账 §12.33。
 
 ## A.7 需要你拍板
 
