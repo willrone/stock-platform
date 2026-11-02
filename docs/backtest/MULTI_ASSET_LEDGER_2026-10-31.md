@@ -3689,3 +3689,61 @@ rsi_71421_ledger.csv                  True          66          13          15  
 - **R4**：`signal_quality.py` 读 ledger 时若另一实例正在追加 → 统计数字可能偏差（账本本身不损坏）。
 - **R3**：`paper_daily_nav.py` 不取锁，但只写 `<strategy>_nav_daily.json`（独立文件）→ 最多读到半写的 holdings。
 - **R6**：三个一次性脚本此前未入库 → 已随前序提交入库（`git status` 现为干净）。
+
+
+---
+
+## §12.49 R2 修复：一次性回填脚本接进同一把互斥锁 + importlib「双模块对象」坑 —— 2026-11-03
+
+### A. R2 是什么
+
+并发写审计（§12.48 B 表）指出：排期层已两重堵死（单一责任源 `com.rone.paper-portfolio`
++ `acquire_run_lock()` 的 fcntl 互斥），但 `backend/scripts/fix_adj_cost_backfill.py`
+**直接调 `pp.save_holdings()` 重写 holdings/portfolio.json，不经过 `paper_portfolio.main()`**
+→ 拿不到那把锁 → 手工跑它、恰好撞上周一 17:40 那档 → **两个进程同时写同一批文件**。
+这是**当前唯一还能真并发写 holdings/portfolio.json 的路径**。
+
+### B. 修复
+
+`scripts/fix_adj_cost_backfill.py`：
+
+1. 抽 `acquire_lock_if_writing(dry_run)` —— 写盘前取锁，dry-run 不取（不写盘就不该占锁）。
+2. **在加载行情之前**取锁：那 2~4 分钟的行情加载里，排期实例完全可能已经开跑；
+   等加载完再取锁就晚了。
+3. 复用 `pp.acquire_run_lock()` → **同一把锁**（同一个 `PAPER_DIR` 下的 lock 文件），
+   拿不到就等（最多 30 分钟），超时 exit 75 —— 语义与主流程完全一致。
+
+### C. 新门禁 `tests/unit/trading/test_fix_adj_cost_lock.py`（6 用例）
+
+1. dry-run 不取锁 / 非 dry-run 必须取锁
+2. 锁路径与主流程同一个
+3. **源码顺序门禁**：取锁调用位置必须早于 `pp.ds.load_data(codes)`
+   （跑 `main()` 要加载行情 2~4 分钟，不适合做行为测试 → 用源码顺序断言，
+    顺序错了就是并发窗口）
+4. **跨进程真互斥**：本进程持锁 → 子进程尝试取锁必须失败（子进程必须显式把
+   `PAPER_DIR` 指到同一个 tmp_path，否则锁的是另一个文件、测试会假绿）
+
+### D. 顺带踩到的坑：**importlib 加载 = 两个模块对象**
+
+`fix_adj_cost_backfill.py` 与 `paper_daily_nav.py` 都用
+`importlib.util.spec_from_file_location("paper_portfolio_mod", ...)` 加载
+`paper_portfolio.py` → **和 `from scripts import paper_portfolio` 不是同一个模块对象**
+（各自一份模块级状态：`PAPER_DIR`、`LEDGER_FIELDS`、`ds`/`ws` 子模块……）。
+
+**后果（实测踩到）**：测试里 `monkeypatch.setattr(pp, "acquire_run_lock", fake)` 打的是
+**没人用的那个对象** → 断言 `fd == 42` 失败，实际拿到 11（真去取锁了）。
+**危险之处**：如果断言写松（比如只断言"没崩"），测试会**假绿** —— 看起来测了锁，
+其实一行锁逻辑都没执行。
+
+**规则**：monkeypatch 必须打在**被测代码实际持有的那个模块对象**上
+（这里是 `fab.pp`），写完要用"fake 会不会真被调用"验一次（比如断言返回的是 fake 的哨兵值）。
+
+**是否要统一成 `from scripts import paper_portfolio`**：暂不改。
+理由：① 脚本需能独立运行（`python scripts/xxx.py`），改 import 要动 sys.path；
+② 实际影响有限（两份模块的常量值相同，`PAPER_DIR` 都是从同一处算出来的）；
+③ 改 import 属于结构性重构，收益（省一份模块内存）不抵风险。
+**但**：将来给这些脚本写测试，**必须记住这条**。
+
+### E. 回归
+
+`test_fix_adj_cost_lock` + `test_paper_run_lock` + `test_ledger_column_contract` → 全绿。

@@ -183,10 +183,31 @@ def fix_merged_line(adj_close: pd.DataFrame, as_of: pd.Timestamp,
             "value": round(total, 2), "value_before": value_before}
 
 
+def acquire_lock_if_writing(dry_run: bool):
+    """写盘前取纸面盘互斥锁；dry-run 不写盘 → 不取锁。返回 fd（或 None）。
+
+    抽成独立函数是为了能被单测直接调用（跑 main() 要加载行情，2~4 分钟）。
+    """
+    if dry_run:
+        return None
+    return pp.acquire_run_lock()
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="回填 adj_cost 并重算市值")
     ap.add_argument("--dry-run", action="store_true", help="只报告，不写盘")
     args = ap.parse_args()
+
+    # ── 互斥锁（§12.48 R2）────────────────────────────────────────
+    # 本脚本会重写 <strategy>_holdings.json 与 portfolio.json，
+    # 但它**不走 paper_portfolio.main()** → 以前拿不到那把进程互斥锁 →
+    # 恰好与周一 17:40 那档（com.rone.paper-portfolio）重叠时会**真并发写**。
+    # 现在共用同一把锁：拿不到就等（最多 30 分钟），超时 exit 75。
+    # 必须在**加载行情之前**取锁 —— 那 2~4 分钟里排期实例完全可能已经开跑。
+    lock_fd = acquire_lock_if_writing(args.dry_run)
+    if lock_fd is not None:
+        print(f"✅ 已取得纸面盘互斥锁（fd={lock_fd}）", flush=True)
+    # lock_fd 必须保持引用直到进程结束（fcntl.flock 随进程退出自动释放）
 
     print("加载行情与后复权价格（较慢，约 2~4 分钟）……", flush=True)
     # 复用 paper_portfolio 已加载好的模块（ds = scripts/daily_signal.py），
