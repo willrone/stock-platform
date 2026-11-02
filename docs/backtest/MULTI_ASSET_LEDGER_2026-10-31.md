@@ -3174,6 +3174,22 @@ BUY  603357.SH  cash_after=(空)      portfolio_value=(空)
 | 门禁 a/b/c（`verify_paper_observation_gates.py`） | 全过 ✅ |
 | 新测试 | **9 passed** ✅ |
 | `tests/unit/trading/` + `tests/unit/tasks/` | exit=0，0 FAILED ✅ |
+| **可复现性二次验证** | 独立重跑 `fix_adj_cost_backfill.py` 写盘 → 6 条线市值与 11-02 采用值**逐位一致**（978,982.93 / 975,143.50 / 984,151.90 / 985,425.19 / 994,824.57 / 936,671.49），门禁 a/b/c 暴露度**完全不变** ✅ |
+
+### E2. 修复后的**抗干扰验证**（后台写盘进程在修复之后才落盘）
+
+修复完成（03:17）之后，一个 11-02 起跑的 `fix_adj_cost_backfill.py` 写盘进程才结束并重写了
+`portfolio.json` + `holdings.json` → 必须确认**我的修复没被覆盖**：
+
+| 检查 | 结果 |
+|---|---|
+| `fix_ledger_nav_columns.py --dry-run`（该进程跑完之后） | 6 条线全部"将改 **0** 行" ✅ |
+| nav_history 末日残差 | 仍 ≤ 0.02 ✅ |
+| 门禁测试 9 个 | 全过 ✅ |
+| 门禁 a/b/c | 全过，暴露度**逐位不变** ✅ |
+
+原因：`fix_adj_cost_backfill.py` **只写 holdings + portfolio.json，不碰 `ledger.csv`**，
+且它改 `nav_history` 时只重算**末点**的值（日期不动）→ 与本节的重建结果**不冲突**。
 
 ### F. 边界与未动的地方
 
