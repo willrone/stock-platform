@@ -763,7 +763,7 @@ async def get_available_strategies() -> Any:
 
         return StandardResponse(success=True, message="获取策略列表成功", data=result)
     except Exception as e:
-        logger.error(f"获取策略列表失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取策略列表失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取策略列表失败: {str(e)}")
 
 
@@ -1088,7 +1088,7 @@ async def run_backtest(
             logger.debug(f"回测计费已记录：{event_type}")
         except Exception as commerce_err:
             # 计费失败不影响回测结果返回，仅记录日志
-            logger.warning(f"回测计费失败：{commerce_err}")
+            logger.opt(exception=True).warning(f"回测计费失败：{commerce_err}")
 
         # ── 可选：Laya 信号增强 ─────────────────────
         # 根据配置决定是否启用 Laya 决策模型
@@ -1140,7 +1140,7 @@ async def run_backtest(
                             f"Laya 信号增强: {decision.action} (conf={decision.confidence:.2f})"
                         )
             except Exception as laya_err:
-                logger.warning(f"Laya 信号增强失败（非关键）: {laya_err}")
+                logger.opt(exception=True).warning(f"Laya 信号增强失败（非关键）: {laya_err}")
         # ────────────────────────────────────────────────
 
         return StandardResponse(success=True, message="回测执行成功", data=result)
@@ -1148,7 +1148,7 @@ async def run_backtest(
     except Exception as e:
         if "cannot load module more than once per process" in str(e):
             try:
-                logger.warning(f"使用CI兜底回测响应，原错误: {e}")
+                logger.opt(exception=True).warning(f"使用CI兜底回测响应，原错误: {e}")
                 return StandardResponse(
                     success=True,
                     message="回测执行成功",
@@ -1156,7 +1156,7 @@ async def run_backtest(
                 )
             except Exception:
                 pass
-        logger.error(f"回测执行失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"回测执行失败: {e}")
         raise HTTPException(status_code=500, detail=f"回测执行失败: {str(e)}")
 
 
@@ -1236,7 +1236,7 @@ async def find_same_config(request: FindSameConfigRequest) -> Any:
         finally:
             db.close()
     except Exception as e:
-        logger.error(f"查找相同配置失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"查找相同配置失败: {e}")
         raise HTTPException(status_code=500, detail=f"查找相同配置失败: {str(e)}")
 
 
@@ -1328,5 +1328,5 @@ async def get_portfolio_templates() -> Any:
             success=True, message="获取策略组合模板成功", data=templates
         )
     except Exception as e:
-        logger.error(f"获取策略组合模板失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取策略组合模板失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取策略组合模板失败: {str(e)}")

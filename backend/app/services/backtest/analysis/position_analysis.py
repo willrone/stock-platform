@@ -34,7 +34,7 @@ class PositionAnalyzer:
         """
         try:
             if not trade_history:
-                logger.warning("交易历史数据为空，无法进行持仓分析")
+                logger.opt(exception=True).warning("交易历史数据为空，无法进行持仓分析")
                 return {}
 
             logger.info(f"开始分析持仓表现: trade_history长度={len(trade_history)}")
@@ -69,7 +69,7 @@ class PositionAnalyzer:
             return result
 
         except Exception as e:
-            logger.error(f"持仓表现分析失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"持仓表现分析失败: {e}")
             raise TaskError(
                 message=f"持仓表现分析失败: {str(e)}",
                 severity=ErrorSeverity.MEDIUM,
@@ -319,7 +319,7 @@ class PositionAnalyzer:
             }
 
         except Exception as e:
-            logger.error(f"分析持仓权重失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"分析持仓权重失败: {e}")
             return {}
 
     def _calculate_weight_statistics(self, all_positions: List[Dict]) -> Dict[str, Any]:
@@ -497,7 +497,7 @@ class PositionAnalyzer:
             }
 
         except Exception as e:
-            logger.error(f"分析交易模式失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"分析交易模式失败: {e}")
             return {}
 
     def _analyze_trading_times(self, trades: List[Dict]) -> Dict[str, Any]:
@@ -692,7 +692,7 @@ class PositionAnalyzer:
             }
 
         except Exception as e:
-            logger.error(f"分析风险集中度失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"分析风险集中度失败: {e}")
             return {}
 
     def _calculate_trade_concentration(

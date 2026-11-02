@@ -120,7 +120,7 @@ def execute_prediction_task_simple(task_id: str) -> Any:
         # 获取任务
         task = task_repository.get_task_by_id(task_id)
         if not task:
-            task_logger.error(f"任务不存在: {task_id}")
+            task_logger.opt(exception=True).error(f"任务不存在: {task_id}")
             return
 
         # 更新任务状态为运行中
@@ -130,7 +130,7 @@ def execute_prediction_task_simple(task_id: str) -> Any:
             )
             task_logger.info(f"任务状态已更新为RUNNING，进程ID: {process_id}")
         except Exception as status_error:
-            task_logger.error(f"任务状态更新失败: {status_error}", exc_info=True)
+            task_logger.opt(exception=True).error(f"任务状态更新失败: {status_error}")
             raise
 
         # 解析任务配置
@@ -204,7 +204,7 @@ def execute_prediction_task_simple(task_id: str) -> Any:
                 success_count += 1
 
             except Exception as e:
-                task_logger.error(f"预测股票 {stock_code} 失败: {e}", exc_info=True)
+                task_logger.opt(exception=True).error(f"预测股票 {stock_code} 失败: {e}")
                 failures.append(f"{stock_code}: {type(e).__name__} {e}")
                 continue
 
@@ -220,7 +220,7 @@ def execute_prediction_task_simple(task_id: str) -> Any:
         task_logger.info(f"预测任务完成: {task_id}, 进程ID: {process_id}")
 
     except Exception as e:
-        task_logger.error(f"执行预测任务失败: {task_id}, 错误: {e}", exc_info=True)
+        task_logger.opt(exception=True).error(f"执行预测任务失败: {task_id}, 错误: {e}")
         try:
             # 确保有session和task_repository
             if "task_repository" in locals():
@@ -228,7 +228,7 @@ def execute_prediction_task_simple(task_id: str) -> Any:
                     task_id=task_id, status=TaskStatus.FAILED, error_message=str(e)
                 )
         except Exception as update_error:
-            task_logger.error(f"更新任务状态失败: {update_error}", exc_info=True)
+            task_logger.opt(exception=True).error(f"更新任务状态失败: {update_error}")
     finally:
         # 确保关闭数据库连接
         if "session" in locals():
@@ -273,7 +273,7 @@ def execute_backtest_task_simple(task_id: str) -> Any:  # noqa: C901
         # 获取任务
         task = task_repository.get_task_by_id(task_id)
         if not task:
-            task_logger.error(f"任务不存在: {task_id}")
+            task_logger.opt(exception=True).error(f"任务不存在: {task_id}")
             return
 
         # 更新任务状态为运行中
@@ -308,11 +308,11 @@ def execute_backtest_task_simple(task_id: str) -> Any:  # noqa: C901
         for field in system_fields:
             if field in config:
                 found_system_fields.append(field)
-                task_logger.error(f"配置中发现系统字段 '{field}': {config[field]}")
+                task_logger.opt(exception=True).error(f"配置中发现系统字段 '{field}': {config[field]}")
                 raise ValueError(f"配置中发现意外的系统字段 '{field}': {config[field]}")
 
         if found_system_fields:
-            task_logger.warning(f"配置中发现系统字段: {found_system_fields}")
+            task_logger.opt(exception=True).warning(f"配置中发现系统字段: {found_system_fields}")
 
         stock_codes = config.get("stock_codes", [])
         start_date_str = config.get("start_date")
@@ -324,10 +324,10 @@ def execute_backtest_task_simple(task_id: str) -> Any:  # noqa: C901
         for key in ["status", "progress", "result", "completed_at", "error_message"]:
             if key in config:
                 unexpected_keys.append(key)
-                task_logger.warning(f"配置中包含意外的'{key}'字段: {config[key]}")
+                task_logger.opt(exception=True).warning(f"配置中包含意外的'{key}'字段: {config[key]}")
 
         if unexpected_keys:
-            task_logger.warning(f"配置中包含意外字段: {unexpected_keys}")
+            task_logger.opt(exception=True).warning(f"配置中包含意外字段: {unexpected_keys}")
 
         # 记录所有配置字段
         task_logger.info(f"完整配置字段: {list(config.keys())}")
@@ -358,7 +358,7 @@ def execute_backtest_task_simple(task_id: str) -> Any:  # noqa: C901
                 end_date = end_date_str
 
         except Exception as date_error:
-            task_logger.error(
+            task_logger.opt(exception=True).error(
                 f"日期解析失败: start_date={start_date_str}, end_date={end_date_str}, 错误: {date_error}"
             )
             raise ValueError(
@@ -391,7 +391,7 @@ def execute_backtest_task_simple(task_id: str) -> Any:  # noqa: C901
                 if message:
                     task_logger.info(f"回测进度: {progress:.1f}% - {message}")
             except Exception as progress_error:
-                task_logger.warning(f"更新回测进度失败: {progress_error}")
+                task_logger.opt(exception=True).warning(f"更新回测进度失败: {progress_error}")
 
         executor = BacktestExecutor(
             data_dir=str(settings.DATA_ROOT_PATH),
@@ -625,7 +625,7 @@ def execute_backtest_task_simple(task_id: str) -> Any:  # noqa: C901
                                             f"其他格式 position_analysis: type={type(position_analysis_data)}"
                                         )
                                 else:
-                                    task_logger.warning(
+                                    task_logger.opt(exception=True).warning(
                                         "enhanced_result.position_analysis 为 None 或空，无法生成持仓分析数据"
                                     )
 
@@ -688,7 +688,7 @@ def execute_backtest_task_simple(task_id: str) -> Any:  # noqa: C901
                                                     date_value.replace("Z", "+00:00")
                                                 )
                                             except Exception:
-                                                task_logger.warning(
+                                                task_logger.opt(exception=True).warning(
                                                     f"无法解析日期: {date_value}"
                                                 )
                                                 continue
@@ -726,15 +726,15 @@ def execute_backtest_task_simple(task_id: str) -> Any:  # noqa: C901
                                                 f"成功保存 {len(snapshots_data)} 个组合快照: task_id={task_id}"
                                             )
                                         else:
-                                            task_logger.error(
+                                            task_logger.opt(exception=True).error(
                                                 f"保存组合快照失败: task_id={task_id}"
                                             )
                                     else:
-                                        task_logger.warning(
+                                        task_logger.opt(exception=True).warning(
                                             f"组合快照数据为空: task_id={task_id}"
                                         )
                                 else:
-                                    task_logger.warning(
+                                    task_logger.opt(exception=True).warning(
                                         f"没有组合历史数据: task_id={task_id}"
                                     )
 
@@ -760,7 +760,7 @@ def execute_backtest_task_simple(task_id: str) -> Any:  # noqa: C901
                                                     )
                                                 )
                                             except Exception:
-                                                task_logger.warning(
+                                                task_logger.opt(exception=True).warning(
                                                     f"无法解析时间戳: {timestamp_value}"
                                                 )
                                                 continue
@@ -808,15 +808,15 @@ def execute_backtest_task_simple(task_id: str) -> Any:  # noqa: C901
                                                 f"成功保存 {len(trades_data)} 条交易记录: task_id={task_id}"
                                             )
                                         else:
-                                            task_logger.error(
+                                            task_logger.opt(exception=True).error(
                                                 f"保存交易记录失败: task_id={task_id}"
                                             )
                                     else:
-                                        task_logger.warning(
+                                        task_logger.opt(exception=True).warning(
                                             f"交易记录数据为空: task_id={task_id}"
                                         )
                                 else:
-                                    task_logger.warning(
+                                    task_logger.opt(exception=True).warning(
                                         f"没有交易历史数据: task_id={task_id}"
                                     )
 
@@ -841,9 +841,8 @@ def execute_backtest_task_simple(task_id: str) -> Any:  # noqa: C901
                                     )
                                 except Exception as stats_error:
                                     await session.rollback()
-                                    task_logger.error(
+                                    task_logger.opt(exception=True).error(
                                         f"计算统计信息失败: task_id={task_id}, 错误: {stats_error}",
-                                        exc_info=True,
                                     )
 
                             await retry_db_operation(
@@ -855,9 +854,8 @@ def execute_backtest_task_simple(task_id: str) -> Any:  # noqa: C901
 
                         except Exception as e:
                             await session.rollback()
-                            task_logger.error(
+                            task_logger.opt(exception=True).error(
                                 f"保存回测详细数据失败: {task_id}, 错误: {e}",
-                                exc_info=True,
                             )
 
                 # 在新的事件循环中运行
@@ -869,8 +867,8 @@ def execute_backtest_task_simple(task_id: str) -> Any:  # noqa: C901
                     loop.close()
 
             except Exception as save_error:
-                task_logger.error(
-                    f"保存详细数据时出错: {task_id}, 错误: {save_error}", exc_info=True
+                task_logger.opt(exception=True).error(
+                    f"保存详细数据时出错: {task_id}, 错误: {save_error}"
                 )
 
         except TaskError as task_error:
@@ -880,11 +878,10 @@ def execute_backtest_task_simple(task_id: str) -> Any:  # noqa: C901
                 )
                 return
             else:
-                task_logger.error(
+                task_logger.opt(exception=True).error(
                     "回测任务错误: {}, 错误: {}",
                     task_id,
                     task_error.message,
-                    exc_info=True,
                 )
                 try:
                     task_repository.update_task_status(
@@ -896,8 +893,8 @@ def execute_backtest_task_simple(task_id: str) -> Any:  # noqa: C901
                     pass
                 raise task_error
         except Exception as backtest_error:
-            task_logger.error(
-                f"回测执行失败: {task_id}, 错误: {backtest_error}", exc_info=True
+            task_logger.opt(exception=True).error(
+                f"回测执行失败: {task_id}, 错误: {backtest_error}"
             )
             try:
                 existing_task = task_repository.get_task_by_id(task_id)
@@ -908,25 +905,25 @@ def execute_backtest_task_simple(task_id: str) -> Any:  # noqa: C901
                         error_message=f"回测执行失败: {str(backtest_error)}",
                     )
                 else:
-                    task_logger.warning(f"任务不存在，无法更新状态: {task_id}")
+                    task_logger.opt(exception=True).warning(f"任务不存在，无法更新状态: {task_id}")
             except Exception as update_error:
-                task_logger.warning(f"更新任务状态失败: {update_error}")
+                task_logger.opt(exception=True).warning(f"更新任务状态失败: {update_error}")
             raise backtest_error
 
     except KeyError as ke:
         error_msg = f"KeyError in backtest task {task_id}: {ke}"
-        task_logger.error(error_msg, exc_info=True)
+        task_logger.opt(exception=True).error(error_msg)
         import traceback
 
         error_details = traceback.format_exc()
-        task_logger.error(f"KeyError 详细堆栈: {error_details}")
+        task_logger.opt(exception=True).error(f"KeyError 详细堆栈: {error_details}")
 
         if "config" in locals():
-            task_logger.error(f"配置内容: {config}")
-            task_logger.error(f"配置类型: {type(config)}")
+            task_logger.opt(exception=True).error(f"配置内容: {config}")
+            task_logger.opt(exception=True).error(f"配置类型: {type(config)}")
             if isinstance(config, dict):
-                task_logger.error(f"配置键: {list(config.keys())}")
-        task_logger.error(f"尝试访问的键: {ke}")
+                task_logger.opt(exception=True).error(f"配置键: {list(config.keys())}")
+        task_logger.opt(exception=True).error(f"尝试访问的键: {ke}")
 
         try:
             if "task_repository" in locals():
@@ -936,22 +933,21 @@ def execute_backtest_task_simple(task_id: str) -> Any:  # noqa: C901
                     error_message=f"KeyError: {str(ke)}",
                 )
         except Exception as update_error:
-            task_logger.error(f"更新任务状态失败: {update_error}", exc_info=True)
+            task_logger.opt(exception=True).error(f"更新任务状态失败: {update_error}")
 
     except Exception as e:
-        task_logger.error(
+        task_logger.opt(exception=True).error(
             f"执行回测任务失败: {task_id}, 错误类型: {type(e).__name__}, 错误: {e}",
-            exc_info=True,
         )
         import traceback
 
         error_details = traceback.format_exc()
-        task_logger.error(f"详细错误信息: {error_details}")
+        task_logger.opt(exception=True).error(f"详细错误信息: {error_details}")
 
         if "config" in locals():
-            task_logger.error(f"配置内容: {config}")
+            task_logger.opt(exception=True).error(f"配置内容: {config}")
         if "task" in locals() and task is not None:
-            task_logger.error(
+            task_logger.opt(exception=True).error(
                 f"任务对象: task_id={task.task_id}, task_type={task.task_type}, status={task.status}"
             )
 
@@ -963,7 +959,7 @@ def execute_backtest_task_simple(task_id: str) -> Any:  # noqa: C901
                     error_message=f"{type(e).__name__}: {str(e)}",
                 )
         except Exception as update_error:
-            task_logger.error(f"更新任务状态失败: {update_error}", exc_info=True)
+            task_logger.opt(exception=True).error(f"更新任务状态失败: {update_error}")
     finally:
         if "session" in locals():
             session.close()
@@ -1010,7 +1006,7 @@ def execute_qlib_precompute_task_simple(task_id: str) -> Any:
         # 获取任务
         task = task_repository.get_task_by_id(task_id)
         if not task:
-            task_logger.error(f"任务不存在: {task_id}")
+            task_logger.opt(exception=True).error(f"任务不存在: {task_id}")
             return
 
         # 更新任务状态为运行中
@@ -1052,8 +1048,8 @@ def execute_qlib_precompute_task_simple(task_id: str) -> Any:
         )
 
     except Exception as e:
-        task_logger.error(
-            f"Qlib预计算任务执行失败: {task_id}, 错误: {e}", exc_info=True
+        task_logger.opt(exception=True).error(
+            f"Qlib预计算任务执行失败: {task_id}, 错误: {e}"
         )
         try:
             if "task_repository" in locals():
@@ -1063,7 +1059,7 @@ def execute_qlib_precompute_task_simple(task_id: str) -> Any:
                     error_message=f"{type(e).__name__}: {str(e)}",
                 )
         except Exception as update_error:
-            task_logger.error(f"更新任务状态失败: {update_error}", exc_info=True)
+            task_logger.opt(exception=True).error(f"更新任务状态失败: {update_error}")
     finally:
         if "session" in locals():
             session.close()

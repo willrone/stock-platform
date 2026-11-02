@@ -218,7 +218,7 @@ class BatchSignalGenerator:
             return False
 
         except Exception as e:
-            logger.error(f"批量预计算失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"批量预计算失败: {e}")
             return False
 
     def _precompute_with_strategy_batch(
@@ -255,7 +255,7 @@ class BatchSignalGenerator:
             return True
 
         except Exception as e:
-            logger.warning(f"策略批量预计算失败: {e}")
+            logger.opt(exception=True).warning(f"策略批量预计算失败: {e}")
             return False
 
     def _precompute_per_stock(
@@ -334,7 +334,7 @@ class BatchSignalGenerator:
                         )
                     )
                 except Exception as e:
-                    logger.warning(f"准备股票 {stock_code} 数据失败: {e}")
+                    logger.opt(exception=True).warning(f"准备股票 {stock_code} 数据失败: {e}")
 
             if not tasks:
                 return False
@@ -375,7 +375,7 @@ class BatchSignalGenerator:
                             ok, stock_code, packed, err = fu.result(timeout=120)
                             if not ok:
                                 if err:
-                                    logger.warning(f"预计算失败 {stock_code}: {err}")
+                                    logger.opt(exception=True).warning(f"预计算失败 {stock_code}: {err}")
                                 continue
                             if packed is None:
                                 continue
@@ -396,7 +396,7 @@ class BatchSignalGenerator:
                                     }
                                 )
                         except Exception as e:
-                            logger.warning(f"预计算失败 {code}: {e}")
+                            logger.opt(exception=True).warning(f"预计算失败 {code}: {e}")
             else:
                 # 单进程路径
                 for idx, (stock_code, df) in enumerate(all_stocks_data.items()):
@@ -433,7 +433,7 @@ class BatchSignalGenerator:
                         )
 
             if not signal_records:
-                logger.warning("未生成任何信号")
+                logger.opt(exception=True).warning("未生成任何信号")
                 return False
 
             self._signal_cache = pd.DataFrame(signal_records)
@@ -442,7 +442,7 @@ class BatchSignalGenerator:
             return True
 
         except Exception as e:
-            logger.error(f"逐股票预计算失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"逐股票预计算失败: {e}")
             return False
 
     def _build_signal_cache_from_dataframe(self, signals_df: pd.DataFrame) -> None:
@@ -530,7 +530,7 @@ class BatchSignalGenerator:
                 ]
 
         except Exception as e:
-            logger.warning(f"获取信号失败 {stock_code} @ {current_date}: {e}")
+            logger.opt(exception=True).warning(f"获取信号失败 {stock_code} @ {current_date}: {e}")
             return []
 
     def _create_trading_signal(

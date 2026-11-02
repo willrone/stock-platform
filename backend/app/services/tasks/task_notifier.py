@@ -63,7 +63,7 @@ class TaskNotifier:
     async def start(self) -> None:
         """启动任务状态监控"""
         if self.is_running:
-            logger.warning("任务通知器已经在运行")
+            logger.opt(exception=True).warning("任务通知器已经在运行")
             return
 
         self.is_running = True
@@ -90,7 +90,7 @@ class TaskNotifier:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"任务状态监控出错: {e}", exc_info=True)
+                logger.opt(exception=True).error(f"任务状态监控出错: {e}")
                 await asyncio.sleep(self.poll_interval)
 
     async def _check_and_notify(self) -> None:
@@ -137,7 +137,7 @@ class TaskNotifier:
                     await self._notify_task_update(task)
 
             except Exception as e:
-                logger.error(f"检查任务状态失败: {e}", exc_info=True)
+                logger.opt(exception=True).error(f"检查任务状态失败: {e}")
 
     async def _notify_task_update(self, task: Task) -> None:
         """通知任务状态更新"""
@@ -150,8 +150,8 @@ class TaskNotifier:
                 await self._notify_general_task_update(task)
 
         except Exception as e:
-            logger.error(
-                f"发送任务状态通知失败: {_task_id(task)}, 错误: {e}", exc_info=True
+            logger.opt(exception=True).error(
+                f"发送任务状态通知失败: {_task_id(task)}, 错误: {e}"
             )
 
     async def _notify_backtest_update(self, task: Task) -> None:
@@ -197,8 +197,8 @@ class TaskNotifier:
             )
 
         except Exception as e:
-            logger.error(
-                f"发送回测任务状态通知失败: {_task_id(task)}, 错误: {e}", exc_info=True
+            logger.opt(exception=True).error(
+                f"发送回测任务状态通知失败: {_task_id(task)}, 错误: {e}"
             )
             # 如果回测WebSocket通知失败，回退到通用通知
             await self._notify_general_task_update(task)
@@ -231,8 +231,8 @@ class TaskNotifier:
 
             await self._sync_backtest_stages(task_id, task_progress)
         except Exception as e:
-            logger.warning(
-                f"同步回测进度失败: {_task_id(task)}, 错误: {e}", exc_info=True
+            logger.opt(exception=True).warning(
+                f"同步回测进度失败: {_task_id(task)}, 错误: {e}"
             )
 
     async def _start_backtest_progress(self, task_id: str) -> None:
@@ -439,8 +439,8 @@ class TaskNotifier:
                 )
 
         except Exception as e:
-            logger.error(
-                f"发送任务状态通知失败: {_task_id(task)}, 错误: {e}", exc_info=True
+            logger.opt(exception=True).error(
+                f"发送任务状态通知失败: {_task_id(task)}, 错误: {e}"
             )
 
 

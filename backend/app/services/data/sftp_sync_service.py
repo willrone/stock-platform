@@ -89,7 +89,7 @@ class SFTPSyncService:
         self.remote_data_dir = remote_data_dir or settings.SFTP_REMOTE_DATA_DIR
 
         if not self.enabled:
-            logger.warning(
+            logger.opt(exception=True).warning(
                 "SFTP同步未启用（SFTP_SYNC_ENABLED=false），远端同步接口将不可用"
             )
 
@@ -167,7 +167,7 @@ class SFTPSyncService:
             logger.info(f"成功连接到SFTP服务器: {self.host}")
             return ssh, sftp
         except Exception as e:
-            logger.error(f"连接SFTP服务器失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"连接SFTP服务器失败: {e}")
             raise
 
     def _disconnect_sftp(self, ssh: Any, sftp: Any) -> Any:
@@ -177,7 +177,7 @@ class SFTPSyncService:
             ssh.close()
             logger.debug("SFTP连接已关闭")
         except Exception as e:
-            logger.warning(f"关闭SFTP连接时出错: {e}")
+            logger.opt(exception=True).warning(f"关闭SFTP连接时出错: {e}")
 
     def get_remote_stock_list(self) -> List[str]:
         """
@@ -199,7 +199,7 @@ class SFTPSyncService:
                 file_stat = sftp.stat(self.remote_list_path)
                 logger.info(f"远端股票列表文件存在，大小: {file_stat.st_size} 字节")
             except FileNotFoundError:
-                logger.error(f"远端股票列表文件不存在: {self.remote_list_path}")
+                logger.opt(exception=True).error(f"远端股票列表文件不存在: {self.remote_list_path}")
                 raise
 
             # 创建临时文件
@@ -223,11 +223,11 @@ class SFTPSyncService:
             try:
                 df = pd.read_parquet(temp_file, engine="pyarrow")
             except Exception as e:
-                logger.warning(f"使用 pyarrow 引擎读取失败: {e}，尝试使用 fastparquet")
+                logger.opt(exception=True).warning(f"使用 pyarrow 引擎读取失败: {e}，尝试使用 fastparquet")
                 try:
                     df = pd.read_parquet(temp_file, engine="fastparquet")
                 except Exception as e2:
-                    logger.error(f"使用 fastparquet 引擎也失败: {e2}")
+                    logger.opt(exception=True).error(f"使用 fastparquet 引擎也失败: {e2}")
                     raise
             logger.debug(
                 f"parquet文件读取完成，行数: {len(df)}, 列: {list(df.columns)}"
@@ -238,14 +238,14 @@ class SFTPSyncService:
                 stock_codes = df["ts_code"].unique().tolist()
             else:
                 # 如果没有ts_code列，尝试第一列
-                logger.warning("未找到ts_code列，使用第一列作为股票代码")
+                logger.opt(exception=True).warning("未找到ts_code列，使用第一列作为股票代码")
                 stock_codes = df.iloc[:, 0].unique().tolist()
 
             logger.info(f"成功获取股票列表: {len(stock_codes)} 只股票")
             return cast(List[str], stock_codes)
 
         except Exception as e:
-            logger.error(f"获取远端股票列表失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"获取远端股票列表失败: {e}")
             raise
         finally:
             if ssh and sftp:
@@ -317,7 +317,7 @@ class SFTPSyncService:
             return cache
 
         except Exception as e:
-            logger.error(f"构建远端文件缓存失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"构建远端文件缓存失败: {e}")
             return {}
 
     def _find_remote_file(self, stock_code: str, sftp: Any) -> Optional[str]:
@@ -418,7 +418,7 @@ class SFTPSyncService:
                     sftp.stat(".")
                 except Exception as conn_error:
                     error_msg = f"SFTP连接已断开: {conn_error}"
-                    logger.warning(
+                    logger.opt(exception=True).warning(
                         f"[{stock_code}] 尝试 {attempt + 1}/{max_retries}: {error_msg}"
                     )
                     if attempt < max_retries - 1:
@@ -432,7 +432,7 @@ class SFTPSyncService:
 
                 if remote_file is None:
                     error_msg = "远端文件不存在，已尝试多种格式和模糊匹配"
-                    logger.warning(f"[{stock_code}] {error_msg}")
+                    logger.opt(exception=True).warning(f"[{stock_code}] {error_msg}")
                     return False, 0, error_msg
 
                 # 下载文件
@@ -456,7 +456,7 @@ class SFTPSyncService:
                 # 验证文件是否下载成功
                 if not local_file.exists():
                     error_msg = "下载后本地文件不存在"
-                    logger.error(f"[{stock_code}] {error_msg}")
+                    logger.opt(exception=True).error(f"[{stock_code}] {error_msg}")
                     if attempt < max_retries - 1:
                         continue
                     return False, 0, error_msg
@@ -465,7 +465,7 @@ class SFTPSyncService:
                 file_size = local_file.stat().st_size
                 if file_size == 0:
                     error_msg = "下载的文件大小为0"
-                    logger.warning(f"[{stock_code}] {error_msg}")
+                    logger.opt(exception=True).warning(f"[{stock_code}] {error_msg}")
                     if attempt < max_retries - 1:
                         local_file.unlink()  # 删除空文件
                         continue
@@ -476,7 +476,7 @@ class SFTPSyncService:
 
             except (paramiko.SSHException, paramiko.socket.error, OSError) as e:
                 error_msg = f"连接错误: {type(e).__name__}: {str(e)}"
-                logger.warning(
+                logger.opt(exception=True).warning(
                     f"[{stock_code}] 尝试 {attempt + 1}/{max_retries}: {error_msg}"
                 )
                 last_error = error_msg
@@ -487,9 +487,8 @@ class SFTPSyncService:
                     continue
             except Exception as e:
                 error_msg = f"未知错误: {type(e).__name__}: {str(e)}"
-                logger.error(
+                logger.opt(exception=True).error(
                     f"[{stock_code}] 尝试 {attempt + 1}/{max_retries}: {error_msg}",
-                    exc_info=True,
                 )
                 last_error = error_msg
                 if attempt < max_retries - 1:
@@ -505,9 +504,9 @@ class SFTPSyncService:
         try:
             task.result()
         except asyncio.CancelledError:
-            logger.warning(f"{failure_message}: 任务已取消")
+            logger.opt(exception=True).warning(f"{failure_message}: 任务已取消")
         except Exception as error:
-            logger.warning(f"{failure_message}: {error}")
+            logger.opt(exception=True).warning(f"{failure_message}: {error}")
 
     def _emit_sync_event(self, coro: Any, failure_message: str) -> None:
         try:
@@ -526,13 +525,13 @@ class SFTPSyncService:
                 )
             except Exception as error:
                 coro.close()
-                logger.warning(f"{failure_message}: {error}")
+                logger.opt(exception=True).warning(f"{failure_message}: {error}")
             return
 
         try:
             asyncio.run(coro)
         except Exception as error:
-            logger.warning(f"{failure_message}: {error}")
+            logger.opt(exception=True).warning(f"{failure_message}: {error}")
 
     def _get_target_stock_codes(self, stock_codes: Optional[List[str]]) -> List[str]:
         if stock_codes is None:
@@ -563,14 +562,14 @@ class SFTPSyncService:
         if success or "连接" not in error_msg.lower():
             return success, file_size, error_msg, ssh, sftp
 
-        logger.warning(f"[{stock_code}] 检测到连接问题，尝试重新连接...")
+        logger.opt(exception=True).warning(f"[{stock_code}] 检测到连接问题，尝试重新连接...")
         try:
             self._disconnect_sftp(ssh, sftp)
             ssh, sftp = self._connect_sftp()
             logger.info(f"[{stock_code}] 重新连接成功，重试同步...")
             success, file_size, error_msg = self.sync_stock_file(stock_code, sftp)
         except Exception as reconnect_error:
-            logger.error(f"[{stock_code}] 重新连接失败: {reconnect_error}")
+            logger.opt(exception=True).error(f"[{stock_code}] 重新连接失败: {reconnect_error}")
             error_msg = f"重新连接失败: {reconnect_error}"
 
         return success, file_size, error_msg, ssh, sftp
@@ -587,13 +586,13 @@ class SFTPSyncService:
         try:
             sftp.stat(".")
         except Exception:
-            logger.warning("检测到SFTP连接可能断开，尝试重新连接...")
+            logger.opt(exception=True).warning("检测到SFTP连接可能断开，尝试重新连接...")
             try:
                 self._disconnect_sftp(ssh, sftp)
                 ssh, sftp = self._connect_sftp()
                 logger.info("SFTP连接已恢复")
             except Exception as reconnect_error:
-                logger.error(f"重新连接失败: {reconnect_error}")
+                logger.opt(exception=True).error(f"重新连接失败: {reconnect_error}")
 
         return ssh, sftp
 
@@ -693,7 +692,7 @@ class SFTPSyncService:
             stock_codes = self._get_target_stock_codes(stock_codes)
 
             if not stock_codes:
-                logger.warning("未找到要同步的股票")
+                logger.opt(exception=True).warning("未找到要同步的股票")
                 return SyncResult(
                     success=False,
                     total_files=0,
@@ -721,7 +720,7 @@ class SFTPSyncService:
             )
 
             if not available_stock_codes:
-                logger.warning("远端服务器上没有可用的股票文件")
+                logger.opt(exception=True).warning("远端服务器上没有可用的股票文件")
                 return SyncResult(
                     success=False,
                     total_files=original_count,
@@ -793,7 +792,7 @@ class SFTPSyncService:
                         )
                     else:
                         failed_files.append(stock_code)
-                        logger.warning(
+                        logger.opt(exception=True).warning(
                             f"[{i}/{total_files}] {stock_code}: 失败 - {error_msg}"
                         )
 
@@ -821,7 +820,7 @@ class SFTPSyncService:
                     )
 
                 except Exception as e:
-                    logger.error(f"同步股票 {stock_code} 时出错: {e}", exc_info=True)
+                    logger.opt(exception=True).error(f"同步股票 {stock_code} 时出错: {e}")
                     failed_files.append(stock_code)
 
             total_duration = (datetime.now() - sync_start_time).total_seconds()
@@ -840,10 +839,10 @@ class SFTPSyncService:
             if failed_files:
                 # 如果失败文件较多，只记录前20个
                 if len(failed_files) > 20:
-                    logger.warning(f"失败文件列表（前20个）: {failed_files[:20]}")
-                    logger.warning(f"还有 {len(failed_files) - 20} 个失败文件未显示")
+                    logger.opt(exception=True).warning(f"失败文件列表（前20个）: {failed_files[:20]}")
+                    logger.opt(exception=True).warning(f"还有 {len(failed_files) - 20} 个失败文件未显示")
                 else:
-                    logger.warning(f"失败文件列表: {failed_files}")
+                    logger.opt(exception=True).warning(f"失败文件列表: {failed_files}")
 
             if missing_stock_codes:
                 logger.info(f"远端不存在的文件数量: {len(missing_stock_codes)}")
@@ -863,7 +862,7 @@ class SFTPSyncService:
             if synced_files > 0:
                 logger.info(f"平均速度: {synced_files / total_duration:.2f} 文件/秒")
             if failed_files:
-                logger.warning(f"失败的股票代码（前10个）: {failed_files[:10]}")
+                logger.opt(exception=True).warning(f"失败的股票代码（前10个）: {failed_files[:10]}")
             if missing_stock_codes:
                 logger.info(
                     f"远端不存在的股票代码示例（前10个）: {missing_stock_codes[:10]}"
@@ -881,8 +880,8 @@ class SFTPSyncService:
 
         except Exception as e:
             total_duration = (datetime.now() - sync_start_time).total_seconds()
-            logger.error(f"同步过程出错: {e}", exc_info=True)
-            logger.error(f"同步失败，总耗时: {total_duration:.1f}秒")
+            logger.opt(exception=True).error(f"同步过程出错: {e}")
+            logger.opt(exception=True).error(f"同步失败，总耗时: {total_duration:.1f}秒")
             return SyncResult(
                 success=False,
                 total_files=0,

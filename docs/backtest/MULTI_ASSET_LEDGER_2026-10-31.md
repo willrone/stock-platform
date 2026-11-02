@@ -3210,3 +3210,67 @@ BUY  603357.SH  cash_after=(空)      portfolio_value=(空)
    同一交易日多批写就有多个值；**每日一值的日频盯市才是权威**。
 4. **门禁测试必须调生产函数** —— 复刻一遍逻辑的测试只证明"我理解的逻辑成立"，
    生产逻辑漂移时它照样绿。
+
+
+## 12.44 qlib 训练链的**原生段错误（SIGSEGV）**：根因 = OpenMP 多线程，另带出 4 个特征工程缺陷（2026-11-03）
+
+### A. 现象
+
+- `pytest tests/` 在 8% 处**整个进程 SIGSEGV** 崩掉（§12.36 F2 记为"既有缺陷，单独排期"）
+- `tests/scripts/test_qlib_integration.py::test_unified_training_engine` 单独跑同样崩（EXIT=139）
+- 崩溃点在**训练完成之后**的评估阶段：`StockPlatformLGBModel.predict` → `lightgbm Booster.predict`
+- 这是**原生段错误**：Python 层捕获不到 → 整个 pytest 进程直接死 → **700+ 测试的结果全丢**（"没跑完"伪装成"跑过了"）
+- 生产含义：`models_impl` 训练 API / `prediction_engine` 走同一条路径 → 段错误会**直接杀掉 API 服务进程**
+
+### B. 定位过程（8 轮，每轮都有被推翻的假设）
+
+| # | 假设 | 结论 |
+|---|---|---|
+| 1 | lightgbm 与 libomp 动态库冲突 | **推翻**：带 `DYLD_LIBRARY_PATH=/opt/homebrew/opt/libomp/lib` 重跑仍崩；lightgbm 的 LC_RPATH 本来就含 libomp |
+| 2 | 训练数据为空 | **成立（第一层）**：测试窗口用 `datetime.now()`，而 qlib 数据末日是 2026-05-08 → 窗口全在数据外 → 空数据 |
+| 3 | Alpha 因子 index 错位 | **成立（第二层）**：Alpha index 是 `(datetime, instrument)`，qlib 数据是 `(instrument, datetime)` → 60 行日期层竟是 `'000001_SZ'`（股票代码）→ 159 个 Alpha 因子全 NaN |
+| 4 | 特征矩阵是 object dtype | **成立（第三层）**：`data[feature_cols].values` 只要含一列非数值，整个矩阵就是 object → 喂给 lightgbm C 层会越界 |
+| 5 | 训练实际用的是空特征 | **成立**：`result_base["feature"]` 塞的是全 `None` 占位 Series → qlib 的 `df["feature"]` 拿到空特征 → **模型等于没训练** |
+| 6 | 训练/预测特征数不一致 | **推翻**：加了守卫后证明两侧都是 678 列，一致 |
+| 7 | lightgbm 本身坏 / 退化树 / 标签 NaN / Dataset 被 GC 后悬垂指针 | **全部推翻**：7 次最小复现（真实 X + 真实 y + 生产 params + 生产 early_stopping 调用 + `qlib.init()` + GC Dataset）**全部不崩**；把生产 booster `save_model` 后在干净进程 load + predict 也**不崩** |
+| 8 | **OpenMP 多线程** | ✅ **成立** |
+
+第 8 轮的判定实验（同一份代码，只改环境变量）：
+
+```
+OMP_NUM_THREADS=1 → EXIT=0   （通过）
+OMP_NUM_THREADS=2 → EXIT=134 （Abort trap）
+OMP_NUM_THREADS=4 → EXIT=139 （Segmentation fault）
+```
+
+且"模型 dump 到文件 → 干净进程 load + predict"完全正常 → 证明**模型和数据都没问题**，崩溃是**进程内 OpenMP 运行时状态**的问题（macOS + Python 3.13 + libomp + qlib provider 的 fork/线程）。
+
+### C. 修复（6 层，全部落地）
+
+1. **OpenMP 单线程锁**：`app/__init__.py` 与 `app/services/qlib/official_lgbm_model.py` 顶层 `os.environ.setdefault("OMP_NUM_THREADS", "1")`，**必须在任何 ML 库加载之前**
+2. **特征矩阵数值化**：`data[feature_cols].apply(pd.to_numeric, errors="coerce").astype("float32")`（object dtype → lightgbm C 层越界）
+3. **qlib 的 DatasetH 契约**：`df["feature"]` 必须返回**真特征 DataFrame**（原来塞全 `None` 占位 → 训练用空特征）；`col_set="feature"` 返回纯特征 DataFrame（不是 FeatureSeries）
+4. **特征卫生**：
+   - 排除标签列（`label` / `LABEL0`）—— 标签混进特征 = 模型偷看答案，评估指标虚高
+   - 列名去重 —— 上游 join 留下重复列名，pandas 按名取列会展开（366 个特征名 → 678 列，实际只有 **209 个唯一特征**，468 个重名）
+5. **训练/预测按名对齐 + 双重守卫**：predict 时按训练记录的特征名重排 + 数量校验；训练与预测两侧都加 NaN/Inf 门禁（NaN 会训出 NaN 分裂阈值 → 预测段错误）
+6. **测试窗口动态化**：从 `settings.QLIB_DATA_PATH/calendars/day.txt` 解析真实数据范围，不再用 `datetime.now()`
+
+### D. 验证
+
+- `tests/scripts/test_qlib_integration.py` **3/3 通过**（此前 1 个 SIGSEGV）
+- 特征数：678（污染：含 `LABEL0` + 468 个重名）→ **209**（清洗后），训练/预测两侧特征名严格一致
+- `OMP_NUM_THREADS` 锁在**代码内**生效（不依赖外部环境变量）
+
+### E. 教训
+
+1. **"测试崩了" ≠ "测试挂了"**：原生崩溃会让"没跑完"看起来像"跑过了"。回归必须看**退出码**，不能只看日志尾部
+2. **第三方原生崩溃，根因常常在我们这侧**：先证明"第三方本身没问题"（最小复现 + 模型 dump 到干净进程），再怀疑环境
+3. **最小复现失败要立刻换桥接手段**：把生产对象 dump 到文件、在干净进程里加载，比继续猜参数快一个数量级
+4. **特征卫生不是洁癖**：标签列混入特征、列名重复，会同时污染指标、错位训练/预测、并把 lightgbm 推向崩溃
+
+### F. 遗留
+
+- OpenMP 多线程在本机不可用 → lightgbm 训练单线程。生产参数本来就是 `num_threads=1`，**无性能损失**；将来若要提速，须先解决 libomp 与 fork 的兼容
+- `official_lgbm_model.py` 顶部 docstring 记的"MLflow recorder 路径会 segfault"属**同一类**原生崩溃，本次被 OMP 锁一并覆盖，但 recorder 路径本身未深挖
+- loguru 的 `exc_info=True` **无效**（loguru 要 `logger.opt(exception=True)`）—— 异常栈全丢，本轮排障被迫靠 print 探针。**已修（202 处）**：31 个 loguru 模块批量改写为 `logger.opt(exception=True).error(...)`；另有 10 处在标准 `logging` 模块里（`exc_info` 本身有效），**保持原样**

@@ -26,7 +26,7 @@ class CacheCleanupService:
     async def start_cleanup_scheduler(self) -> None:
         """启动清理调度器"""
         if self.is_running:
-            self.logger.warning("清理调度器已在运行")
+            self.logger.opt(exception=True).warning("清理调度器已在运行")
             return
 
         self.is_running = True
@@ -45,14 +45,14 @@ class CacheCleanupService:
         except asyncio.CancelledError:
             self.logger.info("清理调度器被取消")
         except Exception as e:
-            self.logger.error(f"清理调度器异常: {e}", exc_info=True)
+            self.logger.opt(exception=True).error(f"清理调度器异常: {e}")
         finally:
             self.is_running = False
 
     async def stop_cleanup_scheduler(self) -> None:
         """停止清理调度器"""
         if not self.is_running:
-            self.logger.warning("清理调度器未在运行")
+            self.logger.opt(exception=True).warning("清理调度器未在运行")
             return
 
         self.is_running = False
@@ -83,7 +83,7 @@ class CacheCleanupService:
 
         except Exception as e:
             error_msg = f"清理任务执行失败: {e}"
-            self.logger.error(error_msg, exc_info=True)
+            self.logger.opt(exception=True).error(error_msg)
             cleanup_results["errors"].append(error_msg)
 
         return cleanup_results
@@ -102,7 +102,7 @@ class CacheCleanupService:
             return expired_count
 
         except Exception as e:
-            self.logger.error(f"清理过期缓存失败: {e}", exc_info=True)
+            self.logger.opt(exception=True).error(f"清理过期缓存失败: {e}")
             return 0
 
     async def cleanup_old_backtest_data(self) -> Dict[str, int]:
@@ -126,7 +126,7 @@ class CacheCleanupService:
                 return cleanup_results
 
         except Exception as e:
-            self.logger.error(f"清理旧数据失败: {e}", exc_info=True)
+            self.logger.opt(exception=True).error(f"清理旧数据失败: {e}")
             return {}
 
     async def force_cleanup_task_data(self, task_id: str) -> bool:
@@ -148,12 +148,12 @@ class CacheCleanupService:
             if success:
                 self.logger.info(f"成功清理任务数据: task_id={task_id}")
             else:
-                self.logger.warning(f"清理任务数据部分失败: task_id={task_id}")
+                self.logger.opt(exception=True).warning(f"清理任务数据部分失败: task_id={task_id}")
 
             return success
 
         except Exception as e:
-            self.logger.error(f"强制清理任务数据失败: {e}", exc_info=True)
+            self.logger.opt(exception=True).error(f"强制清理任务数据失败: {e}")
             return False
 
     async def get_cleanup_statistics(self) -> Dict[str, Any]:
@@ -185,7 +185,7 @@ class CacheCleanupService:
             }
 
         except Exception as e:
-            self.logger.error(f"获取清理统计失败: {e}", exc_info=True)
+            self.logger.opt(exception=True).error(f"获取清理统计失败: {e}")
             return {"error": str(e)}
 
     async def manual_cleanup(
@@ -225,7 +225,7 @@ class CacheCleanupService:
 
         except Exception as e:
             error_msg = f"手动清理任务失败: {e}"
-            self.logger.error(error_msg, exc_info=True)
+            self.logger.opt(exception=True).error(error_msg)
             cleanup_results["errors"].append(error_msg)
 
         return cleanup_results
@@ -254,7 +254,7 @@ async def start_background_cleanup() -> None:
     try:
         await cache_cleanup_service.start_cleanup_scheduler()
     except Exception as e:
-        logger.error(f"启动后台清理服务失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"启动后台清理服务失败: {e}")
 
 
 async def stop_background_cleanup() -> None:
@@ -262,4 +262,4 @@ async def stop_background_cleanup() -> None:
     try:
         await cache_cleanup_service.stop_cleanup_scheduler()
     except Exception as e:
-        logger.error(f"停止后台清理服务失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"停止后台清理服务失败: {e}")

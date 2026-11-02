@@ -77,7 +77,7 @@ class QlibBinConverter:
                 if c not in col_map
             ]
             if missing:
-                logger.warning(f"转换bin失败 {stock_code}: 缺少列 {missing}")
+                logger.opt(exception=True).warning(f"转换bin失败 {stock_code}: 缺少列 {missing}")
                 return None
             data = data[
                 [col_map[c] for c in ["open", "high", "low", "close", "volume"]]
@@ -158,5 +158,5 @@ class QlibBinConverter:
             return features_dir / "close.day.bin"
 
         except Exception as e:
-            logger.error(f"转换为bin格式失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"转换为bin格式失败: {e}")
             return None

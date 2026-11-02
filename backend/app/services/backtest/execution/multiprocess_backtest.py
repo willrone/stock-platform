@@ -90,7 +90,7 @@ def _worker_backtest(
                     cache = data.attrs.setdefault("_precomputed_signals", {})
                     cache[id(strategy)] = signals
             except Exception as e:
-                logger.warning(f"Worker {worker_id}: 预计算信号失败 {code}: {e}")
+                logger.opt(exception=True).warning(f"Worker {worker_id}: 预计算信号失败 {code}: {e}")
 
         precompute_time = time.perf_counter() - precompute_start
         logger.info(f"Worker {worker_id}: 预计算完成，耗时 {precompute_time:.2f}秒")
@@ -148,7 +148,7 @@ def _worker_backtest(
                             )
                             all_signals.append(signal)
                 except Exception as e:
-                    logger.warning(f"Worker {worker_id}: 生成信号失败 {code}: {e}")
+                    logger.opt(exception=True).warning(f"Worker {worker_id}: 生成信号失败 {code}: {e}")
 
             total_signals += len(all_signals)
 
@@ -212,7 +212,7 @@ def _worker_backtest(
         return result
 
     except Exception as e:
-        logger.error(f"Worker {worker_id} 执行失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"Worker {worker_id} 执行失败: {e}")
         return {
             "worker_id": worker_id,
             "error": str(e),
@@ -369,9 +369,9 @@ def run_multiprocess_backtest(
     # 检查是否有错误
     errors = [r for r in results if "error" in r]
     if errors:
-        logger.error(f"❌ {len(errors)} 个进程执行失败:")
+        logger.opt(exception=True).error(f"❌ {len(errors)} 个进程执行失败:")
         for err in errors:
-            logger.error(f"  Worker {err['worker_id']}: {err['error']}")
+            logger.opt(exception=True).error(f"  Worker {err['worker_id']}: {err['error']}")
 
     # 合并成功的结果
     successful_results = [r for r in results if "error" not in r]

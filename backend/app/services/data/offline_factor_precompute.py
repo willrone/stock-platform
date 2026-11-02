@@ -78,7 +78,7 @@ class OfflineFactorPrecomputeService:
             calendar_generator = QlibCalendarGenerator()
             calendar_generator.ensure_calendar_exists()
         except Exception as cal_error:
-            logger.warning(f"生成交易日历文件失败: {cal_error}")
+            logger.opt(exception=True).warning(f"生成交易日历文件失败: {cal_error}")
 
         logger.info(
             f"离线因子预计算服务初始化完成，批次大小: {batch_size}, 最大并发数: {self.max_workers}"
@@ -111,7 +111,7 @@ class OfflineFactorPrecomputeService:
             stock_data_dir = data_root / "parquet" / "stock_data"
 
             if not stock_data_dir.exists():
-                logger.warning(f"股票数据目录不存在: {stock_data_dir}")
+                logger.opt(exception=True).warning(f"股票数据目录不存在: {stock_data_dir}")
                 return []
 
             stock_codes = []
@@ -134,7 +134,7 @@ class OfflineFactorPrecomputeService:
             return stock_codes
 
         except Exception as e:
-            logger.error(f"获取股票列表失败: {e}")
+            logger.opt(exception=True).error(f"获取股票列表失败: {e}")
             return []
 
     def get_stock_date_range(
@@ -158,7 +158,7 @@ class OfflineFactorPrecomputeService:
             return (dates.min().to_pydatetime(), dates.max().to_pydatetime())
 
         except Exception as e:
-            logger.warning(f"获取股票 {stock_code} 日期范围失败: {e}")
+            logger.opt(exception=True).warning(f"获取股票 {stock_code} 日期范围失败: {e}")
             return None
 
     async def precompute_single_stock(
@@ -184,7 +184,7 @@ class OfflineFactorPrecomputeService:
                 stock_code, start_date, end_date
             )
             if stock_data.empty:
-                logger.warning(f"股票 {stock_code} 无数据")
+                logger.opt(exception=True).warning(f"股票 {stock_code} 无数据")
                 return None
 
             # 2. 转换为Qlib格式（基础OHLCV数据）
@@ -235,7 +235,7 @@ class OfflineFactorPrecomputeService:
             return qlib_base
 
         except Exception as e:
-            logger.error(f"预计算股票 {stock_code} 失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"预计算股票 {stock_code} 失败: {e}")
             return None
 
     async def _compute_qlib_base_indicators(
@@ -285,7 +285,7 @@ class OfflineFactorPrecomputeService:
             )
 
         except Exception as e:
-            logger.error(f"计算基础指标失败 {stock_code}: {e}")
+            logger.opt(exception=True).error(f"计算基础指标失败 {stock_code}: {e}")
             return qlib_data
 
     async def _compute_alpha158_factors_with_handler(
@@ -331,7 +331,7 @@ class OfflineFactorPrecomputeService:
                     stock_data, stock_code, self.qlib_data_path
                 )
             except Exception as bin_error:
-                logger.warning(f"股票 {stock_code} 生成Qlib bin失败: {bin_error}")
+                logger.opt(exception=True).warning(f"股票 {stock_code} 生成Qlib bin失败: {bin_error}")
 
             # 优先使用handler计算
             try:
@@ -350,12 +350,12 @@ class OfflineFactorPrecomputeService:
                 factor_count = (
                     len(alpha_factors.columns) if not alpha_factors.empty else 0
                 )
-                logger.warning(
+                logger.opt(exception=True).warning(
                     f"股票 {stock_code} Alpha158 handler因子数不足: {factor_count}，期望158个"
                 )
                 raise ValueError(f"Handler因子数不足: {factor_count} < 158")
             except Exception as handler_error:
-                logger.warning(
+                logger.opt(exception=True).warning(
                     f"股票 {stock_code} Alpha158 handler计算失败: {handler_error}，回退到表达式引擎"
                 )
                 alpha_factors = await self.alpha_calculator.calculate_alpha_factors(
@@ -366,13 +366,13 @@ class OfflineFactorPrecomputeService:
                     force_expression_engine=True,
                 )
                 if not alpha_factors.empty:
-                    logger.warning(
+                    logger.opt(exception=True).warning(
                         f"股票 {stock_code} 表达式引擎计算完成，因子数: {len(alpha_factors.columns)}（可能不足158个）"
                     )
                 return alpha_factors
 
         except Exception as e:
-            logger.warning(f"计算Alpha158因子失败 {stock_code}: {e}", exc_info=True)
+            logger.opt(exception=True).warning(f"计算Alpha158因子失败 {stock_code}: {e}")
             return pd.DataFrame()
 
     async def _compute_alpha158_factors(
@@ -508,7 +508,7 @@ class OfflineFactorPrecomputeService:
             return indicators
 
         except Exception as e:
-            logger.error(f"计算技术指标失败 {stock_code}: {e}")
+            logger.opt(exception=True).error(f"计算技术指标失败 {stock_code}: {e}")
             return pd.DataFrame()
 
     async def _compute_fundamental_features(
@@ -544,7 +544,7 @@ class OfflineFactorPrecomputeService:
             return feature_df
 
         except Exception as e:
-            logger.error(f"计算基本面特征失败 {stock_code}: {e}")
+            logger.opt(exception=True).error(f"计算基本面特征失败 {stock_code}: {e}")
             return pd.DataFrame()
 
     async def precompute_all_stocks(  # noqa: C901
@@ -581,7 +581,7 @@ class OfflineFactorPrecomputeService:
             effective_end_date = end_date or datetime.now()
 
             if not stock_codes:
-                logger.error("没有可用的股票代码")
+                logger.opt(exception=True).error("没有可用的股票代码")
                 return {
                     "success": False,
                     "message": "没有可用的股票代码",
@@ -653,7 +653,7 @@ class OfflineFactorPrecomputeService:
                     try:
                         if isinstance(result, BaseException):
                             failed_stocks.append(stock_code)
-                            logger.error(f"✗ 股票 {stock_code} 预计算失败: {result}")
+                            logger.opt(exception=True).error(f"✗ 股票 {stock_code} 预计算失败: {result}")
                         elif result is not None and not cast(Any, result).empty:
                             # 增量更新：如果文件已存在，合并数据
                             output_file = (
@@ -716,10 +716,10 @@ class OfflineFactorPrecomputeService:
                             logger.info(f"✓ 股票 {stock_code} 预计算完成")
                         else:
                             failed_stocks.append(stock_code)
-                            logger.warning(f"✗ 股票 {stock_code} 预计算失败（无数据）")
+                            logger.opt(exception=True).warning(f"✗ 股票 {stock_code} 预计算失败（无数据）")
                     except Exception as e:
                         failed_stocks.append(stock_code)
-                        logger.error(f"✗ 股票 {stock_code} 预计算失败: {e}")
+                        logger.opt(exception=True).error(f"✗ 股票 {stock_code} 预计算失败: {e}")
 
                 # 更新进度
                 progress = (batch_end / total_stocks) * 100
@@ -794,7 +794,7 @@ class OfflineFactorPrecomputeService:
                     indicators=indicators,
                 )
             except Exception as e:
-                logger.warning(f"更新版本信息失败: {e}")
+                logger.opt(exception=True).warning(f"更新版本信息失败: {e}")
 
             # 生成统计信息
             result = {
@@ -814,7 +814,7 @@ class OfflineFactorPrecomputeService:
             return result
 
         except Exception as e:
-            logger.error(f"预计算所有股票失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"预计算所有股票失败: {e}")
             return {
                 "success": False,
                 "message": f"预计算失败: {str(e)}",

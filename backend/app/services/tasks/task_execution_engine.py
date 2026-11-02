@@ -229,7 +229,7 @@ class PredictionTaskExecutor:
                         prediction_results.append(prediction_result)
 
                     except Exception as e:
-                        logger.error(f"股票预测失败: {stock_code}, 错误: {e}")
+                        logger.opt(exception=True).error(f"股票预测失败: {stock_code}, 错误: {e}")
                         failed_stocks.append(
                             {"stock_code": stock_code, "error": str(e)}
                         )
@@ -610,7 +610,7 @@ class BacktestTaskExecutor:
                 )
 
         except Exception as e:
-            logger.error(f"写入 trade_records 失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"写入 trade_records 失败: {e}")
             # 不抛出异常，避免影响主流程
 
 
@@ -1024,7 +1024,7 @@ class QlibPrecomputeTaskExecutor:
                         TaskStatus.FAILED,
                         error_message=result.get("message", "预计算失败"),
                     )
-                    logger.error(
+                    logger.opt(exception=True).error(
                         f"Qlib预计算任务失败: {task_id}, {result.get('message')}"
                     )
 
@@ -1032,7 +1032,7 @@ class QlibPrecomputeTaskExecutor:
 
             except Exception as e:
                 error_message = f"Qlib预计算任务执行失败: {str(e)}"
-                logger.error(error_message, exc_info=True)
+                logger.opt(exception=True).error(error_message)
 
                 self.task_repository.update_task_status(
                     task_id, TaskStatus.FAILED, error_message=error_message
@@ -1173,7 +1173,7 @@ class HyperparameterOptimizationTaskExecutor:
                     )
                 except ImportError as e:
                     error_msg = f"无法导入超参优化器: {e}. 请确保已安装 optuna: pip install optuna>=3.4.0"
-                    logger.error(error_msg)
+                    logger.opt(exception=True).error(error_msg)
                     raise ValueError(error_msg) from e
 
                 # 使用 n_jobs=1 避免多进程状态同步问题
@@ -1217,7 +1217,7 @@ class HyperparameterOptimizationTaskExecutor:
                 return result
 
             except Exception as e:
-                logger.error(f"超参优化任务执行失败: {e}", exc_info=True)
+                logger.opt(exception=True).error(f"超参优化任务执行失败: {e}")
                 self.task_repository.update_task_status(
                     task_id, TaskStatus.FAILED, error_message=str(e)
                 )

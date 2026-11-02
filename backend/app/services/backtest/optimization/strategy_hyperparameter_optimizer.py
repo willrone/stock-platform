@@ -31,8 +31,8 @@ try:
         RDBStorage,
     )
 except ImportError as e:  # noqa: I005
-    logger.error(f"无法导入 optuna 模块: {e}")
-    logger.error("请运行: pip install optuna>=3.4.0")
+    logger.opt(exception=True).error(f"无法导入 optuna 模块: {e}")
+    logger.opt(exception=True).error("请运行: pip install optuna>=3.4.0")
     raise ImportError(
         "optuna 模块未安装。超参优化功能需要 optuna 库。"
         "请运行: pip install optuna>=3.4.0"
@@ -184,7 +184,7 @@ class StrategyHyperparameterOptimizer:
                 sampler = NSGAIISampler()
             elif optimization_method == "motpe":
                 # MOTPESampler 在 optuna 4.6.0 中不存在，使用 NSGA-II 替代
-                logger.warning("MOTPESampler 不可用，使用 NSGAIISampler 替代")
+                logger.opt(exception=True).warning("MOTPESampler 不可用，使用 NSGAIISampler 替代")
                 sampler = NSGAIISampler()
             else:
                 sampler = NSGAIISampler()  # 默认使用 NSGA-II
@@ -227,7 +227,7 @@ class StrategyHyperparameterOptimizer:
                     f"注入默认参数作为初始 trial: {list(default_params.keys())}"
                 )
             except Exception as e:
-                logger.warning(f"注入默认参数失败: {e}")
+                logger.opt(exception=True).warning(f"注入默认参数失败: {e}")
 
         # 创建回测执行器
         try:
@@ -240,7 +240,7 @@ class StrategyHyperparameterOptimizer:
             )
             logger.info(f"回测执行器已创建，数据目录: {settings.DATA_ROOT_PATH}")
         except Exception as e:
-            logger.error(f"创建回测执行器失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"创建回测执行器失败: {e}")
             raise
 
         # 默认回测配置
@@ -731,8 +731,8 @@ class StrategyHyperparameterOptimizer:
                     return score
 
             except Exception as e:
-                logger.error(f"Trial {trial.number} 失败: {e}", exc_info=True)
-                logger.error(f"Trial {trial.number} 参数: {strategy_params}")
+                logger.opt(exception=True).error(f"Trial {trial.number} 失败: {e}")
+                logger.opt(exception=True).error(f"Trial {trial.number} 参数: {strategy_params}")
                 # 返回最差分数
                 if is_multi_objective:
                     return tuple(
@@ -803,7 +803,7 @@ class StrategyHyperparameterOptimizer:
                     importance = optuna.importance.get_param_importances(study)
                     param_importance = importance
                 except Exception as e:
-                    logger.warning(f"计算参数重要性失败: {e}")
+                    logger.opt(exception=True).warning(f"计算参数重要性失败: {e}")
 
             # 构建优化历史
             optimization_history = []
@@ -939,7 +939,7 @@ class StrategyHyperparameterOptimizer:
                     else:
                         result["pareto_front"] = []
                 except Exception as e:
-                    logger.warning(f"计算 Pareto front 失败: {e}")
+                    logger.opt(exception=True).warning(f"计算 Pareto front 失败: {e}")
                     result["pareto_front"] = []
 
             logger.info(
@@ -948,7 +948,7 @@ class StrategyHyperparameterOptimizer:
             return result
 
         except Exception as e:
-            logger.error(f"策略参数优化失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"策略参数优化失败: {e}")
             return {"success": False, "error": str(e), "strategy_name": strategy_name}
 
     def _calculate_objective_score(

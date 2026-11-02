@@ -107,7 +107,7 @@ async def get_strategy_configs(
                 },
             )
     except Exception as e:
-        logger.error(f"获取策略配置列表失败: {str(e)}")
+        logger.opt(exception=True).error(f"获取策略配置列表失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"获取策略配置列表失败: {str(e)}")
 
 
@@ -130,7 +130,7 @@ async def get_strategy_config(config_id: str) -> Any:
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取配置详情失败: {str(e)}")
+        logger.opt(exception=True).error(f"获取配置详情失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"获取配置详情失败: {str(e)}")
 
 
@@ -159,7 +159,7 @@ async def create_strategy_config(
             json_str = json.dumps(cleaned_parameters, ensure_ascii=False)
             logger.debug(f"参数JSON序列化成功，长度: {len(json_str)}")
         except (TypeError, ValueError) as e:
-            logger.error(
+            logger.opt(exception=True).error(
                 f"参数无法JSON序列化: {str(e)}, 参数类型: {type(cleaned_parameters)}, 参数: {cleaned_parameters}"
             )
             raise HTTPException(
@@ -227,9 +227,8 @@ async def create_strategy_config(
                 raise
             except Exception as db_error:
                 await session.rollback()
-                logger.error(
+                logger.opt(exception=True).error(
                     f"数据库操作失败: {str(db_error)}, 错误类型: {type(db_error).__name__}",
-                    exc_info=True,
                 )
                 # 检查是否是表不存在错误
                 error_str = str(db_error).lower()
@@ -238,7 +237,7 @@ async def create_strategy_config(
                     or "table" in error_str
                     and "does not exist" in error_str
                 ):
-                    logger.error("策略配置表不存在，请运行数据库迁移")
+                    logger.opt(exception=True).error("策略配置表不存在，请运行数据库迁移")
                     raise HTTPException(
                         status_code=500,
                         detail="数据库表不存在，请联系管理员运行数据库迁移",
@@ -247,8 +246,8 @@ async def create_strategy_config(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(
-            f"保存配置失败: {str(e)}, 错误类型: {type(e).__name__}", exc_info=True
+        logger.opt(exception=True).error(
+            f"保存配置失败: {str(e)}, 错误类型: {type(e).__name__}"
         )
         raise HTTPException(status_code=500, detail=f"保存配置失败: {str(e)}")
 
@@ -276,7 +275,7 @@ async def update_strategy_config(config_id: str, request: StrategyConfigUpdate) 
                 try:
                     json.dumps(cleaned_parameters)
                 except (TypeError, ValueError) as e:
-                    logger.error(
+                    logger.opt(exception=True).error(
                         f"参数无法JSON序列化: {str(e)}, 参数: {cleaned_parameters}"
                     )
                     raise HTTPException(
@@ -296,7 +295,7 @@ async def update_strategy_config(config_id: str, request: StrategyConfigUpdate) 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"更新配置失败: {str(e)}")
+        logger.opt(exception=True).error(f"更新配置失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"更新配置失败: {str(e)}")
 
 
@@ -320,5 +319,5 @@ async def delete_strategy_config(config_id: str) -> Any:
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"删除配置失败: {str(e)}")
+        logger.opt(exception=True).error(f"删除配置失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"删除配置失败: {str(e)}")

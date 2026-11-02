@@ -329,8 +329,8 @@ class QlibTrainingOrchestrator:
         )
 
     async def _handle_failure(self, request: TrainingRequest, exc: Exception) -> None:
-        logger.error(
-            f"Qlib模型训练失败: {request.model_id}, 错误: {exc}", exc_info=True
+        logger.opt(exception=True).error(
+            f"Qlib模型训练失败: {request.model_id}, 错误: {exc}"
         )
         if request.progress_callback is not None:
             await request.progress_callback(

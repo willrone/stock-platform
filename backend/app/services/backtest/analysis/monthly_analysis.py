@@ -47,7 +47,7 @@ class MonthlyAnalyzer:
         """
         try:
             if not portfolio_history:
-                logger.warning("组合历史数据为空，无法进行月度分析")
+                logger.opt(exception=True).warning("组合历史数据为空，无法进行月度分析")
                 return {}
 
             # 转换为DataFrame
@@ -86,7 +86,7 @@ class MonthlyAnalyzer:
             return result
 
         except Exception as e:
-            logger.error(f"月度绩效分析失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"月度绩效分析失败: {e}")
             raise TaskError(
                 message=f"月度绩效分析失败: {str(e)}",
                 severity=ErrorSeverity.MEDIUM,
@@ -411,7 +411,7 @@ class MonthlyAnalyzer:
             monthly_returns = monthly_values.pct_change().dropna()
 
             if len(monthly_returns) < window_months:
-                logger.warning(
+                logger.opt(exception=True).warning(
                     f"月度数据不足 {len(monthly_returns)}，无法计算 {window_months} 个月的滚动指标"
                 )
                 return {}
@@ -467,7 +467,7 @@ class MonthlyAnalyzer:
             }
 
         except Exception as e:
-            logger.error(f"计算滚动月度指标失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"计算滚动月度指标失败: {e}")
             return {}
 
     def _calculate_rolling_max_drawdown(self, returns: pd.Series) -> float:

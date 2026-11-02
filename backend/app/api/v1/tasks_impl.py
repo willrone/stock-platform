@@ -343,7 +343,7 @@ async def list_tasks(
             try:
                 status_filter = TaskStatus(status)
             except ValueError:
-                logger.warning(f"无效的任务状态: {status}")
+                logger.opt(exception=True).warning(f"无效的任务状态: {status}")
 
         # 获取任务列表（排除 result 大字段，列表页不需要）
         tasks = task_repository.get_tasks_by_user(
@@ -373,7 +373,7 @@ async def list_tasks(
             data=task_list.model_dump(),
         )
     except Exception as e:
-        logger.error(f"获取任务列表失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取任务列表失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取任务列表失败: {str(e)}")
     finally:
         session.close()
@@ -422,7 +422,7 @@ async def get_task_detailed_result(task_id: str) -> Any:
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取详细回测结果失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取详细回测结果失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取详细回测结果失败: {str(e)}")
     finally:
         session.close()
@@ -557,7 +557,7 @@ async def get_prediction_series(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取预测序列失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取预测序列失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取预测序列失败: {str(e)}")
     finally:
         session.close()
@@ -579,7 +579,7 @@ async def get_chart_data(task_id: str, chart_type: str) -> Any:
     ]
 
     if chart_type not in valid_chart_types:
-        logger.warning(f"不支持的图表类型: {chart_type}")
+        logger.opt(exception=True).warning(f"不支持的图表类型: {chart_type}")
         raise HTTPException(status_code=400, detail=f"不支持的图表类型: {chart_type}")
 
     session = SessionLocal()
@@ -703,7 +703,7 @@ async def compare_backtest_results(request: BacktestCompareRequest) -> Any:
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"回测对比分析失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"回测对比分析失败: {e}")
         raise HTTPException(status_code=500, detail=f"回测对比分析失败: {str(e)}")
     finally:
         session.close()
@@ -797,7 +797,7 @@ async def compare_task_configs(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"对比配置快照失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"对比配置快照失败: {e}")
         raise HTTPException(status_code=500, detail=f"对比配置快照失败: {str(e)}")
     finally:
         session.close()
@@ -888,7 +888,7 @@ async def preview_tuning_config(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"配置预览失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"配置预览失败: {e}")
         raise HTTPException(status_code=500, detail=f"配置预览失败: {str(e)}")
     finally:
         session.close()
@@ -1007,7 +1007,7 @@ async def submit_tuning_task(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"提交调优任务失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"提交调优任务失败: {e}")
         raise HTTPException(status_code=500, detail=f"提交调优任务失败: {str(e)}")
     finally:
         session.close()
@@ -1070,7 +1070,7 @@ async def export_backtest_report(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"导出回测报告失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"导出回测报告失败: {e}")
         raise HTTPException(status_code=500, detail=f"导出回测报告失败: {str(e)}")
     finally:
         session.close()
@@ -1103,7 +1103,7 @@ async def get_task_stats(user_id: str = Depends(get_current_user)) -> Any:
         )
 
     except Exception as e:
-        logger.error(f"获取任务统计失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取任务统计失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取任务统计失败: {str(e)}")
     finally:
         session.close()
@@ -1230,7 +1230,7 @@ async def rebuild_task(
         raise
     except Exception as e:
         session.rollback()
-        logger.error(f"重建任务失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"重建任务失败: {e}")
         raise HTTPException(status_code=500, detail=f"重建任务失败: {str(e)}")
     finally:
         session.close()
@@ -1372,10 +1372,10 @@ async def get_task_detail(task_id: str) -> Any:
                     else:
                         logger.debug(f"任务结果不包含回测数据: task_id={task_id}")
                 except Exception as e:
-                    logger.warning(f"解析回测结果失败: {e}", exc_info=True)
+                    logger.opt(exception=True).warning(f"解析回测结果失败: {e}")
             else:
                 if task_type_value == "backtest":
-                    logger.warning(
+                    logger.opt(exception=True).warning(
                         f"回测任务但无结果数据: task_id={task_id}, result={task_result_value}"
                     )
 
@@ -1423,7 +1423,7 @@ async def get_task_detail(task_id: str) -> Any:
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取任务详情失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取任务详情失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取任务详情失败: {str(e)}")
     finally:
         session.close()
@@ -1461,7 +1461,7 @@ async def get_task_config(task_id: str) -> Any:
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取任务配置快照失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取任务配置快照失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取任务配置快照失败: {str(e)}")
     finally:
         session.close()
@@ -1505,7 +1505,7 @@ async def delete_task(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"删除任务失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"删除任务失败: {e}")
         error_msg = str(e)
         # 检查是否是数据库约束错误
         if "foreign key" in error_msg.lower() or "constraint" in error_msg.lower():
@@ -1550,7 +1550,7 @@ async def stop_task(task_id: str) -> Any:
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"停止任务失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"停止任务失败: {e}")
         raise HTTPException(status_code=500, detail=f"停止任务失败: {str(e)}")
     finally:
         session.close()
@@ -1591,7 +1591,7 @@ async def retry_task(task_id: str) -> Any:
 
             logger.info(f"任务已重新提交到进程池: {task_id}")
         except Exception as submit_error:
-            logger.error(f"重新提交任务到进程池失败: {submit_error}", exc_info=True)
+            logger.opt(exception=True).error(f"重新提交任务到进程池失败: {submit_error}")
             raise HTTPException(
                 status_code=500, detail=f"重新提交任务失败: {str(submit_error)}"
             )
@@ -1607,7 +1607,7 @@ async def retry_task(task_id: str) -> Any:
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"重试任务失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"重试任务失败: {e}")
         raise HTTPException(status_code=500, detail=f"重试任务失败: {str(e)}")
     finally:
         session.close()
@@ -1629,7 +1629,7 @@ async def get_stuck_tasks(timeout_minutes: int = 30) -> Any:
         )
 
     except Exception as e:
-        logger.error(f"获取卡住任务失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取卡住任务失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取卡住任务失败: {str(e)}")
 
 
@@ -1646,7 +1646,7 @@ async def cleanup_stuck_tasks(timeout_minutes: int = 30, auto_fix: bool = False)
         return StandardResponse(success=True, message=message, data=result)
 
     except Exception as e:
-        logger.error(f"清理卡住任务失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"清理卡住任务失败: {e}")
         raise HTTPException(status_code=500, detail=f"清理卡住任务失败: {str(e)}")
 
 
@@ -1675,7 +1675,7 @@ async def force_complete_task(task_id: str, status: str = "cancelled") -> Any:
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"强制完成任务失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"强制完成任务失败: {e}")
         raise HTTPException(status_code=500, detail=f"强制完成任务失败: {str(e)}")
 
 
@@ -1688,7 +1688,7 @@ async def get_task_monitor_statistics() -> Any:
         return StandardResponse(success=True, message="获取统计信息成功", data=stats)
 
     except Exception as e:
-        logger.error(f"获取监控统计失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取监控统计失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取监控统计失败: {str(e)}")
 
 

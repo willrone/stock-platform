@@ -120,7 +120,7 @@ class BacktestDataAdapter:
             return enhanced_result
 
         except Exception as e:
-            logger.error(f"适配回测结果失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"适配回测结果失败: {e}")
             raise TaskError(
                 message=f"适配回测结果失败: {str(e)}",
                 severity=ErrorSeverity.HIGH,
@@ -189,7 +189,7 @@ class BacktestDataAdapter:
         engine_metrics = engine_metrics or {}
 
         if not portfolio_history:
-            logger.warning("组合历史数据为空，无法计算扩展风险指标")
+            logger.opt(exception=True).warning("组合历史数据为空，无法计算扩展风险指标")
             return None
 
         try:
@@ -211,7 +211,7 @@ class BacktestDataAdapter:
             returns = returns.dropna()
 
             if len(returns) == 0:
-                logger.warning("收益率序列为空，无法计算扩展风险指标")
+                logger.opt(exception=True).warning("收益率序列为空，无法计算扩展风险指标")
                 return None
 
             # 计算扩展指标
@@ -300,7 +300,7 @@ class BacktestDataAdapter:
             )
 
         except Exception as e:
-            logger.error(f"计算扩展风险指标失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"计算扩展风险指标失败: {e}")
             return None
 
     async def _analyze_monthly_returns(
@@ -318,7 +318,7 @@ class BacktestDataAdapter:
         """
 
         if not portfolio_history:
-            logger.warning("组合历史数据为空，无法分析月度收益")
+            logger.opt(exception=True).warning("组合历史数据为空，无法分析月度收益")
             return None
 
         try:
@@ -362,7 +362,7 @@ class BacktestDataAdapter:
             return result
 
         except Exception as e:
-            logger.error(f"分析月度收益失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"分析月度收益失败: {e}")
             return None
 
     async def _analyze_positions(
@@ -371,7 +371,7 @@ class BacktestDataAdapter:
         """轻量分析持仓表现，保持结果适配器快速稳定。"""
 
         if not trade_history:
-            logger.warning("交易历史数据为空，无法分析持仓表现")
+            logger.opt(exception=True).warning("交易历史数据为空，无法分析持仓表现")
             return None
 
         try:
@@ -426,7 +426,7 @@ class BacktestDataAdapter:
             return position_analysis
 
         except Exception as e:
-            logger.error(f"分析持仓表现失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"分析持仓表现失败: {e}")
             return None
 
     def _calculate_avg_holding_period(self, trades: List[Dict]) -> int:
@@ -454,7 +454,7 @@ class BacktestDataAdapter:
             return int(np.mean(holding_periods)) if holding_periods else 0
 
         except Exception as e:
-            logger.error(f"计算平均持仓期失败: {e}")
+            logger.opt(exception=True).error(f"计算平均持仓期失败: {e}")
             return 0
 
     async def _analyze_drawdowns(
@@ -463,7 +463,7 @@ class BacktestDataAdapter:
         """分析回撤详情"""
 
         if not portfolio_history:
-            logger.warning("组合历史数据为空，无法分析回撤")
+            logger.opt(exception=True).warning("组合历史数据为空，无法分析回撤")
             return None
 
         try:
@@ -484,7 +484,7 @@ class BacktestDataAdapter:
             #   - max_dd_value 会是 NaN → 进 JSON 就是**非法字面量**。
             # 这里显式判掉：无可用回撤数据时返回全 0 的分析，绝不让 NaN 外泄。
             if len(drawdown) == 0 or drawdown.notna().sum() == 0:
-                logger.warning("回撤序列全为 NaN（组合历史含缺失值），返回空回撤分析")
+                logger.opt(exception=True).warning("回撤序列全为 NaN（组合历史含缺失值），返回空回撤分析")
                 return DrawdownAnalysis(
                     max_drawdown=0.0,
                     max_drawdown_date=None,
@@ -546,7 +546,7 @@ class BacktestDataAdapter:
             return analysis
 
         except Exception as e:
-            logger.error(f"分析回撤详情失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"分析回撤详情失败: {e}")
             return None
 
     def _calculate_max_drawdown(self, values: pd.Series) -> float:
@@ -580,5 +580,5 @@ class BacktestDataAdapter:
             return max(drawdown_periods) if drawdown_periods else 0
 
         except Exception as e:
-            logger.error(f"计算最大回撤持续时间失败: {e}")
+            logger.opt(exception=True).error(f"计算最大回撤持续时间失败: {e}")
             return 0

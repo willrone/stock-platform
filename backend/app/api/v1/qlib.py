@@ -109,7 +109,7 @@ async def prepare_qlib_dataset(request: QlibDatasetRequest) -> Any:
         )
 
     except Exception as e:
-        logger.error(f"准备Qlib数据集失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"准备Qlib数据集失败: {e}")
         raise HTTPException(status_code=500, detail=f"准备Qlib数据集失败: {str(e)}")
 
 
@@ -159,7 +159,7 @@ async def calculate_alpha158_factors(request: AlphaFactorsRequest) -> Any:
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"计算Alpha158因子失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"计算Alpha158因子失败: {e}")
         raise HTTPException(status_code=500, detail=f"计算Alpha158因子失败: {str(e)}")
 
 
@@ -185,7 +185,7 @@ async def create_qlib_model_config(request: QlibModelConfigRequest) -> Any:
         )
 
     except Exception as e:
-        logger.error(f"创建Qlib模型配置失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"创建Qlib模型配置失败: {e}")
         raise HTTPException(status_code=500, detail=f"创建Qlib模型配置失败: {str(e)}")
 
 
@@ -201,7 +201,7 @@ async def get_cache_stats() -> Any:
         )
 
     except Exception as e:
-        logger.error(f"获取缓存统计失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取缓存统计失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取缓存统计失败: {str(e)}")
 
 
@@ -215,7 +215,7 @@ async def clear_cache() -> Any:
         return StandardResponse(success=True, message="缓存清空成功", data={})
 
     except Exception as e:
-        logger.error(f"清空缓存失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"清空缓存失败: {e}")
         raise HTTPException(status_code=500, detail=f"清空缓存失败: {str(e)}")
 
 
@@ -263,7 +263,7 @@ async def get_qlib_status() -> Any:
         )
 
     except Exception as e:
-        logger.error(f"获取Qlib状态失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取Qlib状态失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取Qlib状态失败: {str(e)}")
 
 
@@ -320,7 +320,7 @@ async def list_alpha_factors() -> Any:
         )
 
     except Exception as e:
-        logger.error(f"获取Alpha因子列表失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取Alpha因子列表失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取Alpha因子列表失败: {str(e)}")
 
 
@@ -363,7 +363,7 @@ async def get_supported_models() -> Any:
         )
 
     except Exception as e:
-        logger.error(f"获取支持的模型列表失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取支持的模型列表失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取支持的模型列表失败: {str(e)}")
 
 
@@ -386,7 +386,7 @@ async def get_model_config_template(model_name: str) -> Any:
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取模型配置模板失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取模型配置模板失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取模型配置模板失败: {str(e)}")
 
 
@@ -425,7 +425,7 @@ async def get_model_hyperparameters(model_name: str) -> Any:
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取模型超参数规格失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取模型超参数规格失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取模型超参数规格失败: {str(e)}")
 
 
@@ -476,7 +476,7 @@ async def recommend_models(request: ModelRecommendationRequest) -> Any:
         )
 
     except Exception as e:
-        logger.error(f"模型推荐失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"模型推荐失败: {e}")
         raise HTTPException(status_code=500, detail=f"模型推荐失败: {str(e)}")
 
 
@@ -501,5 +501,5 @@ async def get_training_tips(model_name: str) -> Any:
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取训练建议失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取训练建议失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取训练建议失败: {str(e)}")

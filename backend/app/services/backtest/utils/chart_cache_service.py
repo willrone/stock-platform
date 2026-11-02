@@ -42,7 +42,7 @@ class ChartCacheService:
         """获取缓存的图表数据"""
 
         if chart_type not in self.SUPPORTED_CHART_TYPES:
-            self.logger.warning(f"不支持的图表类型: {chart_type}")
+            self.logger.opt(exception=True).warning(f"不支持的图表类型: {chart_type}")
             return None
 
         async with get_async_session_context() as session:
@@ -88,7 +88,7 @@ class ChartCacheService:
                 return cast(Optional[Dict[str, Any]], cached_data)
 
             except Exception as e:
-                self.logger.error(f"获取缓存数据失败: {e}", exc_info=True)
+                self.logger.opt(exception=True).error(f"获取缓存数据失败: {e}")
                 await session.rollback()
                 return None
 
@@ -102,7 +102,7 @@ class ChartCacheService:
         """缓存图表数据"""
 
         if chart_type not in self.SUPPORTED_CHART_TYPES:
-            self.logger.warning(f"不支持的图表类型: {chart_type}")
+            self.logger.opt(exception=True).warning(f"不支持的图表类型: {chart_type}")
             return False
 
         async with get_async_session_context() as session:
@@ -167,7 +167,7 @@ class ChartCacheService:
                 )
 
             except Exception as e:
-                self.logger.error(f"缓存图表数据失败: {e}", exc_info=True)
+                self.logger.opt(exception=True).error(f"缓存图表数据失败: {e}")
                 await session.rollback()
                 return False
 
@@ -215,7 +215,7 @@ class ChartCacheService:
                 )
 
             except Exception as e:
-                self.logger.error(f"删除缓存失败: {e}", exc_info=True)
+                self.logger.opt(exception=True).error(f"删除缓存失败: {e}")
                 await session.rollback()
                 return False
 
@@ -254,7 +254,7 @@ class ChartCacheService:
                 )
 
             except Exception as e:
-                self.logger.error(f"清理过期缓存失败: {e}", exc_info=True)
+                self.logger.opt(exception=True).error(f"清理过期缓存失败: {e}")
                 await session.rollback()
                 return 0
 
@@ -298,7 +298,7 @@ class ChartCacheService:
                 }
 
             except Exception as e:
-                self.logger.error(f"获取缓存统计失败: {e}", exc_info=True)
+                self.logger.opt(exception=True).error(f"获取缓存统计失败: {e}")
                 return {}
 
     async def get_task_cache_info(self, task_id: str) -> Dict[str, Any]:
@@ -335,7 +335,7 @@ class ChartCacheService:
                 }
 
             except Exception as e:
-                self.logger.error(f"获取任务缓存信息失败: {e}", exc_info=True)
+                self.logger.opt(exception=True).error(f"获取任务缓存信息失败: {e}")
                 return {"task_id": task_id, "error": str(e)}
 
     def _calculate_data_hash(self, data: Dict[str, Any]) -> str:
@@ -350,7 +350,7 @@ class ChartCacheService:
                 data_str = json.dumps(data, sort_keys=True, ensure_ascii=False)
                 return hashlib.md5(data_str.encode("utf-8")).hexdigest()
         except Exception as e:
-            self.logger.warning(f"计算数据哈希失败: {e}")
+            self.logger.opt(exception=True).warning(f"计算数据哈希失败: {e}")
             return ""
 
     async def batch_cache_charts(
@@ -404,7 +404,7 @@ class ChartCacheService:
                 return True
 
             except Exception as e:
-                self.logger.error(f"检查缓存有效性失败: {e}", exc_info=True)
+                self.logger.opt(exception=True).error(f"检查缓存有效性失败: {e}")
                 return False
 
 
