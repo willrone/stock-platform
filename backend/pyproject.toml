@@ -66,7 +66,11 @@ testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-norecursedirs = ["scripts", "__pycache__", ".git", ".venv", "venv", "dist", "build"]
+# 2026-11-02：原来含 "scripts" → 按 basename 匹配，**tests/unit/scripts/ 整个目录
+#   不被采集**（里面的测试从没跑过，断言过期到失败都没人知道）。
+#   仓库根的 backend/scripts/ 由 testpaths=["tests"] 排除，本来就不受影响，
+#   所以这里不需要它。（见台账 §12.31）
+noreversedirs = ["__pycache__", ".git", ".venv", "venv", "dist", "build"]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",

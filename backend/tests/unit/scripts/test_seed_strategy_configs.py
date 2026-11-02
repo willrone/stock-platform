@@ -48,9 +48,14 @@ def test_seed_strategy_configs_is_idempotent(tmp_path: Path) -> None:
         second = module.seed_strategy_configs(session)
         configs = session.execute(select(StrategyConfig)).scalars().all()
 
-    assert first == {"created": 6, "updated": 0, "unchanged": 0, "total": 6}
-    assert second == {"created": 0, "updated": 0, "unchanged": 6, "total": 6}
-    assert len(configs) == 6
+    # 2026-11-02：原来硬编码 6（脚本的 presets 从 6 涨到 17 后这条断言就过期了），
+    # 而且**这个目录一直被 pyproject 的 noreversedirs=["scripts"] 排除在采集之外**
+    # → 没人跑过它 → 过期没人发现。断言改成按 presets 实际条数（不写死魔数），
+    #   真正的不变量是"幂等"：第一次全建，第二次全不改。
+    n = len(module.DEFAULT_STRATEGY_CONFIG_PRESETS)
+    assert first == {"created": n, "updated": 0, "unchanged": 0, "total": n}
+    assert second == {"created": 0, "updated": 0, "unchanged": n, "total": n}
+    assert len(configs) == n
     assert {config.config_id for config in configs} == {
         module.build_config_id(preset["config_name"])
         for preset in module.DEFAULT_STRATEGY_CONFIG_PRESETS
