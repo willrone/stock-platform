@@ -3822,3 +3822,27 @@ for _var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
 - 所有回归命令统一改为**不手动带** OMP 环境变量（让 conftest 兜底），
   并把 `EXITCODE=$?` 落盘 —— 这样"conftest 被删/失效"会立刻暴露成崩溃+非零退出，
   而不是悄悄打不出汇总行。
+
+
+### G. 因果关系钉死（同一条测试的四组对照，2026-11-03 实测）
+
+被测：`tests/scripts/test_qlib_integration.py::test_unified_training_engine`
+（崩点：`lightgbm/basic.py::__inner_predict_np2d`，`libomp.dylib` SIGSEGV）
+
+| # | 根级 conftest | `DYLD_LIBRARY_PATH` 指向系统 libomp | 结果 |
+|---|---|---|---|
+| 1 | 无 | 无 | 3 passed（EXIT=0） |
+| 2 | 无 | **有** | **SIGSEGV** |
+| 3 | **有** | 无 | 1 passed（EXIT=0） |
+| 4 | **有** | **有** | **1 passed（EXIT=0）** ← 最恶劣组合 |
+
+**结论**：
+- `DYLD_LIBRARY_PATH=/opt/homebrew/opt/libomp/lib` **不是根因**，它是**催化剂** ——
+  它把系统 libomp 引进进程，让 lightgbm 与 Python 3.13 的 OpenMP 运行时发生冲突成为可能。
+- **必要条件只有一个：OpenMP 线程数 > 1**。
+- 线程数锁成 1 之后（conftest），**libomp 从哪来都不崩** → 修复是彻底的，不依赖调用方避开某个环境变量。
+
+**为什么之前"全量跑不崩、单跑崩"**：全量跑时 `app` 被更早 import，
+`app/__init__.py` 的 setdefault 抢先生效 → OMP=1；单跑（尤其带 DYLD）时
+`app` 还没 import → OMP 没锁 → 崩。**同一个测试，两种跑法两种结果** ——
+这正是"缺根级 conftest"的典型症状，也说明"全量绿"覆盖不到单跑场景。
