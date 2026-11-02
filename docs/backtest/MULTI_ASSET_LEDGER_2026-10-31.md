@@ -2623,6 +2623,16 @@ ledger / 其它文件一概不动（可人工从 ledger 恢复）。
 → `tests/scripts` 的 2 个 F 与 qlib segfault 归入**既有缺陷台账**，
    单独排期修（硬编码路径 → 改成从项目根解析）。
 
+**闭环（2026-11-03，§12.44）**：
+- qlib segfault：**已修**（根因 = OpenMP 多线程，`OMP_NUM_THREADS=1` 才稳）。
+  全量 `tests/` 现在能跑到 100%，`FAILED/ERROR = 0` —— **§12.36 记的"崩在 8%"不再是障碍**。
+- 2 个 Alpha158 F：已在 §12.40 修掉（硬编码路径 → 从项目根解析；缺 dump_bin 的那条改
+  为从生产数据产物验证并 **skip**）。
+- 回归口径**可以放宽到全量 `tests/`** 了（`tests/unit` 仍是更快的日常口径）。
+- 顺带修掉 §12.36 之后新发现的同类悬空项：`app/services/backtest/execution/multiprocess_backtest.py`
+  的 `data_dir` 仍硬编码旧机器路径 `/Users/ronghui/.../willrone/data`（本机不存在 →
+  多进程回测一启动就失败），改为 `"data"` 交给 DataLoader 按项目根解析（commit 6640a897）。
+
 ## 12.37 纸面盘**守卫收紧**（袖套估值失败 → 合并线拒绝写盘，2026-11-02）
 
 ### A. 触发
@@ -3259,8 +3269,13 @@ OMP_NUM_THREADS=4 → EXIT=139 （Segmentation fault）
 ### D. 验证
 
 - `tests/scripts/test_qlib_integration.py` **3/3 通过**（此前 1 个 SIGSEGV）
+- `tests/unit`：**794 passed / 183s / EXIT=0**（基线 752 → 含新增的 index 对齐门禁 7 项）
+- **全量 `tests/`：跑至 100%，`FAILED/ERROR = 0`**（此前崩在 8%），1 个 SKIP 是
+  `test_alpha158_handler` 的**有意 skip**（qlib 0.9.8 无 dump_bin，改由生产数据产物验证）
+- 生产服务 import 正常（251 路由），`OMP_NUM_THREADS=1` 在 lightgbm 加载**之前**生效
 - 特征数：678（污染：含 `LABEL0` + 468 个重名）→ **209**（清洗后），训练/预测两侧特征名严格一致
 - `OMP_NUM_THREADS` 锁在**代码内**生效（不依赖外部环境变量）
+- 定位方法论已固化成 skill `native-segfault-triage`（原生崩溃定位流程 + 高频根因速查表）
 
 ### E. 教训
 
