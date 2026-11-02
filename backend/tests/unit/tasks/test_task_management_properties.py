@@ -14,7 +14,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.database import Base
-from app.models.task_models import TaskStatus, TaskType
+from app.models.task_models import Task, TaskStatus, TaskType
 from app.repositories.task_repository import (
     PredictionResultRepository,
     TaskRepository,
@@ -176,6 +176,38 @@ class TestTaskManagementIntegrity:
         功能: production-ready-implementation, 属性 2: 任务管理完整性
         验证用户任务管理的完整性 - 用户应该能够管理自己的任务
         """
+        self._exercise_user_task_management(user_id, task_count)
+
+    @given(task_count=st.integers(min_value=1, max_value=10))
+    @settings(max_examples=50, deadline=None)
+    def test_same_user_id_examples_are_isolated(self, task_count):
+        """**确定性复现 + 防回归**（2026-11-03，§12.38 偶发 F 的根因）。
+
+        同一 user_id 连续多个 example → 每个 example 只能看见**本轮**创建的任务。
+        这是那个"偶发"失败的确定化版本：user_id 固定 → 若 example 隔离失效**必然炸**
+        （实测：第 2 个 example 就取到 20 条 vs task_count=2）。
+
+        与被修的 `test_user_task_management_integrity` **走同一段主体代码**
+        → 有人把隔离删掉，这一条立刻炸（否则只测 helper 抓不到真正的回归）。
+        """
+        self._exercise_user_task_management("FIXED_USER_FOR_ISOLATION", task_count)
+
+    def _reset_user_tasks(self, user_id: str) -> None:
+        """清空某用户的**历史**任务 —— hypothesis example 隔离用。
+
+        背景（§12.38）：hypothesis 的多个 example **共享同一个 setup_method 实例**
+        （同一个内存 SQLite），而 `user_id` 是随机文本 → 两个 example 抽到**同一个
+        user_id** 时，`get_tasks_by_user` 会取到**累积**的任务
+        → `assert len(user_tasks) == task_count` 炸（偶发，取决于随机文本是否重复）。
+        """
+        self.db_session.query(Task).filter(Task.user_id == user_id).delete()
+        self.db_session.commit()
+
+    def _exercise_user_task_management(self, user_id: str, task_count: int) -> None:
+        """用户任务管理的属性主体（两个测试共用，保证防回归抓得住）。"""
+        # example 隔离：先清掉该 user_id 的历史任务
+        self._reset_user_tasks(user_id)
+
         created_tasks = []
 
         # 创建多个任务

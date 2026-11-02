@@ -3009,3 +3009,91 @@ grep -rln "nav_daily" → backend/scripts/paper_daily_nav.py
 推荐 **B，但拆两步**：先 A（可独立验证口径与日/周残差），确认后再上前端与定时。
 理由：定时任务会持续消耗 2~4 分钟/天的行情加载，且写盘产物需要纳入
 §12.23 指纹门（`data/paper/` 属**活状态**，不能进静态清单，只能走豁免）。
+
+## 12.42 **§12.38 的偶发 F：根因已定位并修掉**（2026-11-03）
+
+### A. §12.38 留下的 open 项
+
+`tests/unit` 全量**偶发**失败 `tests/unit/tasks/test_task_management_properties.py::
+TestTaskManagementIntegrity::test_user_task_management_integrity`，
+§12.38 取证 5 次（复现 2 次）但**根因未定位**。
+
+### B. 本轮取证：10 轮全量**未复现**
+
+按 §12.38 D 的复现方法跑 **10 轮**（`--tb=long -p no:cacheprovider`，日志分文件存
+`unit_h1..h10.log`）→ **10/10 全绿**（每轮 777 passed）。
+**这不能证明已修**（偶发项没复现 ≠ 不存在）→ 于是改为**主动构造确定性复现**。
+
+### C. 根因（**主动构造复现坐实**，不是推测）
+
+代码结构事实：
+
+```python
+def setup_method(self):                       # ← pytest 每个测试函数调一次
+    self.engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(self.engine)     # ← 所有 example 共享这同一个内存 DB
+
+@given(user_id=st.text(min_size=1, max_size=50),
+       task_count=st.integers(min_value=1, max_value=10))
+@settings(max_examples=50)
+def test_user_task_management_integrity(self, user_id, task_count):
+    ...
+    user_tasks = self.task_repository.get_tasks_by_user(user_id, limit=20)
+    assert len(user_tasks) == task_count      # ← 计数断言
+```
+
+**hypothesis 的 50 个 example 共享同一个 `setup_method` 实例（同一个内存 SQLite）**，
+而 `user_id` 是**随机文本** → 两个 example 抽到**同一个 user_id** 时，
+`get_tasks_by_user` 取到的是**累积**任务 → `len(user_tasks) != task_count` → 炸。
+
+**确定性复现（scratch 脚本，不进仓库）**：把 `user_id` 固定成同一个值再跑 50 examples：
+
+| 对照组 | 结果 |
+|---|---|
+| `user_id` 固定 | ❌ **第 2 个 example 就炸**：`assert 20 == 2`（取到 20 条 = limit 上限） |
+| `user_id` 每轮唯一（uuid4） | ✅ 全过 |
+
+→ 假设成立：**"偶发"来自随机文本是否重复**（hypothesis 不保证 text 策略唯一）。
+§12.38 C 列的怀疑点"DB 共享状态"成立，但**具体的脏来源是同一 user_id 的跨 example 累积**，
+不是"上一个测试的残留"（每个测试函数有独立 `setup_method` → 独立 engine）。
+
+### D. 修法：example 隔离（**不是**改断言）
+
+- 主体抽成 `_exercise_user_task_management(user_id, task_count)`；
+  入口先 `_reset_user_tasks(user_id)`（`DELETE FROM task WHERE user_id = ?` + commit）
+  → 每个 example 只看得见**本轮**创建的任务。
+- **不改断言**（`== task_count` 保持）：改成 `>=` 会把真问题（重复创建）一起放过。
+
+### E. 防回归必须**抓得住**（这里差点做成假的）
+
+只测 helper 是**假防回归**（有人把调用删了，helper 仍绿）。
+→ 加 **twin 测试** `test_same_user_id_examples_are_isolated`：
+`user_id` 固定成 `FIXED_USER_FOR_ISOLATION`，与被修测试**走同一段主体代码**
+→ 隔离失效时**必然炸**。
+
+**验证过防回归的有效性**（不是"读代码觉得对"）：
+
+| 状态 | twin 结果 |
+|---|---|
+| 隔离在位 | ✅ 11 passed |
+| **临时删掉 `_reset_user_tasks` 调用** | ❌ **FAILED `assert 20 == 2`**（当场抓到） |
+| 恢复后 | ✅ 11 passed |
+
+### F. 顺带查清：同文件其他属性测试**不受影响**（逐个看过，不是猜）
+
+| 测试 | 有计数断言？ | 随机 user_id？ | 结论 |
+|---|---|---|---|
+| `test_user_task_management_integrity` | ✅ `== task_count` | ✅ | **受影响** → 已修 |
+| `test_task_creation_integrity` | ❌（只断言单任务属性） | ✅ | 不受影响 |
+| `test_task_status_update_integrity` | ❌（固定 "test_user"，断言单任务状态） | ❌ | 不受影响 |
+| `test_notification_service_reliability` | ❌（`in` 成员检查 + `call_count >=`） | ✅ | 不受影响 |
+| `test_subscription_management_reliability` | ✅ `== len(task_ids)` | ✅ | **已有防护**：第 517-518 行显式重建服务（作者自己写过"多 example 复用实例"的注释） |
+| `test_task_statistics_integrity` | — | — | 第 235 行已用 `uuid4()` 规避 |
+
+### G. 教训
+
+1. **"偶发没复现" ≠ "没问题"** —— 没复现时要把假设**确定化**（固定触发条件）才能坐实根因。
+2. **hypothesis 的 example 之间共享 `setup_method` 状态**是隐蔽陷阱：
+   `setup_method` 只在**测试函数**粒度执行，不在 example 粒度。
+3. **防回归测试要跟被修代码走同一条路径**，否则它测的是"helper 存在"而不是"行为没退化"。
+4. **修法不能是放宽断言** —— 那是把 bug 藏起来，不是修 bug。
