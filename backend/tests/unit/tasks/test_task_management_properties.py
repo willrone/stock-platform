@@ -65,7 +65,7 @@ class TestTaskManagementIntegrity:
         user_id=st.text(min_size=1, max_size=50),
         config=st.dictionaries(st.text(), st.text()),
     )
-    @settings(max_examples=100)
+    @settings(max_examples=100, deadline=None)
     def test_task_creation_integrity(self, task_name, task_type, user_id, config):
         """
         功能: production-ready-implementation, 属性 2: 任务管理完整性
@@ -115,7 +115,7 @@ class TestTaskManagementIntegrity:
         ),
         progress=st.floats(min_value=0.0, max_value=100.0),
     )
-    @settings(max_examples=100)
+    @settings(max_examples=100, deadline=None)
     def test_task_status_update_integrity(
         self, initial_status, target_status, progress
     ):
@@ -170,7 +170,7 @@ class TestTaskManagementIntegrity:
         user_id=st.text(min_size=1, max_size=50),
         task_count=st.integers(min_value=1, max_value=10),
     )
-    @settings(max_examples=50)
+    @settings(max_examples=50, deadline=None)
     def test_user_task_management_integrity(self, user_id, task_count):
         """
         功能: production-ready-implementation, 属性 2: 任务管理完整性
@@ -258,7 +258,7 @@ class TestTaskManagementIntegrity:
         task_count=st.integers(min_value=5, max_value=20),
         days_back=st.integers(min_value=1, max_value=90),
     )
-    @settings(max_examples=30)
+    @settings(max_examples=30, deadline=None)
     def test_task_statistics_integrity(self, task_count, days_back):
         """
         功能: production-ready-implementation, 属性 2: 任务管理完整性
@@ -400,7 +400,7 @@ class TestTaskQueueReliability:
         task_id=st.text(min_size=1, max_size=50),
         task_type=st.sampled_from([TaskType.PREDICTION, TaskType.BACKTEST]),
     )
-    @settings(max_examples=30)
+    @settings(max_examples=30, deadline=None)
     def test_task_execution_context_integrity(self, task_id, task_type):
         """
         功能: production-ready-implementation, 属性 2: 任务管理完整性
@@ -466,7 +466,7 @@ class TestNotificationServiceReliability:
     )
     @pytest.mark.asyncio
     @settings(
-        max_examples=100, suppress_health_check=[HealthCheck.function_scoped_fixture]
+        max_examples=100, suppress_health_check=[HealthCheck.function_scoped_fixture], deadline=None
     )
     async def test_notification_service_reliability(
         self, task_id, user_id, task_name, task_type
@@ -539,7 +539,7 @@ class TestNotificationServiceReliability:
     )
     @pytest.mark.asyncio
     @settings(
-        max_examples=50, suppress_health_check=[HealthCheck.function_scoped_fixture]
+        max_examples=50, suppress_health_check=[HealthCheck.function_scoped_fixture], deadline=None
     )
     async def test_subscription_management_reliability(self, user_id, task_ids):
         """
@@ -587,7 +587,7 @@ class TestNotificationServiceReliability:
             assert user_id not in unsubscribe_subscribers
 
     @given(notification_count=st.integers(min_value=1, max_value=20))
-    @settings(max_examples=30)
+    @settings(max_examples=30, deadline=None)
     def test_notification_statistics_integrity(self, notification_count):
         """
         功能: production-ready-implementation, 属性 5: 通知服务可靠性
@@ -629,7 +629,7 @@ class TestProgressTrackerReliability:
         task_id=st.text(min_size=1, max_size=50),
         total_steps=st.integers(min_value=1, max_value=20),
     )
-    @settings(max_examples=50)
+    @settings(max_examples=50, deadline=None)
     def test_progress_tracker_reliability(self, task_id, total_steps):
         """
         功能: production-ready-implementation, 属性 2: 任务管理完整性

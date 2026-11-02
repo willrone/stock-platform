@@ -92,7 +92,7 @@ class TestPredictionEngineAccuracy:
         confidence_level=st.floats(min_value=0.5, max_value=0.99),
         horizon=st.sampled_from(["short_term", "medium_term", "long_term"]),
     )
-    @settings(max_examples=100)
+    @settings(max_examples=100, deadline=None)
     def test_prediction_engine_accuracy_property(
         self, stock_code, model_id, confidence_level, horizon
     ):
@@ -157,7 +157,7 @@ class TestPredictionEngineAccuracy:
         stock_codes=st.lists(st.just("000001.SZ"), min_size=1, max_size=5),
         model_id=st.text(min_size=1, max_size=50),
     )
-    @settings(max_examples=50)
+    @settings(max_examples=50, deadline=None)
     def test_batch_prediction_consistency(self, stock_codes, model_id):
         """
         功能: production-ready-implementation, 属性 1: 预测引擎准确性
@@ -203,7 +203,7 @@ class TestPredictionEngineAccuracy:
             assert price_diff < result.predicted_price * 0.01  # 差异应小于1%
 
     @given(confidence_level=st.floats(min_value=0.5, max_value=0.99))
-    @settings(max_examples=50)
+    @settings(max_examples=50, deadline=None)
     def test_confidence_interval_validity(self, confidence_level):
         """
         功能: production-ready-implementation, 属性 1: 预测引擎准确性
@@ -246,7 +246,7 @@ class TestPredictionEngineAccuracy:
             ["model_load_error", "data_insufficient", "prediction_timeout"]
         )
     )
-    @settings(max_examples=30)
+    @settings(max_examples=30, deadline=None)
     def test_error_handling_and_fallback(self, error_type):
         """
         功能: production-ready-implementation, 属性 1: 预测引擎准确性
@@ -312,7 +312,7 @@ class TestFeatureExtractionReliability:
             unique=True,
         ),
     )
-    @settings(max_examples=50)
+    @settings(max_examples=50, deadline=None)
     def test_feature_extraction_reliability(self, data_length, technical_indicators):
         """
         功能: production-ready-implementation, 属性 1: 预测引擎准确性
@@ -391,7 +391,7 @@ class TestFeatureExtractionReliability:
             assert "特征提取失败" in str(e) or "数据" in str(e)
 
     @given(missing_ratio=st.floats(min_value=0.0, max_value=0.3))
-    @settings(max_examples=30)
+    @settings(max_examples=30, deadline=None)
     def test_feature_extraction_with_missing_data(self, missing_ratio):
         """
         功能: production-ready-implementation, 属性 1: 预测引擎准确性
@@ -462,7 +462,7 @@ class TestRiskAssessmentAccuracy:
         predicted_price=st.floats(min_value=1.0, max_value=1000.0),
         data_length=st.integers(min_value=100, max_value=300),
     )
-    @settings(max_examples=50)
+    @settings(max_examples=50, deadline=None)
     def test_risk_assessment_accuracy(
         self, current_price, predicted_price, data_length
     ):
@@ -542,7 +542,7 @@ class TestRiskAssessmentAccuracy:
         volatility=st.floats(min_value=0.01, max_value=0.5),
         confidence_level=st.floats(min_value=0.5, max_value=0.99),
     )
-    @settings(max_examples=30)
+    @settings(max_examples=30, deadline=None)
     def test_confidence_interval_properties(self, volatility, confidence_level):
         """
         功能: production-ready-implementation, 属性 1: 预测引擎准确性

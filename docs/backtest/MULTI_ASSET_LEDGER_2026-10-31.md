@@ -2989,7 +2989,7 @@ grep -rln "nav_daily" → backend/scripts/paper_daily_nav.py
 | 前端 `frontend/src/app/paper-portfolio/page.tsx` | 读 `/api/v1/trading/signal`（**不读** `nav_daily`） |
 | 后端 `signal_service.py` | 曲线 `nav` 来自 **ledger.csv 的 `portfolio_value`**（= 调仓日净值点，周频） |
 | `nav_basis` 字段 | 已诚实披露：**"调仓日净值点（周频）"**，并注明"回撤会被低估" |
-| 定时任务 | **没有**（launchd 只有 `com.rone.paper-portfolio` → 周频 `weekly_paper_portfolio.sh`；crontab 空） |
+| 定时任务 | ⚠️ **2026-11-03 订正：已有** —— Hermes cron `0294eb16149f`（`daily_nav.sh`，工作日 18:20），2026-11-02 20:20 才建、`last_run_at=null`，**首次执行是 2026-11-03 18:20**。（原记"没有"作废：写这行时 job 尚未创建。launchd 侧只有 `com.rone.paper-portfolio` → 周频 `weekly_paper_portfolio.sh`） |
 
 方案书 `docs/plans/2026-11-01-paper-daily-mark-to-market.md:163` 把
 "前端曲线是否同步接"列为**待定项**（推荐：先做数据层，前端用一个开关接上），
@@ -3013,7 +3013,7 @@ grep -rln "nav_daily" → backend/scripts/paper_daily_nav.py
 | 方案 | 内容 | 风险 |
 |---|---|---|
 | A | 只接数据层：API 增加 `nav_daily` 字段（只增不改，不改前端） | 最低；前端不动 |
-| B | A + 前端曲线切到日频 + 加每日 launchd 定时任务 | 中；涉及前端展示口径与新定时任务 |
+| B | A + 前端曲线切到日频 | 中；涉及前端展示口径。<br>⚠️ 2026-11-03 订正：**定时任务部分已落地**（cron `0294eb16149f` 工作日 18:20），B 只剩前端切换 |
 | C | 暂不动 | 日频盯市继续"无消费者"（但它现在**根本没在定时跑**） |
 
 推荐 **B，但拆两步**：先 A（可独立验证口径与日/周残差），确认后再上前端与定时。
@@ -3289,3 +3289,122 @@ OMP_NUM_THREADS=4 → EXIT=139 （Segmentation fault）
 - OpenMP 多线程在本机不可用 → lightgbm 训练单线程。生产参数本来就是 `num_threads=1`，**无性能损失**；将来若要提速，须先解决 libomp 与 fork 的兼容
 - `official_lgbm_model.py` 顶部 docstring 记的"MLflow recorder 路径会 segfault"属**同一类**原生崩溃，本次被 OMP 锁一并覆盖，但 recorder 路径本身未深挖
 - loguru 的 `exc_info=True` **无效**（loguru 要 `logger.opt(exception=True)`）—— 异常栈全丢，本轮排障被迫靠 print 探针。**已修（202 处）**：31 个 loguru 模块批量改写为 `logger.opt(exception=True).error(...)`；另有 10 处在标准 `logging` 模块里（`exc_info` 本身有效），**保持原样**
+
+
+---
+
+## §12.45 日频盯市接入接口（§12.41 方案 A 落地）+ 硬编码路径清理 —— 2026-11-03
+
+### A. 背景：§12.41 那个"建好了没人用"的东西
+
+`data/paper/<strategy>_nav_daily.json`（日频盯市净值）早就算得出来，但
+**接口不暴露、前端不读**。§12.41 已给出 A/B/C 三方案，
+本节落地 **方案 A（数据层接入，只增不改）**；B（前端口径切换）属行为变更，
+**留待拍板**。
+⚠️ **2026-11-03 订正**：§12.41 写的"没有定时任务"**已作废** —— Hermes cron
+`0294eb16149f`（`daily_nav.sh`，工作日 18:20）2026-11-02 20:20 就建好了，
+只是 `last_run_at=null`、首次执行是 **2026-11-03 18:20** → **方案 C 实际已落地**，
+剩下要拍板的只有 B。**教训：断言"某机制不存在"之前必须查运行态**
+（cron 的 `last_run_at` / `next_run_at`、launchd 的 `runs` 计数、产物 mtime），
+不能只看文档或目录里有没有脚本。
+
+### B. 改动
+
+**后端** `app/services/trading/signal_service.py`：
+
+| 位置 | 改动 |
+|---|---|
+| 新增 `load_nav_daily(strategy)` | 读日频产物，规整为 `available/basis/n_points/n_stale_points/updated_at/initial_capital/points` |
+| 新增 `_nav_daily_path(strategy)` | `data/paper/<strategy>_nav_daily.json` |
+| `daily_signal()` no_data 分支 | 挂 `nav_daily`（无信号时也如实说有没有日频数据） |
+| `daily_signal()` 正常分支 | 挂 `nav_daily` |
+| `performance()` | 挂 `nav_daily`（周频 `nav_basis/nav_points` **原样保留**） |
+
+**三条诚实披露原则**（写进函数 docstring，也有测试守着）：
+
+1. **没有日频数据就说没有** —— `available=False` + `note` 说明原因，
+   不能返回空数组让人以为"净值没波动"
+2. **陈旧价格必须透出** —— `stale_price` 非空 = 该点用的是非当日收盘价；
+   吞掉它等于伪造精度 → 逐点保留 + 单独计数 `n_stale_points`
+3. **新鲜度必须透出** —— 日频产物由 cron `0294eb16149f`（工作日 18:20）产出，
+   但**可能滞后**（首次执行 2026-11-03 18:20；本次产物 mtime 2026-11-02 20:39）
+   → `updated_at` 是数据有多旧的唯一证据 → 原样给出
+
+**测试** `tests/unit/trading/test_signal_nav_daily.py`（7 项，全通过）：
+缺产物 / 产物无可用点 / 单点坏值不拖垮整份 / 陈旧价保留并计数 /
+接口只增不改 / 周频字段未改名 / 真实产物可读且日期有序。
+
+### C. 验证（真实调用，非构造数据）
+
+```
+daily_signal('22f').nav_daily  → available=True n_points=12 stale=0
+                                  updated_at=2026-11-02T20:39:32
+performance('22f')             → nav_basis='调仓日净值点（周频）' nav_points=4
+                                  nav_daily.n_points=12
+```
+
+**日频 12 点 vs 周频 4 点** —— 两套口径并存、**不合并**：
+日频点数多（20 点 ≈ 1 个月，周频 20 点 ≈ 5 个月），能抓到持仓期内回撤；
+但口径不同（`total_return@trade_day` vs 调仓日净值点），
+**混在一张图里比就是口径造假** → 前端切换属方案 B，等拍板。
+
+### D. 顺带清理：5 处硬编码旧机器路径
+
+`/Users/ronghui/Documents/GitHub/willrone` 在本机无效，全部改为从 `__file__` 解析：
+
+| 文件 | 改法 |
+|---|---|
+| `test_phase3_optimization.py` | `sys.path` → `Path(__file__).resolve().parent` |
+| `test_phase4_multiprocess.py` | `project_root` → `Path(__file__).resolve().parent.parent` |
+| `create_phase3_task.py` | 产物输出 → 本文件所在目录 |
+| `tests/scripts/run_qlib_optimizations_test.py` | `sys.path` → `parents[2]`（改后单跑 6/6 通过） |
+| `scripts/test_optuna_optimization.py` | docstring 里的 `cd` 示例 → `<项目根>/backend` |
+
+**故意不改**：`tests/scripts/test_alpha158_handler.py:4` 的 docstring 里
+`/Users/ronghui` 是**"原来长什么样"的历史说明**，改了会丢可追溯性。
+
+### E. 一个 hypothesis 假红：**已定位根因并修掉**（不是"已知 flaky 放过"）
+
+现象：全量 `tests/` 跑到 100% 时出现 1 个失败：
+`tests/unit/tasks/test_task_management_properties.py::TestTaskManagementIntegrity::test_task_statistics_integrity`
+→ `hypothesis.errors.FlakyFailure`。
+
+**根因（读到 traceback 才发现，与第一直觉不同）**：
+不是断言失败，是 **`hypothesis.errors.DeadlineExceeded` —— 超时**。
+
+```
+Falsifying example: test_task_statistics_integrity(task_count=13, days_back=28)
+Unreliable test timings! On an initial run, this test took 343.83ms, which exceeded
+the deadline of 200.00ms, but on a subsequent run it took 7.82 ms, which did not.
+```
+
+- `@settings(max_examples=30)` **没设 `deadline=None`** → hypothesis 默认 deadline **200ms**
+- 任何碰 DB/IO 的属性测试**首次运行**都要几百 ms（SQLAlchemy 首次初始化 + 缓存冷）
+  → 首跑超时即炸，hypothesis 重放时已热（7.82ms）就过 → 报 `FlakyFailure`
+- **这压根不是 flaky，是配置错**：同一文件里已有两处 `@settings(..., deadline=None)`
+  （第 182/349 行），说明此前有人已经在这类问题上栽过一次，但只修了那两处
+
+**修法（全仓统一，不是只补出错那一处）**：`@settings(...)` 一律补 `deadline=None`。
+脚本扫 `tests/**/*.py`，**4 个文件 29 处**（含 2 处多行块）全部补齐：
+
+| 文件 | 处数 |
+|---|---|
+| `tests/unit/tasks/test_task_management_properties.py` | 9 |
+| `tests/unit/prediction/test_prediction_engine_properties.py` | 12 |
+| `tests/unit/backtest/test_backtest_data_adapter_properties.py` | 5 |
+| `tests/unit/infrastructure/test_infrastructure_properties.py` | 3 |
+
+**验证**：改后 `grep -c` 全仓 `@settings` 缺 deadline = **0 处**；
+flaky 那个文件**连跑 3 次全绿**。
+
+**方法论沉淀**（已写进 skill 陷阱 15）：
+判定 hypothesis 假红**第一步是看异常类型**，不是先猜业务回归：
+- `DeadlineExceeded` → 超时假红 → 补 `deadline=None`（配置错，与业务无关）
+- `AssertionError` + 共享 setup 实例 → example 隔离问题 → 清历史 + 补确定性复现用例
+- 两者都不是 → 才 `git stash` 比对基线判真回归
+
+### F. 待拍板（未动手）
+
+- **方案 B**：前端口径切换（纸面盘日频曲线 + 明确标注周频口径）
+- ~~方案 C：日频盯市定时任务~~ → **已落地**（cron `0294eb16149f`，工作日 18:20，
+  首次执行 2026-11-03 18:20；跑完需验 `runtime/logs/daily_nav_*.log` 与产物 mtime）

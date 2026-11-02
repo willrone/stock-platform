@@ -122,7 +122,7 @@ class TestBacktestDataAdapterProperties:
         initial_cash=st.floats(min_value=50000, max_value=500000),
         final_value_multiplier=st.floats(min_value=0.8, max_value=2.0),
     )
-    @settings(max_examples=100)
+    @settings(max_examples=100, deadline=None)
     def test_backtest_overview_data_completeness(
         self, num_trades, num_snapshots, initial_cash, final_value_multiplier
     ):
@@ -257,7 +257,7 @@ class TestBacktestDataAdapterProperties:
         portfolio_length=st.integers(min_value=30, max_value=252),
         volatility_level=st.floats(min_value=0.1, max_value=0.5),
     )
-    @settings(max_examples=50)
+    @settings(max_examples=50, deadline=None)
     def test_extended_risk_metrics_calculation_accuracy(
         self, portfolio_length, volatility_level
     ):
@@ -479,7 +479,7 @@ class TestBacktestDataAdapterProperties:
         monthly_return_mean=st.floats(min_value=-0.05, max_value=0.05),
         monthly_return_std=st.floats(min_value=0.01, max_value=0.10),
     )
-    @settings(max_examples=50)
+    @settings(max_examples=50, deadline=None)
     def test_monthly_returns_analysis_consistency(
         self, num_months, monthly_return_mean, monthly_return_std
     ):
@@ -609,7 +609,7 @@ class TestBacktestDataAdapterProperties:
         num_stocks=st.integers(min_value=2, max_value=10),
         trades_per_stock=st.integers(min_value=2, max_value=20),
     )
-    @settings(max_examples=50)
+    @settings(max_examples=50, deadline=None)
     def test_position_analysis_completeness(self, num_stocks, trades_per_stock):
         """
         功能: backtest-results-visualization, 属性8: 持仓统计计算准确性

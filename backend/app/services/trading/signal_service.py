@@ -176,6 +176,80 @@ def _ledger_path(strategy: str) -> str:
     return os.path.join(PAPER_DIR, f"{strategy}_ledger.csv")
 
 
+def _nav_daily_path(strategy: str) -> str:
+    return os.path.join(PAPER_DIR, f"{strategy}_nav_daily.json")
+
+
+def load_nav_daily(strategy: str) -> Dict[str, Any]:
+    """读取**日频盯市**净值点（§12.41 方案 A：只增不改的数据层接入）。
+
+    产物由 `backend/scripts/paper_daily_nav.py` 写，格式：
+        {strategy, basis, initial_capital, updated_at,
+         points: [{date, value, return_pct, n_positions, stale_price}]}
+
+    三条诚实披露原则（不要替用户做假设）：
+      1. **日频产物由 Hermes cron `0294eb16149f`（工作日 18:20）产出，但可能滞后**
+         → `updated_at` 就是数据新鲜度，必须透出（该 job 2026-11-02 20:20 才建，
+         首次执行是 2026-11-03 18:20）
+      2. `stale_price` 非空 = 该点用的是非当日收盘价 → **不能吞掉**，前端要能标记
+      3. 缺产物 / 点不可用 → 明确 `available=False`，不返回空数组冒充"没有波动"
+
+    口径：`total_return@trade_day`（总回报口径），与周频 `nav_basis`
+    是**两套口径**，不能混在一张图里比。
+    """
+    empty: Dict[str, Any] = {
+        "available": False,
+        "basis": None,
+        "n_points": 0,
+        "n_stale_points": 0,
+        "updated_at": None,
+        "initial_capital": None,
+        "points": [],
+        "note": "暂无日频盯市数据（data/paper/<strategy>_nav_daily.json 不存在）；"
+            "该产物由 cron 0294eb16149f 工作日 18:20 产出",
+    }
+    raw = _read_json(_nav_daily_path(strategy))
+    if not isinstance(raw, dict):
+        return empty
+
+    points: List[Dict[str, Any]] = []
+    for p in raw.get("points") or []:
+        if not isinstance(p, dict):
+            continue
+        raw_value = p.get("value")
+        if raw_value is None:  # ⚠️ 不能用 `or 0`：0 是合法净值
+            continue
+        try:
+            value = float(raw_value)
+        except (TypeError, ValueError):
+            continue
+        points.append(
+            {
+                "date": p.get("date"),
+                "value": round(value, 2),
+                "return_pct": p.get("return_pct"),
+                "n_positions": p.get("n_positions"),
+                "stale_price": p.get("stale_price"),
+            }
+        )
+    if not points:
+        return {**empty, "note": "日频盯市产物存在，但没有可用数据点"}
+
+    return {
+        "available": True,
+        "basis": raw.get("basis"),
+        "n_points": len(points),
+        "n_stale_points": sum(1 for p in points if p.get("stale_price")),
+        "updated_at": raw.get("updated_at"),
+        "initial_capital": raw.get("initial_capital"),
+        "points": points,
+        "note": (
+            "note": "日频盯市（total_return 口径，与周频 nav_basis 是两套口径）；"
+                "由 cron 0294eb16149f 工作日 18:20 产出，updated_at 即数据新鲜度",
+        ),
+    }
+
+
 def extract_nav_from_trades(
     trades: List[Dict[str, Any]],
 ) -> tuple[List[float], List[str]]:
@@ -300,6 +374,8 @@ class TradingSignalService:
                 "buys": [],
                 "sells": [],
                 "holds": [],
+                # 日频盯市（§12.41 A）：即使无信号也要如实说有没有日频数据
+                "nav_daily": load_nav_daily(strategy),
             }
 
         buys = []
@@ -410,6 +486,9 @@ class TradingSignalService:
                 "board_lot": BOARD_LOT,
             },
             "fill_assumption": "信号在收盘后生成，按下一交易日开盘/收盘价成交",
+            # ── 日频盯市净值点（§12.41 方案 A：只增不改）──
+            # 周频净值点在 performance() 里；这里是"每个交易日盯市"的细粒度序列。
+            "nav_daily": load_nav_daily(strategy),
         }
 
     # ── 信号质量（信任凭证）──
@@ -559,6 +638,12 @@ class TradingSignalService:
             "nav_insufficient": len(nav) < 20,
             "nav_start": nav_dates[0] if nav_dates else None,
             "nav_end": nav_dates[-1] if nav_dates else None,
+            # ── 日频盯市净值点（§12.41 方案 A：只增不改，不动周频口径）──
+            # 周频 nav_* 是"调仓日净值点"，日频 nav_daily 是"每个交易日盯市"，
+            # **两套口径**：日频点数多（20 点 ≈ 1 个月 vs 周频 ≈ 5 个月），
+            # 能抓到持仓期内的回撤；但日频产物目前没有定时任务在跑，
+            # 新鲜度看 nav_daily.updated_at。
+            "nav_daily": load_nav_daily(strategy),
             "n_buys": len(buys),
             "n_sells": len(sells),
             "realized_pnl": round(realized, 2),
