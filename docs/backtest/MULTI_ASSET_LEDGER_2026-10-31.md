@@ -3506,3 +3506,79 @@ $ bash scripts/daily_nav.sh
 **本轮提交**：
 `f8b91c76` 台账闭环 → `chore` 硬编码路径清理 → `2efaff65` 日频接入 + hypothesis 超时修复 →
 `003ff160` 修 SyntaxError → 本次台账增补。
+
+
+---
+
+## §12.47 运行时端口错配：前端一直连着一个「源码已删的免鉴权孤儿实例」—— 2026-11-03
+
+### A. 发现路径（从「前端拿不到 nav_daily」倒查出来的）
+
+我改完 `signal_service` 后去前端验证，**浏览器 fetch 拿到的响应里没有 `nav_daily`**。
+本以为是浏览器缓存 → 加 `cache:'no-store'` + 时间戳仍没有 → 判定是**后端不是新代码**。
+于是逐层倒查：
+
+| 层 | 查到的 | 结论 |
+|---|---|---|
+| 浏览器 → 前端 | `/api/v1/trading/signal` **200，有数据** | 前端代理是通的 |
+| 前端 next dev 的 env | `NEXT_PUBLIC_API_URL=http://127.0.0.1:8890` | 代理目标是 **8890** |
+| `.env.local` | `NEXT_PUBLIC_API_URL=http://127.0.0.1:18082` | **与实际生效值不一致** |
+| `next.config` 兜底 | `NEXT_PUBLIC_BACKEND_HOST \|\| NEXT_PUBLIC_API_URL \|\| 'localhost:8000'` | 兜底是 **8000 = splash（本地 LLM 服务）** |
+| `scripts/env.sh` 约定 | backend **18082** / frontend **13000** / data-api **5002** | 约定端口是 18082 |
+| :18082 | `curl` err=7（连接被拒） | **约定端口上没有服务** |
+| :8889 | `uvicorn app.main:app`（8:33AM 起） | 本项目的正式后端，但**前端没连它** |
+| **:8890** | `uvicorn verify_app:app`（9:25AM 起） | **前端真正连的是它** |
+| `backend/verify_app.py` | **磁盘上不存在**（`ls` 报 No such file） | 源码已删，**进程还活着** |
+
+**根因**：某个会话用 `NEXT_PUBLIC_API_URL=http://127.0.0.1:8890` 手工起了前端，
+配套起了一个 `verify_app`（**免鉴权**）在 8890。源码后来删了，**进程没杀**。
+于是：**改任何后端代码，前端都看不到**（它连的是另一个实例），
+而且那个孤儿实例**免鉴权** → 页面看起来"能用"，掩盖了配置已经错位的事实。
+
+### B. 修复（对齐项目约定端口）
+
+1. kill `12917`（verify_app 孤儿）与 `8889`（我自己起的那个实例）
+2. 后端归位：`bash scripts/dev-backend.sh` → **18082**（用 `env.sh` 的约定端口 + `backend_python_bin`）
+   → `health=200`，日志 `runtime/logs/backend_18082.log`
+3. 前端归位：`bash scripts/dev-frontend.sh` → **13000**，它会
+   `export NEXT_PUBLIC_API_URL=http://127.0.0.1:18082` → 前端 → 后端打通
+   （`curl 13000/api/v1/health` 返回后端信封 ✓）
+
+**副作用（必须知情）**：正式后端**要鉴权**，之前那个孤儿实例免鉴权 →
+**纸面盘页现在需要登录**（免费账号还会被付费墙拦成 403）。
+这是**修正**不是退化：免鉴权实例本来就违反鉴权设计（陷阱 43/44/47/48 的同一类问题）。
+
+### C. 端到端验证（真实 HTTP + 鉴权 + 付费墙，全链路）
+
+```
+POST /auth/register  → 201（拿到 token）
+UPDATE users SET subscription_tier='enterprise' ... → 1 row（免费账号本会 403）
+GET /trading/signal?strategy=22f      → 200  has_nav_daily=True
+     available=true basis=total_return@trade_day n_points=12 n_stale_points=0
+     updated_at=2026-11-03T05:35:07  initial_capital=1,000,000
+     首点 2026-10-16 (998795.88 / -0.12%) → 末点 2026-11-02 (978982.94 / -2.10%)
+GET /trading/performance?strategy=22f  → 200  nav_basis='调仓日净值点（周频）' nav_points=4
+                                           nav_daily.n_points=12   ← 两套口径并存
+GET /trading/strategies               → 200  7 条线
+```
+
+### D. 教训（已写进 skill 陷阱 55）
+
+1. **"前端拿不到新字段"先怀疑代理链路，再怀疑代码**：逐层查
+   `浏览器→前端→(env / .env.local / next.config)→后端端口→磁盘上的源码`。
+   **端口不是三处一致就一定一致** —— 生效的是**进程启动时的 env**，不是磁盘上的配置文件。
+2. **"源码已删但进程还活着"是隐蔽的毒源**：它会持续提供**过期代码 + 可能更宽松的鉴权**，
+   让"改了没生效"看起来像"代码写错了"。定期用 `lsof -iTCP` 对一遍端口占用，
+   并确认每个监听端口的 `cwd` 与源码文件**都还在**。
+3. **兜底默认值必须指向同类服务**：`next.config` 的兜底 `localhost:8000` 指向的是
+   **splash（本地 LLM 服务）** → 一旦 env 丢失，API 请求会被代理到 LLM 服务，
+   返回 `{"error":{"type":"invalid_request_error"}}` —— 看起来像"接口报错"，
+   实际是"打错服务"。兜底应指向**同项目约定端口**（18082）。
+4. **孤儿免鉴权实例会掩盖鉴权问题**：页面"能看"不等于"配置对"。
+
+### E. 遗留（待办）
+
+- 探针账号 `navprobe`（enterprise，密码已知）**方案 B 验收后必须删**（当前留着是为了 B 的截图验证）
+- `next.config` 的兜底端口仍指向 8000（splash）→ 建议改成 18082（**行为变更，等拍板**）
+- 浏览器实测截图在本轮没做成：`Page.captureScreenshot` 两次都 60s 超时
+  （页面 2804px 高 + dev server 首次编译）；方案 B 验收必须解决这个（用视口截图 + 等编译完成）
