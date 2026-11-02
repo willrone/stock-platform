@@ -2189,3 +2189,130 @@ rsync 3.x 不同：
 - **Time Machine 失效**（`tmutil latestbackup` → "Failed to mount destination"）：
   系统级备份当前不提供任何保护，需单独修。
 - **外接盘未插时的行为**：排期会 rc=2 明确报错并通知（这是期望行为，不是缺陷）。
+
+## 12.31 `norecursedirs=["scripts"]` → `tests/unit/scripts/` **整目录从未被采集**（2026-11-02）
+
+### A. 触发
+
+落地纸面盘观测口径层时顺手查 pytest 采集范围，发现 `backend/tests/unit/scripts/`
+里的测试**从来没有跑过** —— 而且其中一条断言已经烂掉。
+
+### B. 根因
+
+`backend/pyproject.toml` 里：
+
+```toml
+norecursedirs = ["scripts", "__pycache__", ".git", ".venv", "venv", "dist", "build"]
+```
+
+pytest 的 `norecursedirs` 按**目录 basename** 匹配（不是按路径）→ 根目录下**任何**叫
+`scripts` 的目录都被排除 → `backend/tests/unit/scripts/` 连同它的 3 条测试一起
+从采集里消失了。而且 pytest **不会**报告"某目录没被采集"，所以这个洞是**静默**的。
+
+### C. 烂掉的断言（已被证实会红）
+
+`tests/unit/scripts/test_seed_strategy_configs.py` 硬编码：
+
+```python
+assert first == {"created": 6, ..., "total": 6}      # 脚本的 presets 早就涨到 17
+```
+
+把 HEAD 版本捞回来单跑（临时文件，已删）：
+
+```
+FAILED tests/unit/scripts/test_tmp_oldseed.py::test_seed_strategy_configs_is_idempotent
+{'created': 17} != {'created': 6}
+1 failed, 2 passed
+```
+
+→ 这条测试**如果当初被采集到**，第一次跑就是红的。
+
+### D. 修法
+
+1. `norecursedirs` 去掉 `"scripts"`。
+   **不需要它**：仓库根的 `backend/scripts/` 本来就被 `testpaths = ["tests"]` 排除，
+   去掉后只有 `tests/unit/scripts/` 恢复采集 → 采集面**只增不减**。
+2. 断言改成按 `len(module.DEFAULT_STRATEGY_CONFIG_PRESETS)` 取条数，不写死魔数。
+   真正的不变量是**幂等**（第一次全建、第二次全不改），不是"恰好 6 条"。
+
+### E. 验证
+
+- `pytest tests/unit/scripts --collect-only` → 3 tests（原先 0）。
+- 全量 `tests/unit`：737（基线）→ **752 passed**，0 failed。
+  拆账：+3 恢复采集（`tests/unit/scripts/`）+ 9 观测口径层 + 3 本轮空壳线回落 = 752。
+
+### F. 教训
+
+- **"测试目录存在"不等于"测试在跑"**：pytest 不会告诉你某个目录被配置排除了。
+  想知道采集面，唯一的办法是 `--collect-only` 看数量。
+- **写死的魔数断言会腐烂**：因为没人跑，它还能烂着；
+  改成从源数据推导条数，腐烂就变成"源数据变了，断言跟着变"。
+- 排除规则按 basename 匹配 → 目录名取个通用词（`scripts`/`tests`/`utils`）
+  会在**任何层级**误伤。改排除规则前先 `--collect-only` 存一份基线。
+
+## 12.32 纸面盘"读反"治理（观测口径层落地 + 空壳线 ¥0 误读，2026-11-02）
+
+### A. 触发
+
+用户要求"有股票平台的策略全貌视角"，复核纸面盘页时发现**这张表会被读反**，
+且读反的方式不止一种 —— 三种误读叠在一起，光看代码看不出来。
+
+### B. 三种误读（全部实测复现）
+
+| # | 误读 | 实测现象 | 根因 |
+|---|---|---|---|
+| ① | **裸 PnL 不可比** | 7 条线暴露度差 5 倍（17.5%~92.1%）；从未成交的线裸 PnL=0.00% 排在 4 条真亏钱的线**前面**；现金占 82.5% 的 `gbm_voltgt` 裸 PnL=-0.05%（像打平），投入段实际亏 0.30% | 只报总盈亏，不报暴露度 |
+| ② | **空壳线市值被读成 ¥0** | `multi_asset_final` 卡片大字 **¥0** + 下面"未建仓" → 读成"亏光了/爆仓"，实际是**100 万全在现金里，一股没买** | 空壳线**没有 holdings 文件** → `holdings.get("last_value", 0) or 0` 回落成 0；而 `portfolio.json` 注册表里是 `value=100万/cash=100万/n_positions=0` |
+| ③ | **as-of 不一致却不显示** | 3 条线到 10-26，3 条只到 10-23，混在一张表里比 | 观测层缺 `as_of` |
+
+### C. 修法
+
+1. **口径只实现一次**：`paper_portfolio.py::line_observation_metrics()` 出 6 个字段
+   （`as_of / exposure / invested_return_pct / n_trades / status / last_trade`），
+   重建路径与新跑路径共用（不写两份 —— 本项目已因"同套逻辑写两份"吃过亏）。
+2. **只增不改**：`signal_service.py` 透出新字段，既有字段语义与取值不动（门禁 d）。
+3. **展示红线**：`n_trades=0` 的线 PnL 显示 `—` 而不是 `0.00`；卡片同时给出
+   暴露度 / 投入段收益 / 数据日；**不一致时不排名**。
+4. **②的修法（事实修正，不是"只增不改"）**：holdings 里没有 `cash`/`last_value`
+   时回落到注册表。**坑**：判空必须 `is not None` 而不是 `or` ——
+   `cash=0`/`value=0` 是合法值（满仓线现金就是 0），用 `or` 会把满仓线说成全现金。
+5. **③的修法（前端）**：MUI 的 `caption` 变体渲染成 inline `<span>` →
+   观测行与策略描述**粘成一行**（"数据日 2026-10-26RSI 7/14/21 超卖…"）。
+   观测行加 `display: block`。
+
+### D. 验证（附实测输出）
+
+- 门禁 a/b/c：`tests/unit/trading/test_paper_portfolio_observation.py`（9 条）
+  + `test_signal_shell_line_value.py`（3 条，本轮新增，含"满仓线 cash=0 不被覆盖"）。
+- 门禁 d：全量 `tests/unit` 通过。
+- UI：headless Chrome 出图 + **量 DOM 坐标**（`描述行顶 ≥ 观测行底` 才算分行）
+  + DOM 取值逐卡核对（7/7），`multi_asset_final` 由 **¥0 → ¥1,000,000**，
+  PnL 显示 `—`，观测行显示"未建仓（从未成交 · 0.00% 不代表打平）"。
+
+### E. 顺带查清：本地验证实例的 429 是**桶的身份**问题，不是配置错
+
+页面一次拉 9 个请求（列表 + 7 条线 + 赛马）。实测第 11 个请求起 429：
+- **未登录** → IP 桶（`burst_size=10`）→ 被打爆；
+- **已登录** → user 桶（容量 = 每分钟额度 60）→ 不受影响。
+
+所以这是**本地未登录验证环境**的噪声，不是线上缺陷。
+本地验证用独立端口的验证实例（`scratch/verify_app.py`，只换 `require_current_user` 替身
++ 放开限流，**不改产品代码**）。
+
+> 踩坑两则：
+> ① `app.user_middleware` 里装的是 Starlette 的 `Middleware` **包装对象**，
+>    不是中间件实例 → 必须判 `_mw.cls`，用 `isinstance` 永远为假（我的第一版补丁
+>    就是这么静默失效的，还以为是自己算错）。
+> ② 守卫拦下 `pkill` 那条命令时，**整条命令都没执行** → 旧进程还活着，
+>    新进程因端口占用秒退 → 我对着一个"改了没生效"的进程查了半天。
+>    教训：改配置后先确认**在跑的那个进程**的启动时间/日志，别默认重启成功了。
+
+### F. 教训
+
+- **"显示 0"和"没有数据"是两回事**：`?? 0` 是最省事也最有害的兜底 ——
+  它把"这条线没数据"变成"市值归零"。该显示「暂无」就显示「暂无」。
+- **回落值要先问"哪个来源是真相"**：注册表（portfolio.json）是纸面盘的真相，
+  holdings 文件只是"成交过才有"的明细文件；前者覆盖后者才对。
+- **截图超时≠不能验证**：DOM 坐标量法比肉眼看图更硬（可重复、能判"分行"）。
+- **视觉改动必须量**：MUI 变体的默认 display（`caption` → inline span）不看渲染看不出来。
+
