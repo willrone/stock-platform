@@ -3747,3 +3747,78 @@ rsi_71421_ledger.csv                  True          66          13          15  
 ### E. 回归
 
 `test_fix_adj_cost_lock` + `test_paper_run_lock` + `test_ledger_column_contract` → 全绿。
+
+
+---
+
+## §12.50 pytest 根级 conftest 锁 OpenMP：治"跑到 100% 却打不出汇总行" —— 2026-11-03
+
+### A. 症状（极具迷惑性）
+
+全量 `pytest tests/` 进度条走到 **100%**，然后在**收尾阶段**进程崩掉，
+**pytest 的最终汇总行（"N passed, M skipped in Xs"）永远打不出来**。
+只看进度条 = 误判成"测试全过"。
+
+### B. 根因（不是我的代码错，是我跑法错 + 基础设施有洞）
+
+崩溃报告（`~/Library/Logs/DiagnosticReports/Python-2026-11-03-*.ips`）一串全是：
+
+```
+Python-2026-11-03-050749.ips  signal=SIGABRT type=EXC_CRASH
+Python-2026-11-03-050236.ips  signal=SIGSEGV type=EXC_BAD_ACCESS
+    frames: libomp.dylib +456300 | libomp.dylib +459028 | libomp.dylib +235476 | ...
+Python-2026-11-03-050217.ips  signal=SIGSEGV   （同一栈）
+Python-2026-11-03-050159.ips  signal=SIGSEGV   （同一栈）
+```
+
+**全部崩在 `libomp.dylib`（LLVM OpenMP 运行时）** —— 就是 §12.36 记过的那个老问题：
+
+| OMP_NUM_THREADS | 结果（§12.36 实测） |
+|---|---|
+| 1 | 正常 EXIT=0 |
+| 2 | Abort trap 134 |
+| 4 | **Segmentation fault 139** |
+
+**为什么又复发**：修复点是 `app/__init__.py:18` 和
+`app/services/qlib/official_lgbm_model.py` 的顶层
+`os.environ.setdefault("OMP_NUM_THREADS", "1")` —— 但那是**import app 时**才执行。
+pytest **收集阶段**若先 import 了 qlib / lightgbm / numpy（某些 test module 顶层就 import），
+`app` 还没被 import → setdefault **来不及** → OpenMP 多线程已初始化 → 段错误。
+
+**基础设施的洞**：`backend/conftest.py`（rootdir 级）**根本不存在** —— 只有 `tests/conftest.py`。
+没有根级 conftest，就没有任何东西保证"在所有 ML 库之前"锁住线程数。
+
+### C. 修复
+
+新建 `backend/conftest.py`（rootdir 级，**collection 开始时**加载，早于任何 test module import）：
+
+```python
+for _var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+    os.environ.setdefault(_var, "1")
+```
+
+→ **调用方不再需要记得带环境变量**。生产参数本来就是 `num_threads=1`（§12.36），
+所以**无性能损失**。
+
+### D. 新门禁 `tests/unit/trading/test_root_conftest_omp_guard.py`（5 用例）
+
+1. `backend/conftest.py` 必须存在（删了就红）
+2. 三个线程变量都要设置
+3. 必须用 `setdefault`（外部显式指定时不覆盖）
+4. **本 pytest 进程内** `OMP_NUM_THREADS == "1"` → 证明 conftest 真的在 collection 前执行了
+   （不是"文件里有这行"就算过）
+5. 干净子进程里也读到 `1` → 证明是环境层面生效
+
+### E. 为什么这条值得单独立节
+
+**教训一**：§12.36 修的是"代码里 setdefault"，但**没有覆盖 pytest 场景**
+（pytest 的 import 顺序和生产服务不同）→ 修复不完整。
+**教训二**："进度条 100%" ≠ "测试通过"。**没有汇总行就是没通过**，
+必须落盘 `EXITCODE=$?` 并核对。之前的回归报告一直写"888 passed"是因为带了汇总行；
+这次丢了汇总行我立刻重跑而没有报"通过"——这个判断是对的。
+
+### F. 后续
+
+- 所有回归命令统一改为**不手动带** OMP 环境变量（让 conftest 兜底），
+  并把 `EXITCODE=$?` 落盘 —— 这样"conftest 被删/失效"会立刻暴露成崩溃+非零退出，
+  而不是悄悄打不出汇总行。
