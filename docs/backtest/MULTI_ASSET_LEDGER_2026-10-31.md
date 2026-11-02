@@ -3408,3 +3408,101 @@ flaky 那个文件**连跑 3 次全绿**。
 - **方案 B**：前端口径切换（纸面盘日频曲线 + 明确标注周频口径）
 - ~~方案 C：日频盯市定时任务~~ → **已落地**（cron `0294eb16149f`，工作日 18:20，
   首次执行 2026-11-03 18:20；跑完需验 `runtime/logs/daily_nav_*.log` 与产物 mtime）
+
+### G. 顺带把「日频盯市 cron 首跑前置验证」做掉
+
+`daily_nav.sh` 是 Hermes cron `0294eb16149f` 的入口，而该 job **从未执行过**
+（`last_run_at=null`，首次执行 = 今天 18:20）。**首跑前不验证 = 今晚白跑**，
+所以在 cron 之前**手动跑了一次**：
+
+```
+$ bash scripts/daily_nav.sh
+[05:33:17] 纸面盘锁空闲（已等 00 秒）        # flock 探测（不是看锁文件存在）
+加载行情与后复权价格（较慢，约 2~4 分钟）……
+[load] 5549 stocks, 8756 days, panel=5513 55s
+[adj] 后复权价格合成: 5595 只 × 8756 天 56s
+数据末日 = 2026-11-02
+  [22f]             点数 12（2026-10-16 ~ 11-02）| 末日 ¥978,983（-2.10%）| 与周频末点一致 ✓
+  [honest_42f]      点数 12 | 末日 ¥975,144（-2.49%）| 与周频末点一致 ✓
+  [rsi_71421]       点数 12 | 末日 ¥984,152（-1.58%）| 与周频末点一致 ✓
+  [factor_ranking]  点数 12 | 末日 ¥985,425（-1.46%）| 与周频末点一致 ✓
+  [gbm_voltgt]      点数  7（2026-10-23 起）| 末日 ¥994,825（-0.52%）| 与周频末点一致 ✓
+  [honest_42f_neu]  点数  7（2026-10-23 起）| 末日 ¥936,671（-6.33%）| 与周频末点一致 ✓
+[05:35:08] paper_daily_nav exit=0
+```
+
+- **exit=0，6 条线全部产出**，每条线都与周频末点交叉校验一致 ✓（两套口径算出的末点必须吻合）
+- `gbm_voltgt` / `honest_42f_neu` 只有 7 点 → 这两条线**建仓晚**（2026-10-23 才起），
+  不是 bug；**点数不同不能当"缺数据"报**
+- **日频盯市立刻暴露了周频看不见的差异**：`honest_42f` -2.49% vs
+  `honest_42f_neu` **-6.33%**（差 **3.84pp**）→ 行业中性线在这段持仓期内明显更差。
+  周频只看调仓日末点，**看不出这段回撤发生在哪、什么时候** → 这正是做日频的意义
+- 跑完后接口复核：`updated_at` 从 2026-11-02T20:39 → **2026-11-03T05:35**，
+  `daily_signal().nav_daily.available=True`，末日点 `{date: 2026-11-02, value: 978982.94,
+  return_pct: -2.1017, n_positions: 30, stale_price: None}` ✓
+
+**结论**：cron 首跑无风险；**方案 C 实际已就绪**，§12.41 待拍板项只剩方案 B。
+
+### H. 本轮的一次自身失误（记录下来）
+
+改 `signal_service.py` 文案时，`patch` 的 `old_string` 因不唯一被匹配到**括号内部**，
+把 `"note": (` 的结构嵌套坏 → `SyntaxError` → **7 个测试文件 collection error**
+（全部是 `import signal_service` 失败的连锁，**不是 7 个独立问题**）。
+**是全量回归抓出来的**（代价：几分钟 + 一次重跑）。
+
+**流程修正**（已写进 skill 陷阱 54）：改完 `.py` 立刻
+`python -m compileall -q app tests`（秒级），再跑目标测试，再提交。
+**别靠全量回归兜底** —— 它抓得住但慢；而且「多个文件同时 collection error」时，
+**先查是不是同一个 import 根因**（`grep -A3 'ERROR collecting'`），别逐个去修。
+
+### I. 方案 B 的具体设计（**待点头，未动手**）
+
+**先纠正一个说法**：§12.41 原先描述 B 为"前端曲线切到日频"，这不准确。
+实测 `frontend/src/app/paper-portfolio/page.tsx`（977 行）**根本没有图表组件**
+（无 recharts / LineChart / AreaChart）—— 页面上那条"净值曲线对比"在 line 693，
+属于**同页的「策略赛马」板块**（月频 36 点复利还原），与纸面盘无关。
+→ **B 不是"切换口径"，是"新增一条纸面盘日频净值曲线"**。recharts 已在 `package.json`（^3.6.0）。
+
+**数据源（已就绪，零后端改动）**：`GET /api/v1/trading/signal?strategy=<key>`
+→ `nav_daily` 字段（§12.45 B 段已接入），结构：
+`{available, basis, n_points, n_stale_points, updated_at, initial_capital, points:[{date,value,return_pct,n_positions,stale_price}]}`
+
+**改动面（预估 1 个文件 + 1 个接口调用）**：
+
+| 位置 | 做什么 |
+|---|---|
+| `page.tsx` 纸面盘区 | 新增一张日频净值曲线卡片（recharts `LineChart`），`xAxis=dataKey="date"`、`yAxis=dataKey="value"` |
+| 数据获取 | 复用页里已有的 `/trading/signal?strategy=<key>` 响应，**不新增接口**（`nav_daily` 已在响应里） |
+| 曲线归一 | 画**净值**（元）还是**相对期初的累计收益%** —— **建议后者**（各线期初都 100 万，绝对值会掩盖差异） |
+| 必须同屏标注 | ① 口径：`total_return` 日频盯市 ② `updated_at`（数据新鲜度）③ `n_points` ④ 有 `stale_price` 的点用不同 marker |
+
+**明确不做**（防止口径造假）：
+- ❌ 不把日频与周频画在同一张图（`total_return` vs 调仓日净值点，两套口径）
+- ❌ 不用日频曲线去替换/覆盖纸面盘卡片上现有的"区间收益"数字（那是有明确起止日的口径）
+- ❌ 不加"自动刷新"按钮以外的行为变更（轮询/定时刷新属行为变更，要单独拍板）
+
+**验收标准（按既有标准，不接受"看起来没问题"）**：
+1. `npx tsc --noEmit` 无错 + `npm run build` 通过
+2. **CDP 截图确认实际渲染**（用户硬要求：禁止闭眼改色/改排版）—— 曲线有真实形状、坐标轴有日期刻度、
+   标注文字可读、不遮挡既有卡片
+3. 多线切换时曲线随 `strategy` 变化，且空数据（`available=false`）时显示明确提示而非空白卡片
+4. 后端 `tests/unit/trading/test_signal_nav_daily.py` 保持 7/7 通过
+
+**成本**：约 1 个前端文件 + 验证；无后端改动、无新依赖、无数据库变更。
+
+### J. 本轮最终验证（全部用真实执行结果，不是"应该没问题"）
+
+| 项 | 结果 |
+|---|---|
+| 全量 `tests/` | **889 收集 / 888 passed / 1 skipped（有意）/ 0 failed / 0 error / EXIT=0**（135 个文件） |
+| 新增 `tests/unit/trading/test_signal_nav_daily.py` | **7/7 通过** |
+| hypothesis 原 flaky 文件连跑 3 次 | **3/3 全绿**（补 `deadline=None` 后） |
+| 全仓 `@settings` 缺 `deadline` | **0 处** |
+| `compileall app tests` | **EXIT=0** |
+| `load_nav_daily('22f')` 真实调用 | `available=True n_points=12 stale=0 updated_at=2026-11-03T05:35` |
+| `daily_nav.sh` 手动首跑 | **exit=0**，6 条线全部产出，与周频末点逐条一致 ✓ |
+| 基线对比 | 11-02 全量 881 → 本轮 889（净增 8 个用例，0 新失败） |
+
+**本轮提交**：
+`f8b91c76` 台账闭环 → `chore` 硬编码路径清理 → `2efaff65` 日频接入 + hypothesis 超时修复 →
+`003ff160` 修 SyntaxError → 本次台账增补。
