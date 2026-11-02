@@ -154,17 +154,32 @@ def main() -> None:
             except Exception:
                 old = pd.DataFrame(columns=COLS)
             old["date"] = pd.to_datetime(old["date"])
-            # 以 TDX 的 pct_chg 为准更新同日期行；TDX 没有的日期保留 baostock 的
+            # ⚠️ 2026-11-02 修正：原来用 how="left" —— 只保留 **baostock 已有**的
+            #   日期，TDX 有而 baostock（T+1 才更新）还没有的**当天**被整个丢弃
+            #   → baostock_daily 里永远缺最近一个交易日
+            #   → load_adjusted_close 合成后复权价时该日整行 NaN
+            #   → 纸面盘 adj_cost 写成 NaN → 市值被冻结在买入金额（台账 §12.35）。
+            #   现在用 outer：TDX 独有的日期整行补进来（close/OHLCV 取 TDX，
+            #   turn/PE/PB 无来源置 NaN），两边都有的行以 TDX 的 pct_chg 为准。
             merged = old.merge(
-                new_df[["date", "pct_chg", "trade_status"]],
-                on="date", how="left", suffixes=("", "_tdx"),
+                new_df,
+                on="date", how="outer", suffixes=("", "_tdx"),
             )
             mask = merged["pct_chg_tdx"].notna()
             merged.loc[mask, "pct_chg"] = merged.loc[mask, "pct_chg_tdx"]
             merged.loc[mask, "trade_status"] = merged.loc[mask, "trade_status_tdx"]
-            out = merged[[c for c in COLS if c in merged.columns]].drop(
+            # 其余字段：baostock 优先，缺失时用 TDX 补（TDX 独有日期的关键路径）
+            for _c in COLS:
+                if _c in ("date", "pct_chg", "trade_status"):
+                    continue
+                _tc = f"{_c}_tdx"
+                if _tc in merged.columns:
+                    _m = merged[_c].isna() & merged[_tc].notna()
+                    merged.loc[_m, _c] = merged.loc[_m, _tc]
+            merged = merged.drop(
                 columns=[c for c in merged.columns if c.endswith("_tdx")], errors="ignore"
             )
+            out = merged[[c for c in COLS if c in merged.columns]]
             updated += 1
         else:
             out = new_df[COLS]
