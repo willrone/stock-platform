@@ -373,6 +373,65 @@ def save_holdings(strategy: str, data: Dict[str, Any]) -> None:
         json.dump(data, fh, ensure_ascii=False, indent=1)
 
 
+# ── 进程互斥锁（2026-11-02）──────────────────────────────────────────
+# 为什么要：纸面盘今天有**三个排期**都会调 scripts/paper_portfolio.py
+#   ① launchd com.rone.tdx-update  16:05（daily_tdx_update.sh 第 5 步，周一）
+#   ② Hermes cron tdx-daily-update 17:30（同一个 daily_tdx_update.sh）
+#   ③ launchd com.rone.paper-portfolio 17:40（+ 周二 09:20 兜底）
+# 实测 2026-11-02：② 跑到 17:44:55，而 ③ 在 17:40:04 就启动了
+#   → 两个进程**并发写**同一批 holdings/ledger/portfolio.json
+#   → 后写者赢 → 前者的成交明细可能被**静默覆盖**。
+#   今晚没出事是运气（② 正好漏了 honest_42f_neu，③ 补上了）。
+#
+# 语义：**等待，不跳过** —— ③ 若直接跳过，② 漏掉的线就永远补不回来
+#   （honest_42f_neu 今晚正是靠 ③ 才补成交成功的）。
+LOCK_FILENAME = ".paper_portfolio.lock"
+
+
+def lock_path() -> str:
+    """锁文件路径（**函数内**算 → 测试可重定向 PAPER_DIR）。"""
+    return os.path.join(PAPER_DIR, LOCK_FILENAME)
+
+
+def acquire_run_lock(timeout_s: int = 1800, poll_s: float = 5.0) -> int:
+    """取纸面盘互斥锁；返回 fd（调用方须保持它开着直到进程结束）。
+
+    - 拿不到就**等**（最多 timeout_s 秒），不是跳过；
+    - 超时 → 打印原因并 sys.exit(75)（EX_TEMPFAIL：临时性失败，值得重试）。
+    """
+    import fcntl
+    import time as _time
+    os.makedirs(PAPER_DIR, exist_ok=True)
+    fd = os.open(lock_path(), os.O_CREAT | os.O_RDWR, 0o644)
+    deadline = _time.time() + max(0, timeout_s)
+    waited = False
+    while True:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            break
+        except OSError:
+            if _time.time() >= deadline:
+                os.close(fd)
+                print(
+                    f"❌ 纸面盘互斥锁等待超时（{timeout_s}s）：另有实例正在跑"
+                    f"（锁文件 {lock_path()}）。本次不启动，避免并发写账本。",
+                    flush=True,
+                )
+                sys.exit(75)
+            if not waited:
+                print(
+                    "⏳ 另有纸面盘实例正在跑（可能是 17:30 数据任务那一档）"
+                    f"→ 等待它结束（最多 {timeout_s}s）……",
+                    flush=True,
+                )
+                waited = True
+            _time.sleep(poll_s)
+    os.ftruncate(fd, 0)
+    os.lseek(fd, 0, os.SEEK_SET)
+    os.write(fd, f"pid={os.getpid()} started={_time.strftime('%F %T')}\n".encode())
+    return fd
+
+
 # ── 观测口径层（方案书附录 A，2026-11-02）────────────────────────────
 # 为什么要有这一层：7 条线的暴露度差 5 倍（17.5% ~ 92.1%），**总盈亏在暴露度
 # 不同的情况下不可比**。实测两个已发生的误读：
@@ -1568,6 +1627,10 @@ def main() -> None:
     ap.add_argument("--capital", type=float, default=1_000_000.0)
     ap.add_argument("--force", action="store_true", help="非周五也跑")
     args = ap.parse_args()
+
+    # 互斥锁：防止 16:05 / 17:30 / 17:40 三档并发写同一批账本文件
+    # （拿不到就等待，等待超时才退出 —— 见 acquire_run_lock 的说明）
+    _lock_fd = acquire_run_lock()
 
     codes = ds.list_universe()
     frames, panel, master = ds.load_data(codes)

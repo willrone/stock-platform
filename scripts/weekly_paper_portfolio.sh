@@ -64,6 +64,16 @@ grep -vE "INFO |WARNING " "$RAW" >"$LOG.tmp"
 } >>"$LOG"
 rm -f "$LOG.tmp"
 
+# ── 第 3 步：信号质量统计（2026-11-02 从 daily_tdx_update.sh 搬过来）──
+# 为什么搬：它统计「每个历史买入信号发出后 T+1/T+5/T+10/T+20 的超额收益与
+# 胜率」，读的是**纸面盘 ledger 里的成交记录** → 必须**排在纸面盘之后**跑，
+# 才统计得到当次成交。原来它跟纸面盘写在同一个 if 块里（周一），
+# 现在纸面盘由本脚本负责，它也归本脚本 —— 单一责任源。
+echo "=== signal quality ==="
+env -u PYTHONPATH -u PYTHONHOME "$PY" scripts/signal_quality.py >>"$RAW" 2>&1 || \
+  echo "⚠️ signal_quality 失败（不影响主流程）"
+echo "=== signal quality done ==="
+
 # 保留最近 8 次日志，避免 runtime/logs 无限增长
 ls -1t "$LOG_DIR"/paper_portfolio_*.log 2>/dev/null | tail -n +9 | while read -r f; do
   rm -f "$f" "$f.raw"

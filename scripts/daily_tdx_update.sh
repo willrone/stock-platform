@@ -42,27 +42,22 @@ print(run_incremental())
   env -u PYTHONPATH backend/.venv-py313/bin/python3 \
     backend/scripts/check_data_freshness.py --fail-if-stale
 
-  # 5) 周一收盘后自动跑多策略纸面盘（各线独立 100 万记账）
-  #    22f / honest_42f / rsi_71421 / factor_ranking
-  #
-  #    2026-10-26 改为**周一**而不是周五：纸面盘口径改成 lag1
-  #    （周五收盘出信号 → **下一交易日**成交，价格和涨跌停判定都在成交日）。
-  #    周五跑的时候下一交易日的数据还不存在 → 只能周一收盘后跑。
-  #    信号日仍取「master 里最后一个周五」，成交日取它的下一个交易日。
-  if [ "$(date +%u)" = "1" ]; then
-    echo "=== Monday: multi-strategy paper portfolio (lag1: 周五信号→周一成交) ==="
-    env -u PYTHONPATH backend/.venv-py313/bin/python3 backend/scripts/paper_portfolio.py
-    echo "=== paper portfolio done ==="
-
-    # 6) 信号质量统计（2026-10-25 新增）
-    #    回答「这个信号到底准不准」：每个历史买入信号发出后
-    #    T+1/T+5/T+10/T+20 的超额收益与胜率。
-    #    同时把后复权价格与基准算好，供信号服务使用。
-    echo "=== signal quality ==="
-    env -u PYTHONPATH backend/.venv-py313/bin/python3 backend/scripts/signal_quality.py || \
-      echo "signal_quality 失败（不影响主流程）"
-    echo "=== signal quality done ==="
-  fi
+  # 5) 纸面盘 + 信号质量统计 —— **已移出本脚本**（2026-11-02）
+  #    原来这里在周一跑 paper_portfolio.py + signal_quality.py，但本脚本被
+  #    **两个排期**调用：
+  #      · launchd com.rone.tdx-update  16:05（周一~周五）
+  #      · Hermes cron tdx-daily-update 17:30（同一脚本）
+  #    两个问题：
+  #      ① 16:05 那次**注定失败**：TDX 当日日线包实测 17:30 才落地
+  #         → 16:05 时数据还停在上一交易日 → lag1 口径下 7 条线全部拒绝成交
+  #         → 脚本非零退出（launchctl 里长期显示 exit 3，看着像故障）。
+  #      ② **并发写账本**：2026-11-02 实测 17:30 那次跑到 17:44:55，
+  #         而 17:40 的专用排期 17:40:04 就启动了 → 两个进程同时写
+  #         holdings/ledger/portfolio.json → 后写者赢 → 成交明细可能被覆盖。
+  #    → 现在：纸面盘**只由专用排期** com.rone.paper-portfolio 负责
+  #      （周一 17:40 + 周二 09:20 兜底），signal_quality 跟在它后面跑；
+  #      本脚本**只管拉数据**。
+  #    → 并发问题另由 paper_portfolio.py 里的进程互斥锁兜底。
 
   echo "=== $(date '+%Y-%m-%d %H:%M:%S') all done ==="
 } >> "$LOG" 2>&1
