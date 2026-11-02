@@ -176,6 +176,43 @@ def _ledger_path(strategy: str) -> str:
     return os.path.join(PAPER_DIR, f"{strategy}_ledger.csv")
 
 
+def extract_nav_from_trades(
+    trades: List[Dict[str, Any]],
+) -> tuple[List[float], List[str]]:
+    """从 ledger 成交记录里提取净值点（每日一个，同日多笔取最后一条）。
+
+    ⚠️ 这段逻辑必须和 `scripts/fix_ledger_nav_columns.py` 的口径一致，
+    并且**必须过滤非法值** —— 2026-11-02 那次并发写账本（§12.34/§12.43）
+    把 `portfolio_value` 写成了**单笔盈亏**（-54.89 / -56.45），
+    直接进净值曲线会让图表从 990,864 掉到 -56（像清零），
+    而 5 个月后攒够 20 个调仓点时还会把最大回撤算成 -100%。
+
+    防御性规则：
+      - 空值 / 非数字 → 跳过
+      - **<= 0 → 跳过**（组合净值不可能为负）
+      - 同一日期的多次记录 → 取最后一条
+    """
+    nav: List[float] = []
+    nav_dates: List[str] = []
+    for t in trades or []:
+        pv = t.get("portfolio_value")
+        if not pv:
+            continue
+        try:
+            v = float(pv)
+        except (TypeError, ValueError):
+            continue
+        if not (v == v) or v <= 0:   # NaN 或非法（非正）
+            continue
+        d = str(t.get("date") or "")
+        if nav_dates and nav_dates[-1] == d:
+            nav[-1] = v
+        else:
+            nav.append(v)
+            nav_dates.append(d)
+    return nav, nav_dates
+
+
 class TradingSignalService:
     """对外提供可执行信号。"""
 
@@ -457,22 +494,7 @@ class TradingSignalService:
         # 2026-10-27：付费用户此前只能看到累计收益，**看不到回撤** ——
         # 低回撤幻觉会让用户以为低风险。必须把真实风险摆出来。
         # 数据源：ledger.csv 的 portfolio_value 列（每日快照，同日多笔取最后一条）
-        nav: List[float] = []
-        nav_dates: List[str] = []
-        for t in trades:
-            pv = t.get("portfolio_value")
-            if not pv:
-                continue
-            try:
-                v = float(pv)
-            except (TypeError, ValueError):
-                continue
-            d = str(t.get("date") or "")
-            if nav_dates and nav_dates[-1] == d:
-                nav[-1] = v
-            else:
-                nav.append(v)
-                nav_dates.append(d)
+        nav, nav_dates = extract_nav_from_trades(trades)
         sharpe = None
         max_dd = None
         win_rate = None
