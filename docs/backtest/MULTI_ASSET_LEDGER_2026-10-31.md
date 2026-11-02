@@ -2622,3 +2622,70 @@ ledger / 其它文件一概不动（可人工从 ledger 恢复）。
 → **回归口径固定为 `tests/unit`**（752 项基线 + 本次新增 9 项 = 761）。
 → `tests/scripts` 的 2 个 F 与 qlib segfault 归入**既有缺陷台账**，
    单独排期修（硬编码路径 → 改成从项目根解析）。
+
+## 12.37 纸面盘**守卫收紧**（袖套估值失败 → 合并线拒绝写盘，2026-11-02）
+
+### A. 触发
+
+修完 §12.35 的口径问题后复查 `fix_adj_cost_backfill.py` 时发现的**残留降级路径**：
+
+```python
+except Exception as e:
+    print(f"⚠️ 袖套估值失败（不影响 A 腿修复）：{e}")
+total = a_value + (s_value or 0.0)
+```
+
+### B. 为什么是错的（不是"小瑕疵"）
+
+袖套估值抛异常时 `s_value = None` → `total` 只剩 A 腿（约 **499,226**）→
+**照样打印成"市值 999,026 → 499,226"这样的正常结果并写进 `portfolio.json`**，
+脚本 **exit 0、不报警**。
+→ 袖套腿（≈50 万）凭空消失，而快照看起来完全正常。
+→ 这正是本项目反复踩的同一类坑：**降级把失败伪装成成功**。
+
+（历史上有过一次真实事故：`multi_asset_final` 市值从 999,026 掉到 499,226，
+当时误以为是"袖套腿丢失"，实为此路径。）
+
+### C. 改法（三处都改成"失败即中止"）
+
+| 位置 | 改前 | 改后 |
+|---|---|---|
+| `fix_merged_line` | 异常 → 警告 → 继续算 A 腿 | 异常 → 记 `s_err` → **提前 return `{failed: True, value: None}`，不触碰 merged** |
+| `main`（合并线） | 无分支 | `failed` → 打印原因 → **`sys.exit(1)`，且不重建 `portfolio.json`** |
+| `main`（portfolio 重建） | 失败 → print + **保留旧值** → 继续写 | 任一条线失败 → 收集错误 → **`sys.exit(1)`，不写**（避免"半份快照"） |
+
+### D. 测试（故障注入，不是"读代码觉得对"）
+
+`backend/tests/unit/trading/test_fix_adj_cost_backfill_guard.py` — **3 passed**：
+
+1. 注入 `load_etf_bars` 抛异常 → `failed=True`、`value is None`、合并线**未写盘**
+2. 对照组：袖套正常 → `failed=False`、`value = A腿 + 袖套`、正常写盘
+3. `main` 遇 `failed` → `SystemExit(1)` 且临时目录里**不生成** `portfolio.json`
+
+> 测试里踩到的两个坑：
+> ① `main()` 的 `ap.parse_args()` 会读 pytest 的 `sys.argv` → 退出码 2；
+>    必须先 `monkeypatch.setattr(sys, "argv", [...])`。
+> ② 断言 `s_value` 时别忘了它**含袖套现金**（`cash + 持仓市值`），
+>    期望值算错了 50 万。
+
+### E. 顺带查清：合并线/袖套线的 `adj_cost` 全为 NaN **不是缺陷**
+
+复查落盘文件时看到 `multi_asset_final`（69 只）、`multi_asset_final_sleeve`（9 只）
+的 `adj_cost` 全 NaN、`adj_cost_date` 缺失，一度以为是漏修。
+
+查清结论：**设计如此** ——
+- 袖套腿走**前复权价**口径估值，本来就不依赖 `adj_cost`；
+- `fix_merged_line` 只写 `merged` 的 `last_value` / `nav_history`，**从不写 positions**；
+- A 腿单独文件 `multi_asset_final_a_holdings.json`：**60/60 锚点一致**
+  （`adj_cost_date == buy_date`），NaN = 0 ✓
+- 市值口径自洽：`499,225.89`(A腿) + `499,800.07`(袖套) = **999,025.96** ✓
+
+→ 7 条单线 + A 腿的 `adj_cost_date == buy_date` **100% 一致**（272/272），NaN = 0。
+
+### F. 教训
+
+**守卫的判定标准不是"能不能继续跑"，而是"结果还可不可信"。**
+袖套估值失败时，A 腿的市值**本身是对的**——但把"对的 A 腿"和"缺失的袖套"
+拼成一个数，那个数就是**错的**，而且是"看起来正常的错"。
+→ 组合型指标里，**任何一个分项失败 = 整条线不可信 = 拒绝出数**，
+  不接受"部分正确"的结果落盘。
