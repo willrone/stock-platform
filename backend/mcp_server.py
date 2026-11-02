@@ -166,19 +166,65 @@ def paper_portfolio(strategy: str = "") -> str:
         with open(portfolio_path) as fh:
             portfolio = json.load(fh)
         lines = portfolio.get("lines", {})
+        # 观测口径层（附录 A，2026-11-02）：
+        #   门禁 d → pnl_pct **原字段取值不变**（前端 TS 类型是 number，改 null
+        #   会编译不过）；诚实信号放在新增字段上。
+        #   为什么必须有这一层：7 条线暴露度差 5 倍（17.5%~92.1%），只看总盈亏
+        #   会把"没建仓"读成"打平"，把"选股亏钱"读成"仓位小所以没亏"。
+        _asofs = sorted({str(ln.get("as_of")) for ln in lines.values()
+                         if ln.get("as_of")})
+        _asof_consistent = len(_asofs) <= 1
         summary = {
             "date": portfolio.get("meta", {}).get("date"),
             "data_latest": portfolio.get("meta", {}).get("data_latest"),
             "capital_per_line": portfolio.get("meta", {}).get("capital_per_line"),
+            # ── as-of 诚实：不一致就不许把排名当结论 ─────────────────────
+            "as_of_dates": _asofs,
+            "as_of_consistent": _asof_consistent,
+            "note": (
+                "" if _asof_consistent else
+                "各线 as-of 不一致 → ranking_by_invested_return 仅供参考，"
+                "不是同一时点的比较"
+            ),
+            "ranking_by_invested_return": [
+                {
+                    "strategy": _nm,
+                    "invested_return_pct": _ln.get("invested_return_pct"),
+                    "exposure": _ln.get("exposure"),
+                    "pnl_display": _ln.get("pnl_display"),
+                    "as_of": _ln.get("as_of"),
+                    "status": _ln.get("status"),
+                }
+                for _nm, _ln in sorted(
+                    lines.items(),
+                    key=lambda kv: (kv[1].get("invested_return_pct") is None,
+                                    -(kv[1].get("invested_return_pct") or 0.0)))
+            ],
             "lines": {
                 name: {
                     "value": ln.get("value"),
                     "cash": ln.get("cash"),
                     "n_positions": ln.get("n_positions"),
+                    # 原字段：取值不变（门禁 d）
                     "pnl_pct": round(
                         (float(ln.get("value", 0))
                          / float(portfolio.get("meta", {}).get("capital_per_line", 1))
                          - 1) * 100, 2),
+                    # 展示用：从未成交的线是 "—"，不是 0.00%
+                    # （落盘值优先；旧 portfolio.json 没有该字段时现算）
+                    "pnl_display": (
+                        ln.get("pnl_display")
+                        or ("—" if ln.get("n_trades") == 0
+                            else (f"{float(ln.get('pnl_pct')):.2f}%"
+                                  if ln.get("pnl_pct") is not None else "—"))
+                    ),
+                    # 暴露度 / 投入段收益 / as-of / 成交笔数 / 状态
+                    # → 让不同仓位量的线**可比**（暴露度差 5 倍时总盈亏不可比）
+                    "exposure": ln.get("exposure"),
+                    "invested_return_pct": ln.get("invested_return_pct"),
+                    "as_of": ln.get("as_of"),
+                    "n_trades": ln.get("n_trades"),
+                    "status": ln.get("status"),
                     "desc": ln.get("desc"),
                 }
                 for name, ln in lines.items()

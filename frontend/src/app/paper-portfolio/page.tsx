@@ -158,6 +158,19 @@ type LineSignal = {
   cost_model?: { commission: number; stamp_tax: number; slippage: number; cash_reserve: number; board_lot: number };
   fill_assumption?: string;
   upgrade_hint?: string;
+  // ── 观测口径层（2026-11-02）：暴露度 / 投入段收益 / as-of / 成交笔数 / 状态 ──
+  /** 暴露度 = 1 − cash/value（0~1） */
+  exposure?: number | null;
+  /** 投入段收益% = (value−initial)/(value−cash)×100 → 消除仓位量差异后的可比口径 */
+  invested_return_pct?: number | null;
+  /** 展示用 PnL 字符串；从未成交的线是 "—"（不是 "0.00%"） */
+  pnl_display?: string | null;
+  /** 该线估值所用的数据日 */
+  as_of?: string | null;
+  /** 未建仓 / 持仓中 / 空仓 */
+  line_status?: string | null;
+  /** 累计成交笔数 */
+  n_trades?: number | null;
 };
 
 type StrategyInfo = {
@@ -172,6 +185,13 @@ type StrategyInfo = {
   last_value: number | null;
   locked?: boolean;
   delay_days?: number;
+  // ── 观测口径层（2026-11-02）──────────────────────────────────
+  exposure?: number | null;
+  invested_return_pct?: number | null;
+  pnl_display?: string | null;
+  as_of?: string | null;
+  status?: string | null;
+  n_trades?: number | null;
 };
 
 type StrategyListResponse = {
@@ -716,8 +736,31 @@ export default function PaperPortfolioPage() {
       <Stack direction="row" spacing={1.5} sx={{ mb: 2, flexWrap: 'wrap' }}>
         {order.map((s) => {
           const l = lines[s.key];
-          const value = l?.value ?? s.last_value ?? 0;
-          const pnlPct = ((value - cap) / cap) * 100;
+          // 注意：不要 `?? 0` —— 取不到数据时显示 ¥0 会被读成"市值归零"，
+          // 实际是"这条线没有数据"。fmtMoney(undefined) → 「暂无」。
+          const value = l?.value ?? s.last_value;
+          // 裸 PnL：只作为**兜底**（后端还没给 pnl_display 时用）；无市值 → null
+          const pnlPct =
+            typeof value === 'number' && Number.isFinite(value)
+              ? ((value - cap) / cap) * 100
+              : null;
+          // ── 观测口径层（2026-11-02）──────────────────────────────
+          // 7 条线的暴露度差 5 倍（17.5%~92.1%）→ **裸 PnL 不可比**：
+          //   · 从未成交的线（0 持仓/100% 现金）裸 PnL = 0.00%，会被读成"打平"，
+          //     实际它排在 4 条真亏钱的线前面；
+          //   · 现金占比 82.5% 的线裸 PnL -0.05%（像打平），投入的部分实际亏 0.30%。
+          // → 展示用 pnl_display（未成交 = "—"）+ 暴露度 + 投入段收益。
+          const obsStatus = s.status ?? l?.line_status ?? null;
+          const obsNeverBuilt = obsStatus === '未建仓';
+          const obsExposure = s.exposure ?? l?.exposure ?? null;
+          const obsInvRet = s.invested_return_pct ?? l?.invested_return_pct ?? null;
+          const obsAsOf = s.as_of ?? l?.as_of ?? null;
+          const pnlText =
+            s.pnl_display ??
+            l?.pnl_display ??
+            (obsNeverBuilt || pnlPct === null
+              ? '—'
+              : `${pnlPct >= 0 ? '↑ +' : '↓ '}${pnlPct.toFixed(2)}%`);
           const stale = (() => {
             const d = daysSince(l?.date ?? s.last_signal);
             return d !== null && d > STALE_DAYS;
@@ -770,10 +813,33 @@ export default function PaperPortfolioPage() {
                 </Typography>
                 <Typography
                   variant="body2"
-                  sx={{ color: pnlPct >= 0 ? 'success.main' : 'error.main', fontWeight: 600 }}
+                  sx={{
+                    // 未建仓的线不给涨跌色（0.00% 不是"打平"，是"没做过"）
+                    color:
+                      obsNeverBuilt || pnlPct === null
+                        ? 'text.secondary'
+                        : pnlPct >= 0
+                          ? 'success.main'
+                          : 'error.main',
+                    fontWeight: 600,
+                  }}
                 >
-                  {pnlPct >= 0 ? '↑ +' : '↓ '}
-                  {pnlPct.toFixed(2)}%
+                  {pnlText}
+                </Typography>
+                {/* 观测口径层：暴露度 + 投入段收益 → 让仓位量不同的线可比 */}
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  // display:block —— MUI 的 caption 变体渲染成 inline <span>，
+                  // 不加这行会跟下面那段策略描述**粘成一行**（实测：
+                  // "数据日 2026-10-26RSI 7/14/21 超卖…"）。
+                  sx={{ display: 'block', overflowWrap: 'anywhere' }}
+                >
+                  {obsNeverBuilt
+                    ? '未建仓（从未成交 · 0.00% 不代表打平）'
+                    : `暴露 ${obsExposure != null ? `${(obsExposure * 100).toFixed(1)}%` : '—'} · 投入段 ${
+                        obsInvRet != null ? `${obsInvRet.toFixed(2)}%` : '—'
+                      }${obsAsOf ? ` · 数据日 ${obsAsOf}` : ''}`}
                 </Typography>
                 <Typography
                   variant="caption"

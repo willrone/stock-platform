@@ -373,6 +373,98 @@ def save_holdings(strategy: str, data: Dict[str, Any]) -> None:
         json.dump(data, fh, ensure_ascii=False, indent=1)
 
 
+# ── 观测口径层（方案书附录 A，2026-11-02）────────────────────────────
+# 为什么要有这一层：7 条线的暴露度差 5 倍（17.5% ~ 92.1%），**总盈亏在暴露度
+# 不同的情况下不可比**。实测两个已发生的误读：
+#   ① 从未交易的线（0 持仓/100% 现金）裸 PnL = 0.00% → 在裸 PnL 榜上排第 2，
+#      高于 4 条真正亏了钱的线；
+#   ② 付费档 gbm_voltgt 裸 PnL -0.05%（像打平），但它 82.5% 现金 →
+#      投入的那 17.5% 实际亏 0.30%。
+# 修法：**每条线同时给出「投入段收益」**（已投资部分本身的收益率）+
+# 「暴露度」+「as-of 数据日」+「成交笔数」+「状态」，并让**从未交易的线
+# 不再显示 0.00%**（显示 — 且 status=未建仓）。
+
+def ledger_stats(strategy: str) -> Dict[str, Any]:
+    """该线 ledger 的统计：记录数 / 去重成交日数 / 最后成交日（只读）。
+
+    ledger.csv 的行 = 一笔成交记录（买、卖各算一笔）。
+    """
+    p = ledger_path(strategy)
+    n_rows = 0
+    days = set()
+    if os.path.exists(p):
+        try:
+            import csv as _csv
+            with open(p, newline="") as fh:
+                for r in _csv.DictReader(fh):
+                    n_rows += 1
+                    d = str(r.get("date") or "").strip()
+                    if d:
+                        days.add(d)
+        except Exception:  # noqa: BLE001
+            pass
+    days_sorted = sorted(days)
+    return {"n_trades": n_rows,
+            "n_trade_days": len(days_sorted),
+            "last_ledger_date": days_sorted[-1] if days_sorted else None}
+
+
+def line_observation_metrics(strategy: str, line: Dict[str, Any],
+                              capital: float) -> Dict[str, Any]:
+    """单条线的观测口径指标。
+
+    **只实现一次**：重建路径（rebuild_line_from_files）与新跑路径的行 dict
+    都交给它 → 口径不会漂移。本项目吃过"同套逻辑写两份 → 互相共错"的亏
+    （台账 §12.28 的审计器/回填器共错教训），所以这里刻意收口。
+
+    字段：
+      as_of               该线估值所用的数据日（= 成交日/最后估值日）
+      exposure            暴露度 = 1 − cash/value
+      invested_return_pct **投入段收益** = (value−initial)/(value−cash)×100
+                          ← 消除暴露度差异，让不同仓位量的线可比
+      pnl_pct             总盈亏%；**从未交易过时为 None**（不是 0.00）
+      n_trades            累计成交记录数
+      n_trade_days        累计成交日数
+      status              未建仓 / 持仓中 / 空仓
+    """
+    h = load_holdings(strategy, capital)
+    cash = float(line.get("cash") or 0.0)
+    value = float(line.get("value") or 0.0)
+    initial = float(h.get("initial_capital") or line.get("initial_capital") or capital)
+    st = ledger_stats(strategy)
+    n_pos = int(line.get("n_positions") or 0)
+    n_trades = int(st["n_trades"])
+
+    exposure = (value - cash) / value if value > 0 else None
+    invested = value - cash
+    invested_return_pct = ((value - initial) / invested * 100.0) if invested > 1e-9 else None
+    # 从未交易过 → 该线的盈亏**没有意义**（0.00% 是"什么都没做"，不是"打平"）
+    pnl_pct = ((value - initial) / initial * 100.0) if (initial > 0 and n_trades > 0) else None
+    if n_trades == 0:
+        status = "未建仓"
+    elif n_pos > 0:
+        status = "持仓中"
+    else:
+        status = "空仓"
+    # as_of 优先级：本次写盘时记的 value_as_of → last_trade → ledger 最后成交日
+    as_of = h.get("value_as_of") or h.get("last_trade") or st["last_ledger_date"]
+    return {
+        "as_of": as_of,
+        "exposure": round(exposure, 6) if exposure is not None else None,
+        "invested_return_pct": (round(invested_return_pct, 4)
+                                if invested_return_pct is not None else None),
+        "pnl_pct": round(pnl_pct, 4) if pnl_pct is not None else None,
+        # 展示用字符串：**显示规则只在这里实现一次**，MCP / API / 前端都读它
+        # （三处各写一遍=迟早漂移，本项目已吃过这个亏）。
+        "pnl_display": ("—" if pnl_pct is None else f"{pnl_pct:.2f}%"),
+        "n_trades": n_trades,
+        "n_trade_days": int(st["n_trade_days"]),
+        "last_trade": h.get("last_trade"),
+        "status": status,
+        "initial_capital": round(initial, 2),
+    }
+
+
 def append_ledger(strategy: str, rows: List[Dict[str, Any]]) -> None:
     if not rows:
         return
@@ -869,6 +961,10 @@ def run_line(
                   "last_signal": str(signal_day.date()),
                   "last_trade": str(trade_day.date()),
                   "last_value": round(end_value, 2),
+                  # value_as_of：这份市值是用**哪一天**的收盘价算的
+                  # （as-of 日期是观测口径层的硬要求：没有它就无法知道
+                  #  各条线在拿不同日期的市值做比较）
+                  "value_as_of": str(trade_day.date()),
                   "fill_assumption": "Friday close"})
     save_holdings(strategy, paper)
 
@@ -1211,6 +1307,7 @@ def run_multi_asset_line(
         "last_signal": str(signal_day.date()),
         "last_trade": str(trade_day.date()),
         "last_value": round(s_value, 2),
+        "value_as_of": str(trade_day.date()),
         "initial_capital": s_capital,
         "fill_assumption": "lag1：周五收盘出信号，下一交易日收盘成交",
     })
@@ -1285,6 +1382,7 @@ def run_multi_asset_line(
         "last_signal": str(signal_day.date()),
         "last_trade": str(trade_day.date()),
         "last_value": round(merged_value, 2),
+        "value_as_of": str(trade_day.date()),
         "initial_capital": capital,
         "fill_assumption": "lag1：周五收盘出信号，下一交易日收盘成交",
         "legs": {
@@ -1659,6 +1757,17 @@ def main() -> None:
         })
         merged_lines[r["strategy"]] = _prev
 
+    # ── 观测口径层（附录 A）：给**每条线**补 6 个指标 ─────────────────
+    # 放在这里（所有行合并完成之后）→ 新跑路径与重建路径拿到的是**同一个**
+    # 函数算出的口径，不会出现"两条路径各算一套"的漂移。
+    for _name in list(merged_lines):
+        try:
+            merged_lines[_name].update(
+                line_observation_metrics(_name, merged_lines[_name], args.capital))
+        except Exception as e:  # noqa: BLE001
+            # 观测层失败**不能**让整条线失败：宁可少几个字段，也不能不出汇总
+            print(f"  ⚠️ 观测指标计算失败 {_name}: {e}", flush=True)
+
     summary = {
         "meta": {
             # signal_date = 周五出信号；trade_date = 下一交易日成交（lag1 口径）
@@ -1690,10 +1799,32 @@ def main() -> None:
     # 这里只保留 data/paper/ 下的受控副本供后端 / MCP 读取。
 
     print(f"\n{'='*60}", flush=True)
-    print(f"{'strategy':<20}{'value':>14}{'cash':>12}{'pos':>6}{'buy':>5}{'sell':>6}")
-    for r in results:
-        print(f"{r['strategy']:<20}¥{r['value']:>13,.0f}¥{r['cash']:>11,.0f}"
-              f"{r['n_positions']:>6}{len(r['buys']):>5}{len(r['sells']):>6}")
+    # ── 观测口径层（附录 A）：表格必须让人看出"暴露度不同 → 总盈亏不可比" ──
+    # 排序用**投入段收益**（消除暴露度差异）；从未交易的线排最后且不参与排名。
+    def _fmt_pct(v, width=8):
+        return f"{'—':>{width}}" if v is None else f"{v:>{width}.2f}"
+
+    _rows = []
+    for _n, _ln in merged_lines.items():
+        _rows.append((
+            _ln.get("invested_return_pct"),
+            _n, _ln.get("value"), _ln.get("cash"), _ln.get("exposure"),
+            _ln.get("pnl_pct"), _ln.get("invested_return_pct"),
+            _ln.get("as_of"), _ln.get("n_positions"), _ln.get("n_trades"),
+            _ln.get("status"),
+        ))
+    _rows.sort(key=lambda r: (r[0] is None, -(r[0] if r[0] is not None else 0.0)))
+    _asofs = {r[7] for r in _rows if r[7]}
+    _asof_note = "" if len(_asofs) <= 1 else \
+        f"  ⚠️ 各线 as-of 不一致（{sorted(_asofs)}）→ 排名仅供参考，不是同一时点的比较"
+    print(f"{'strategy':<20}{'value':>13}{'cash':>12}{'暴露':>7}{'PnL%':>8}"
+          f"{'投入段%':>9}{'as_of':>12}{'pos':>5}{'笔':>5}  状态{_asof_note}")
+    for (_ir, _n, _val, _cash, _exp, _pnl, _inv, _asof, _npos, _nt, _st) in _rows:
+        print(f"{_n:<20}¥{float(_val or 0):>12,.0f}¥{float(_cash or 0):>11,.0f}"
+              f"{(float(_exp)*100 if _exp is not None else 0):>6.1f}%"
+              f"{_fmt_pct(_pnl)}{_fmt_pct(_inv, 9)}"
+              f"{str(_asof or '—'):>12}{int(_npos or 0):>5}{int(_nt or 0):>5}  {_st or '—'}")
+    print("  （PnL% 为「—」= 该线从未成交，0.00% 不代表打平；投入段% = 已投资部分本身的收益率）")
     print(f"\n[saved] {os.path.join(PAPER_DIR, 'portfolio.json')}", flush=True)
 
     if line_errors:

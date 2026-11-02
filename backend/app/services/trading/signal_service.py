@@ -193,9 +193,17 @@ class TradingSignalService:
 
     # ── 策略列表 ──
     def list_strategies(self) -> List[Dict[str, Any]]:
+        # 观测口径层（附录 A，2026-11-02）：把 portfolio.json 里**已经算好的**
+        # 观测字段带出来 → 前端各线卡片显示"暴露度 / 投入段收益 / as-of / 状态"，
+        # 而不是自己拿 value/capital 算一个裸 PnL（那是读反的根源：
+        #  7 条线暴露度差 5 倍，裸 PnL 不可比）。
+        # 只增不改：原有字段语义与取值全部保留（门禁 d）。
+        portfolio = _read_json(os.path.join(PAPER_DIR, "portfolio.json")) or {}
+        plines = portfolio.get("lines", {}) or {}
         out = []
         for s in SIGNAL_STRATEGIES.values():
             holdings = _read_json(_paper_path(s.key)) or {}
+            ln = plines.get(s.key) or {}
             out.append({
                 "key": s.key,
                 "display_name": s.display_name,
@@ -206,7 +214,20 @@ class TradingSignalService:
                 "has_paper": bool(holdings),
                 "last_signal": holdings.get("last_signal"),
                 "n_positions": len(holdings.get("positions", {}) or {}),
-                "last_value": holdings.get("last_value"),
+                # 空壳线（无 holdings 文件）→ 以注册表回落，别给 null
+                # （null 会被前端读成"这条线没数据"，实际是"100 万现金待部署"）。
+                "last_value": (
+                    holdings.get("last_value")
+                    if holdings.get("last_value") is not None
+                    else ln.get("value")
+                ),
+                # ── 新增（只增不改）────────────────────────────
+                "exposure": ln.get("exposure"),
+                "invested_return_pct": ln.get("invested_return_pct"),
+                "pnl_display": ln.get("pnl_display"),
+                "as_of": ln.get("as_of"),
+                "status": ln.get("status"),
+                "n_trades": ln.get("n_trades"),
             })
         return out
 
@@ -279,9 +300,37 @@ class TradingSignalService:
             })
         holds.sort(key=lambda h: -(h.get("cost_amount") or 0))
 
-        cash = float(holdings.get("cash", 0) or 0)
-        value = float(holdings.get("last_value", 0) or 0)
-        capital = float(holdings.get("initial_capital", 1_000_000) or 1_000_000)
+        _ln = line or {}
+
+        # 未成交的线**没有 holdings 文件**（multi_asset_final 就是这种空壳线：
+        # 注册表里有 value=100万/cash=100万/0 持仓，但从来没有过持仓文件）。
+        # 原实现回落成 0 → 接口报 "市值 0" → 前端卡片显示 "¥0"，
+        # 会被读成"市值归零/爆仓"，实际是"100 万全在现金里，一股没买"。
+        # → 以 portfolio.json 注册表为准回落（register 是纸面盘的真相来源）。
+        # 注意用 `is not None` 判空而不是 `or`：cash=0 / value=0 是**合法值**
+        # （满仓线现金就是 0），不能被回落到注册表。
+        _h_cash = holdings.get("cash")
+        _h_value = holdings.get("last_value")
+        cash = float(
+            _h_cash if _h_cash is not None else (_ln.get("cash") or 0)
+        )
+        value = float(
+            _h_value if _h_value is not None else (_ln.get("value") or 0)
+        )
+        _h_capital = holdings.get("initial_capital")
+        capital = float(
+            _h_capital if _h_capital is not None
+            else (_ln.get("initial_capital") or 1_000_000)
+        )
+
+        # 观测口径层（附录 A）：展示用 PnL 字符串 —— 从未成交的线是 "—"
+        # （0.00% 会被读成"打平"，它其实只是"什么都没做"）。
+        _pnl = _ln.get("pnl_pct")
+        _pnl_display = (
+            _ln.get("pnl_display")
+            or ("—" if _ln.get("n_trades") == 0
+                else (f"{float(_pnl):.2f}%" if _pnl is not None else "—"))
+        )
 
         return {
             "strategy": strategy,
@@ -295,7 +344,20 @@ class TradingSignalService:
             "cash": round(cash, 2),
             "value": round(value, 2),
             "capital": capital,
+            # 门禁 d：**原字段语义与取值不变**（前端 TS 类型是 number，
+            # 改成 null 会编译不过）。诚实信号放在新增的 pnl_display / status 上。
             "total_return_pct": round((value / capital - 1) * 100, 3) if capital else 0.0,
+            # 观测口径层（附录 A，2026-11-02）：展示用字符串。
+            # 从未成交的线 → "—"，不再显示 0.00%（0.00% 会被读成"打平"，
+            # 而它其实只是"什么都没做"——实测该线在裸 PnL 榜上排第 2，
+            # 高于 4 条真正亏了钱的线）。
+            "pnl_display": _pnl_display,
+            # 暴露度 / 投入段收益 / as-of / 成交笔数 / 状态
+            "exposure": (line or {}).get("exposure"),
+            "invested_return_pct": (line or {}).get("invested_return_pct"),
+            "as_of": (line or {}).get("as_of"),
+            "n_trades": (line or {}).get("n_trades"),
+            "line_status": (line or {}).get("status"),
             "n_positions": len(positions),
             "buys": buys,
             "sells": sells,
