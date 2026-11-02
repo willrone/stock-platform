@@ -2706,3 +2706,67 @@ total = a_value + (s_value or 0.0)
 拼成一个数，那个数就是**错的**，而且是"看起来正常的错"。
 → 组合型指标里，**任何一个分项失败 = 整条线不可信 = 拒绝出数**，
   不接受"部分正确"的结果落盘。
+
+## 12.38 既有缺陷：**`tests/unit` 全量偶发 F**（与本次改动无关，已取证，2026-11-03）
+
+### A. 现象
+
+`pytest tests/unit` 全量跑，**偶发**失败：
+```
+FAILED tests/unit/tasks/test_task_management_properties.py::
+       TestTaskManagementIntegrity::test_user_task_management_integrity
+```
+同一份代码，**跑一次绿、跑一次红**。
+
+### B. 取证（5 次运行，不是推测）
+
+| # | 代码版本 | 结果 |
+|---|---|---|
+| 1 | HEAD | ❌ F（tasks 那个） |
+| 2 | HEAD | ❌ F（tasks 那个） |
+| 3 | HEAD | ✅ 0 F |
+| 4 | HEAD | ✅ 0 F |
+| 5 | **基线**（`git checkout fd8470bd -- backend/`，**同目录同数据**，只回退 `paper_portfolio.py` + `sync_pct_chg_from_tdx.py`） | ❌ **F（同一个 tasks 测试）** |
+
+→ **基线代码下同样复现** → 与本次 paper/guard 改动**无因果关系**。
+
+> 补充：`git worktree` 到基线的对照**不可靠** —— worktree 里 `data/` 缺 gitignore 的
+> parquet，基线稳定 F 的是 `test_determinism`（HEAD 上一次都没 F 过）→ 那是环境假象。
+> **必须用"同目录只回退代码"的对照**，否则会得出错误结论。
+
+### C. 已知信息
+
+- 单独跑该测试：**通过** → 属**跨测试污染 / 顺序敏感**，不是该测试自身逻辑错
+- 组合实验 `backtest+tasks` / `core+tasks` / `api+tasks`：**均不复现** → 污染源不在这些目录
+- 该测试是 **hypothesis 属性测试**（`@given(user_id=st.text(...), task_count=...)`，
+  `max_examples=50`），`user_id` 随机 → 与 `.hypothesis/examples`（1.1M 缓存）、
+  `task_repository` 的 DB 共享状态都可能相关
+- 断言关键行：`assert len(user_tasks) == task_count`（DB 里若已有同 `user_id` 的旧任务就会炸）
+
+### D. **根因未定位**（不猜）
+
+已跑的几次全量输出都被 `grep`/`tail` 过滤掉了 traceback，**没有拿到失败现场**。
+→ 根因待定，**不写猜测进台账**。
+
+**复现方法（下一步）**：
+```bash
+cd backend
+for i in 1 2 3 4 5; do
+  env -u PYTHONPATH -u PYTHONHOME .venv-py313/bin/python3 -m pytest tests/unit     --tb=long -p no:cacheprovider > /tmp/unit_$i.log 2>&1
+  grep -E "^FAILED" /tmp/unit_$i.log && echo ">>> 第 $i 次复现，traceback 在 /tmp/unit_$i.log"
+done
+```
+拿到 traceback 后再定位（重点怀疑：`get_tasks_by_user` 是否按 user 过滤 + DB 是否跨轮持久 + hypothesis 样本重放）。
+
+### E. 回归口径（本次交付的实际状态）
+
+- `tests/unit/trading`：**33 项全过**（EXIT=0）
+- `tests/unit` 全量：**773 passed, 0 failed**（2026-11-03 00:13 跑，114s）
+- 权威口径仍是 `tests/unit`（见 §12.36 F2）
+
+### F. 顺带记一个坑：`-q` 加两次 → **summary 行消失**
+
+`pyproject.toml` 的 `addopts` 已有 `-q`，命令行再写 `-q` 就变成 `-qq`，
+**pytest 的 "773 passed" 那行会被吞掉** → 只能靠 `^FAILED` 行判断成败，
+极易误判（本次有两次"grep passed 抓不到 → 以为没跑"）。
+→ **查结果用 `-v` 或直接看 `$?`**，别靠 grep "passed"。
