@@ -3921,3 +3921,37 @@ for _var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
 **教训**：把"我以为的现象"当判据用了整整一天。**判据必须先验证**：
 - 用 `-v` 跑一个 10 个测试的小集合（0.2 秒）就能立刻证伪，却拖到全量跑完才查。
 - **下次先做最小复现**（10 个测试、0.2 秒），不要先上全量。
+
+
+### J. 全量回归终局 + 长驻进程代码陈旧问题（2026-11-03 06:40）
+
+**全量结果（`-v`，计数行可见）**：
+```
+================== 909 passed, 1 skipped in 346.91s (0:05:46) ==================
+EXITCODE=0
+```
+0 FAILED / 0 ERROR。1 SKIPPED 是 `test_alpha158_handler.py:119`
+（qlib 0.9.8.dev31 无 dump_bin，handler 路径改由生产数据产物验证）—— 合法跳过。
+
+对比修复前的 888 → 现在 **909**，多出来的 21 条是本轮新增的门禁
+（`test_ledger_column_contract.py` 12 条 + `test_root_conftest_omp_guard.py` 5 条 + 其他）。
+
+**新发现：长驻进程加载的是启动时的代码，改完代码它们不会自动更新**
+
+| 进程 | 启动时间 | 状态 |
+|---|---|---|
+| 后端 :18082（`run.py`） | 05:51:32 | 落后于 06:05/06:09 的改动 → **已重启**（新 PID 59412，06:32:32）✓ |
+| 前端 `next dev` | 05:52:26 → next-server 06:28:01 自动重启 | Next dev 会 watch 源码与 `next.config.js` 并自动重启 → **自动生效** ✓ |
+| **MCP server**（`mcp_server.py`） | **11-01 23:29** | 落后本轮**全部**改动 → **需重启 Hermes gateway**（由用户操作）⚠️ |
+
+**MCP server 为什么不会自愈**：它是 Hermes gateway 的 stdio 子进程
+（父链 `launchd → ai.hermes.gateway.plist → osascript → python → mcp_server.py`），
+gateway 不重启就不会重载 Python 进程 → `mcp__stock_platform__*` 全部工具跑的是旧代码。
+
+**排查孤儿实例的结论**：当前**无**孤儿后端（:8890 已死，PID 1632 是 MCP server，
+不监听任何 TCP 端口，是正常常驻）。但**成因已封死**（前端启动守卫 + 端口单一真源）。
+
+**另记一笔**：`scripts/dev-backend.sh` 会主动
+`export DYLD_LIBRARY_PATH=/opt/homebrew/opt/libomp/lib` —— 即 §12.50 认定的"催化剂"。
+目前 OMP=1 使其无害，但这是**主动引入风险**的动作，历史原因未记录。
+暂未删除（可能另有依赖），但已在守卫落地后由 OMP 锁兜底。
