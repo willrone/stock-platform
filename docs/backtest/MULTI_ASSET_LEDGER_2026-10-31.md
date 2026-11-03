@@ -4141,3 +4141,331 @@ lsof -p 1534 | grep cwd
 **cwd + 启动时间**，不是端口号；查的时候必须 `lsof -nP -iTCP -sTCP:LISTEN`
 扫**全端口**，不能只 grep 约定端口。入口写法 `main:app` 与 `app.main:app`
 不同也不能只看端口下结论。
+
+## §12.53 账本重放（方案 D）：`cash_after` 三重语义不可信 → 现金必须自己重算 —— 2026-11-03
+
+### A. 背景与动机
+
+方案 B′（`paper_daily_nav.py` 日频盯市）画的是 **cron 从 2026-11-02 起每天记的点**。
+但 ledger 里有 **2026-10-16 起的全部成交流水** → 可以把更早的日频曲线**回溯**出来
+（方案书 §2.3 步骤 1）。要做回溯，第一件事是**能重建任意 as_of 的持仓与现金**。
+
+台账 §12.52 已把 `paper_daily_nav.py` 接进同一把 fcntl 互斥锁。
+本节在其基础上补上**账本侧的重放实现**：
+
+- 新增 `backend/scripts/ledger_replay.py`（可复用模块 + 只读 CLI）
+- `backend/scripts/paper_daily_nav.py` 加 `--as-of` / `--range`（默认行为逐位不变）
+- 新增门禁 `backend/tests/unit/trading/test_ledger_replay.py`（21 条）
+  与 `test_paper_daily_nav_range.py`（11 条）
+
+### B. 核心发现：`ledger.cash_after` **绝对不能**用来重建现金
+
+`cash_after` 这一列在真实账本里混着**三种互不相同的语义**，任何一种都不能当权威值。
+以下全部是**当前磁盘状态下的实测数字**。
+
+#### B1. 语义一：**列错位固化值**（2026-11-02 批，6 条线全部中招）
+
+成因链条（已逐环节复现）：
+
+1. 2026-11-02 那批成交是**新 15 列代码**写的（多出 `cost_amount` / `realized_pnl`），
+   但当时**文件表头还是旧的 13 列** → 表头与数据行契约不一致。
+2. §12.48 的迁移 `_normalize_ledger_file`（`paper_portfolio.py:702`）按
+   **旧表头位置**取值（`r[idx[f]]`），旧表头的 `cash_after` 落在 **index 11**。
+   而新语义下 index 11 是 `cost_amount` → **`cost_amount` 被落进了 `cash_after`**，
+   index 13（真 `cash_after`）与 index 14（真 `portfolio_value`）被**整列丢弃**。
+3. `fix_ledger_nav_columns.py` 又按「同日最后一批的 `cash_after`」**统一覆盖**了整日 →
+   错位值被**固化**成该日的单一值。
+
+实测（22f，把 §12.48 迁移在备份上原样重放一遍即可复现）：
+
+```
+迁移后 11-02 批：cash_after = 该行 cost_amount（30495.0 / 31256.0 / 31360.0）
+                 portfolio_value = 该行 realized_pnl（-54.89 / -56.26 / -56.45）
+备份原行 index13（真 cash_after）= 78942.93   ← 被丢弃的真值
+```
+
+| 线 | 真值（备份 index13 / 重放） | 账本现值 | 差 |
+|---|---|---|---|
+| 22f | 78942.93 | **31360.00** | −47582.93 |
+| honest_42f | 87871.68 | **14445.00** | −73426.68 |
+| rsi_71421 | 83971.91 | **31360.00** | −52611.89 |
+| factor_ranking | 96962.90 | **18702.00** | −78260.90 |
+| gbm_voltgt | 762154.57 | **15200.00** | −746954.57 |
+| honest_42f_neu | 179247.49 | **15568.00** | −163679.49 |
+
+> 注：账本里的 `31360.00` **不是**「末笔 SELL 的 gross」，
+> 而是**末笔 SELL 那行的 `cost_amount`**（`000958.SZ` 的 cost_amount 恰好 = 31360.0）。
+
+#### B2. 语义二：**逐批快照**（同日多批 → 同一天多个不同值）
+
+22f 的 2026-10-23 当天有 **4 批**成交（每批 3 SELL + 3 BUY，24 只票互不重叠），
+迁移前每批各写一个 `cash_after`：
+
+```
+批1: 76669.81   批2: 73061.74   批3: 72616.55   批4: 77720.51
+```
+
+`fix_ledger_nav_columns.py` 取「同日最后一批」= **77720.51** 统一覆盖了全日
+→ 语义从「逐批快照」退化成「该日最后一个快照」。
+**只有当天的最后一批才等于日末现金**，中间那些值只是批末快照。
+
+#### B3. 语义三：**整批同值**（当前代码的写法）
+
+`paper_portfolio.run_line`（`:1291` / `:1299`）在写每一行时都填
+`round(cash, 2)` —— 而 `cash` 在**整个批次处理完后**才不再变化
+→ **一次 `run_line` 的所有行共享同一个值**。
+所以「当前代码语义」= 整批同值，取**该批写盘当时的现金**。
+
+### C. 为什么必须自己重算（而不是读 `cash_after`）
+
+因为上面三种语义**没有任何一种能保证等于「某日的日末现金」**：
+语义一是错位值、语义二要挑对批次、语义三只在「该批是当日最后一批且期间无并发」时才对。
+
+`ledger_replay.py` 的重算口径**与 `paper_portfolio` 记账逐项相同**：
+
+```
+BUY : cash -= gross + max(5, gross×0.0003) + gross×0.001        （买入无印花税）
+SELL: cash += gross - max(5, gross×0.0003) - gross×0.0005 - gross×0.001
+gross = ledger 的 amount
+       买入时 = shares×price
+       卖出时 = **总回报口径** gross（含后复权比值），**不是** price×shares
+```
+
+#### C1. 为什么不用账本现成的 `commission` / `stamp_tax` / `slippage` 三列
+
+那三列是**写盘时 `round(x, 2)` 后的值**，而生产算现金用的是**未舍入**值
+→ 逐行舍入误差会累积。实测（6 条线真实重放，对 `holdings.json` 的 cash）：
+
+| 现金模型 | 22f | honest_42f | rsi_71421 | factor_ranking | gbm_voltgt | honest_42f_neu | 门禁 ≤0.05 |
+|---|---|---|---|---|---|---|---|
+| `ledger_columns`（用账本三列） | −0.0200 | **−0.0600** | −0.0500 | **+0.1100** | −0.0200 | +0.0200 | **2 条线不过** |
+| `rate`（默认，按生产费率重算） | +0.0105 | −0.0028 | −0.0161 | −0.0009 | +0.0035 | −0.0035 | **6 条线全过** |
+
+误差量级：每行每个费用列 2dp 舍入误差 ≤0.005 元，
+`ledger_columns` 每行累加 2~3 个费用列 → 148 行的线漂移可达 ~0.1 元；
+`rate` 模型只剩「卖出 gross 的 2dp 舍入」一项 → 漂移 ≤0.02 元。
+**默认用 `rate`**；`ledger_columns` 保留仅作对照/审计。
+
+> ⚠️ **与方案书 §2.2 的字面公式的关系（有意偏离，必须说明）**：
+> 方案书 §2.2 写的是「从 `amount/commission/stamp_tax/slippage` 重算」，
+> 这在字面上等于本模块的 `ledger_columns` 模型 —— 但**按字面实现会过不了 §2.6 的
+> 「残差 ≤0.05」门禁**（实测 2 条线不过：`honest_42f` −0.0600、
+> `factor_ranking` +0.1100）。
+> 根因：账本那三个费用列是**写盘时 `round(x,2)` 后的值**，而生产算现金用的是**未舍入**值
+> → 每个费用列各带 ≤0.005 元的独立舍入误差，逐行累加。
+> 因此本模块的**默认模型 `rate` 与 §2.2 的意图一致**（用 `amount` + **生产同一套费率**
+> 重算，而不是读 `cash_after`），只是**费率由代码重算而非读账本那三列**。
+> `ledger_columns` 作为 `--cash-model ledger_columns` 保留，供审计对照。
+
+### D. `portfolio_value` 的状态：**当前磁盘上是对的**（澄清一条已撤回的结论）
+
+⚠️ 本节明确**撤回**此前「ledger 的 `portfolio_value` 是 `adj_ratio=1.0` 的冻结值、
+会污染夏普/回撤」的说法 —— **该结论不成立**。
+
+当前磁盘状态下实测（6 条线全部）：
+
+| 线 | ledger `portfolio_value`（11-02 行） | `holdings.nav_history` 末点 | 差 |
+|---|---|---|---|
+| 22f | 978982.94 | 978982.94 | **0.0** |
+| honest_42f | 975143.50 | 975143.50 | **0.0** |
+| rsi_71421 | 984151.88 | 984151.88 | **0.0** |
+| factor_ranking | 985425.19 | 985425.19 | **0.0** |
+| gbm_voltgt | 994824.57 | 994824.57 | **0.0** |
+| honest_42f_neu | 936671.49 | 936671.49 | **0.0** |
+
+`portfolio.json` 的 `value` 也与之同源（22f = 978982.93 = `holdings.last_value`，
+差 0.01 是 `round(x,2)` 舍入）。
+
+**为什么曾经看起来是错的**：早前报告的「22f ledger.pv = 1,001,156.93，与 holdings 差 +22,174」
+是在**表头错位状态下**读出来的伪值 —— 把 `realized_pnl` 读成了 `portfolio_value`。
+§12.48 迁移到 15 列之后这个伪值已不复存在。
+且 `signal_service.extract_nav_from_trades`（`:253`）的 docstring 已写明
+2026-11-02 那次并发写账本（§12.34/§12.43）曾把 `portfolio_value` 写成单笔盈亏
+（−54.89 / −56.45），**已由 `scripts/fix_ledger_nav_columns.py` 修掉**，
+并且该函数有防御性过滤（空值 / NaN / ≤0 跳过、同日取最后一条）。
+
+**仍然成立、仍需写进本节的风险观察**（不实现，仅记录）：
+`extract_nav_from_trades` 取的正是 ledger 的 `portfolio_value`，
+虽然当前值正确，但它依赖「**ledger 的 pv 一直是组合总市值**」这个不变量。
+一旦将来再发生一次并发写或列契约错位，净值点会被**静默污染**
+（值仍是合法正数、能通过现有过滤），而**目前没有第二道交叉校验**。
+
+> **建议**（未实现）：净值统计最好能对照 `holdings.nav_history` 做一次交叉校验，
+> 异常时以 holdings 为准或明确标注，而不是无声采用 ledger 的值。
+
+### E. 重放语义选「全清仓 + 从 positions 删除」
+
+`paper_portfolio.run_line` 卖出时是**卖掉整个持仓并从 positions 删除**
+（`del positions[c]`），买入时 `positions[c] = {...}` **整体覆盖**
+→ `ledger_replay.py` 默认 `semantics="full_liquidation"`，与生产**逐位一致**。
+
+**诚实声明**：现有账本里**没有任何部分卖出、也没有对同一只票的重复买入**
+（6 条线实测：`partial_sells` 0 次、`re_buys` 0 次），
+所以「全清仓」与「移动平均成本」两种语义在现有数据上**结果完全相同**
+→ 这个选择**无法被现有数据证伪**。
+因此选**与生产一致**的那个（生产是权威口径，日后出现部分卖出时重放不会与生产分叉）。
+`semantics="moving_average"` 作为兼容选项保留（旧 `paper_daily_nav.replay_holdings` 的口径）。
+
+### F. `adj_cost` 不在账本里 → 必须重新查后复权矩阵
+
+`adj_cost`（买入成本对应的后复权价）**不写进 ledger** → 重放时现查：
+
+```
+adj_cost      = last_valid_adj(adj_close, code, buy_date)[0]
+                （= 买入成交日（含）之前最后一个有效后复权价）
+adj_cost_date = 该价格所在日期
+```
+
+缺值时**显式标注为缺失**（`adj_cost=None` → 该票 `frozen_count += 1`，市值冻结在买入额，
+并在该净值点显式列出 `frozen_codes`），**不静默填 0、不用前值**。
+
+实测对账：6 条线全部 `adj_cost` 差异 **0 处**（重放现查的值 == `holdings.json` 存的值）。
+
+### G. 验收锚点 A~E 的**实测**结果
+
+重放命令（真实数据，只读盘，不写 `data/paper/`）：
+
+```bash
+cd /Users/rone/Projects/stock-platform
+env -u PYTHONPATH -u PYTHONHOME backend/.venv-py313/bin/python3 \
+    backend/scripts/ledger_replay.py --json /tmp/replay_real.json
+```
+
+```
+✅ 已取得纸面盘互斥锁（fd=3）
+[load] 5549 stocks, 8756 days, panel=5513 64s
+[adj] 后复权价格合成: 5595 只 × 8756 天 63s
+数据末日 = 2026-11-02
+  [22f]              A(positions)差异 0 | B(cash)残差 +0.0105 | C(末点净值)差 0.0 | 日频点 12 (缺价日 0 / 滞后价日 0)
+  [honest_42f]       A(positions)差异 0 | B(cash)残差 -0.0028 | C(末点净值)差 0.0 | 日频点 12 (缺价日 0 / 滞后价日 0)
+  [rsi_71421]        A(positions)差异 0 | B(cash)残差 -0.0161 | C(末点净值)差 0.0 | 日频点 12 (缺价日 0 / 滞后价日 0)
+  [factor_ranking]   A(positions)差异 0 | B(cash)残差 -0.0009 | C(末点净值)差 0.0 | 日频点 12 (缺价日 0 / 滞后价日 0)
+  [gbm_voltgt]       A(positions)差异 0 | B(cash)残差 +0.0035 | C(末点净值)差 0.0 | 日频点 7 (缺价日 0 / 滞后价日 0)
+  [honest_42f_neu]   A(positions)差异 0 | B(cash)残差 -0.0035 | C(末点净值)差 0.0 | 日频点 7 (缺价日 0 / 滞后价日 0)
+```
+
+#### 锚点汇总
+
+| 锚点 | 门禁 | 22f | honest_42f | rsi_71421 | factor_ranking | gbm_voltgt | honest_42f_neu | 结论 |
+|---|---|---|---|---|---|---|---|---|
+| **A** positions 逐位差异 | 0 | **0** | **0** | **0** | **0** | **0** | **0** | ✅ 6/6 |
+| **B** cash 残差（元） | ≤0.05 | +0.0105 | −0.0028 | −0.0161 | −0.0009 | +0.0035 | −0.0035 | ✅ 6/6 |
+| **C** 末点净值差（元） | ≤0.05 | **0.0** | **0.0** | **0.0** | **0.0** | **0.0** | **0.0** | ✅ 6/6 |
+| **D** 交易日覆盖 | 无缺口 | 12/12 | 12/12 | 12/12 | 12/12 | 7/7 | 7/7 | ✅ 6/6 |
+| **D** 缺价标注 | 显式 | 缺价日 0 / 滞后日 0 / frozen 0 | 同左 | 同左 | 同左 | 同左 | 同左 | ✅ 6/6 |
+
+**A 的具体数字**（22f，其余 5 条线同样为 0 差异）：
+持仓 30 只，`shares` / `cost` / `buy_date` **逐位 0 差异**；
+`adj_cost` 对账差异 **0 处**。
+
+**B 的具体数字**：见上表（`holdings.json` 的 cash vs 重放现金）。
+
+**C 的具体数字**：22f `nav_history` 末点 `{"date":"2026-11-02","value":978982.94}`
+vs 重放末点 978982.94 → 差 **0.0**；其余 5 条线同样 **0.0**。
+
+#### 锚点 D 的实测细节（缺价标注是**真跑出来的**，不是空口声明）
+
+- **交易日覆盖**：对每条线，把「首次建仓日 ~ 数据末日」之间的**全部**交易日
+  与实际产出的净值点日期做集合比对 → **漏天 0、多余 0**（22f/honest_42f/rsi_71421/
+  factor_ranking 各 12 点，gbm_voltgt/honest_42f_neu 各 7 点）。
+- **缺价标注**：每个净值点都强制带 `stale_count` / `missing_count` / `frozen_count` /
+  `stale_price` 四个字段（缺一个就断言失败）。
+  真实数据上这 6 条线当前**缺价日 0、滞后价日 0、frozen 0** —— 因为这批票
+  在它们各自的持仓区间内**每天都有有效后复权价**。
+- **原始矩阵里的 NaN 确实存在，但都在「未持有」的日期**（这是关键区分）：
+  gbm_voltgt 的持仓票 `002827.SZ` 有 5 个 NaN 单元格、`301468.SZ` 有 4 个，
+  但逐个核对持仓演变后确认 **9 个 NaN 全部落在「该票尚未建仓 / 已清仓」的日期**
+  （`002827.SZ` 的 NaN 在 10-26~10-30，而它是 11-02 才建仓的；
+  `301468.SZ` 的 NaN 在 10-26~10-29，同样是 11-02 建仓）
+  → **不构成「持仓期间缺价」**，故标注数确实为 0，这是**真实结论**而非漏标。
+- 标注机制本身的有效性由**合成数据门禁**覆盖
+  （`test_stale_price_day_is_marked` / `test_missing_price_day_is_marked_as_missing` /
+  `test_no_silent_fill_missing_price`）。
+
+### H. 实现与门禁
+
+**实现**（`backend/scripts/ledger_replay.py`，857 行）：
+
+| 函数 | 职责 |
+|---|---|
+| `parse_ledger(path)` | 解析 ledger → `(LedgerRow 列表, 诊断)`。**按行长度**判定契约（15/13），**不靠表头** → 表头错位时仍能读出真值；诊断报告 `header_contract` / `row_contracts` / `contract_mismatch_rows` / `unparsed_rows` |
+| `cash_delta(row, cash_model)` | 单行现金影响。`rate`（默认）/ `ledger_columns`（对照） |
+| `replay_rows(rows, ...)` | 逐笔重放 → 每个成交日一个快照 + 诊断（`partial_sells` / `re_buys` / `cash_unavailable_rows`） |
+| `state_at(snapshots, as_of)` | 重建任意 as_of（含当日）的持仓与现金 |
+| `build_nav_points(...)` | 逐交易日产出净值点 + **缺价显式标注**（stale / missing / frozen + 计数） |
+| `compare_with_holdings(...)` | 与 `holdings.json` 对账（锚点 A / B） |
+| `main()` | 只读 CLI（**取纸面盘同一把 fcntl 锁**，取锁点在加载行情之前） |
+
+**`paper_daily_nav.py` 的扩展**（默认行为**逐位不变**）：
+
+- `--as-of YYYY-MM-DD` → 只产出该交易日那一个点
+- `--range START:END` → 只产出区间内的点；**非交易日直接报错**（不静默取整）
+- 两者同给 → 取交集；交集为空 → 明确记录 `status` 且不产出点
+- ⚠️ 区间收窄只影响**产出哪些点**，**不影响重放口径**：
+  持仓与现金仍从**账本开头**逐笔重放（区间起点之前的持仓必须算对）
+
+**默认行为不变的验证**（真实数据，把 HEAD 版与新版放同一进程对比）：
+
+```
+[22f            ] 净值点逐位相等=True (12点) | 快照cash逐位相等=True | 持仓逐位相等(除新增键)=True
+[honest_42f     ] 净值点逐位相等=True (12点) | 快照cash逐位相等=True | 持仓逐位相等(除新增键)=True
+[rsi_71421      ] 净值点逐位相等=True (12点) | 快照cash逐位相等=True | 持仓逐位相等(除新增键)=True
+[factor_ranking ] 净值点逐位相等=True (12点) | 快照cash逐位相等=True | 持仓逐位相等(除新增键)=True
+[gbm_voltgt     ] 净值点逐位相等=True (7点)  | 快照cash逐位相等=True | 持仓逐位相等(除新增键)=True
+[honest_42f_neu ] 净值点逐位相等=True (7点)  | 快照cash逐位相等=True | 持仓逐位相等(除新增键)=True
+
+净值点全等: True | 快照 cash 全等: True | 持仓(除新增键)全等: True
+持仓里新增的键: ['adj_cost_date']  ← 只增不改，不影响估值（total_return 只读 shares/cost/adj_cost）
+diag 新增键: ['window_end', 'window_start']  删除键: []
+```
+
+**门禁**（`backend/tests/unit/trading/`，全部用**合成数据** + `tmp_path`，跑得快）：
+
+| 文件 | 条数 | 覆盖 |
+|---|---|---|
+| `test_ledger_replay.py` | 21 | 15 列契约 / 13 列契约 / **表头错位仍能读出真值** / 无法判定的行长度被报告而非猜测 / 缺文件返回空+错误 / **cash_after 不可信时重算现金仍正确** / 完全忽略 cash_after / `ledger_columns` 对照模型 / 未知模型报错 / **全清仓语义**（卖出即删除、重买即覆盖、部分卖出被标记）/ 两种语义在重复买入上确实不同 / `state_at` 的 as_of 边界 / **缺行情日被显式标注**（stale / missing / 不静默前值填充）/ 每个交易日都产出点 / range 过滤 |
+| `test_paper_daily_nav_range.py` | 11 | 默认产出全部交易日 / `--as-of` 产出单点且**与默认跑法同日的值一致** / `--range` 只产窗口内且**值与默认跑法一致** / **区间不改变重放口径** / 非交易日报错 / 格式错误报错 / 起点晚于终点报错 / as-of 与 range 取交集 |
+
+测试结果：
+
+```
+$ cd backend && env -u PYTHONPATH -u PYTHONHOME .venv-py313/bin/python3 \
+      -m pytest tests/unit/trading/ -q -p no:warnings --tb=line
+........................................................................ [ 63%]
+.........................................                                [100%]
+```
+
+（`tests/unit/trading/` 全目录 **113 条全绿**，无回归。）
+
+### I. ⚠️ 后复权序列会随数据更新漂移 → 曲线**不是可复现的历史事实**
+
+后复权价是**递推合成**出来的（`load_adjusted_close`：5595 只 × 8756 天）：
+除权除息事件一旦有**新增或修正**、或成分股范围变化，**整条历史序列都会重算**。
+
+所以本节产出的日频曲线是：
+
+> **「按当前后复权序列回算出来的结果」**，而**不是**「2026-10-16 那天真实发生过的历史事实」。
+
+这一条已写进**产物元数据**（`ledger_replay.py` 的 JSON 输出 `reproducibility_note` 字段），
+不只写在文档里：
+
+```json
+"reproducibility_note": "后复权序列是递推出来的 → 历史值会随数据更新漂移 → 本曲线是『按当前后复权序列回算的结果』，不是可复现的历史事实"
+```
+
+**实践含义**：回溯曲线可以用于**口径自洽性检查**（锚点 A/B/C）与**相对比较**，
+但**不能**当作审计意义上的历史业绩凭证；若要后者，必须**冻结当天的后复权快照**再回算。
+
+### J. 本节**不做**的事
+
+- **多资产线 `multi_asset_final` 不做**：A 腿用后复权比值、袖套用前复权价直接乘股数，
+  **两套口径拼不到一条有经济意义的曲线上**；且合并文件 `multi_asset_final_holdings.json`
+  里 `leg=a` 段是**过期快照**。本次只做 6 条单线。
+  > 口径说明：方案书 §2.4 / §2.6 提到的「7 条线」把 `multi_asset_final_a` 这一条
+  > 也算进去了；本节的 6 条 = `paper_daily_nav.DAILY_LINES` 的 6 条单线
+  > （22f / honest_42f / rsi_71421 / factor_ranking / gbm_voltgt / honest_42f_neu）。
+  > `multi_asset_final_ledger.csv` 是 **14 列**（多一个 `leg` 列），
+  > 本模块的 `parse_ledger` 会把它**判为无法解析并明确报告**
+  > （`unparsed_rows`），**不会静默按 15 列硬读**。
+- **不写 `data/paper/` 下的任何生产数据文件**，重放结果只写到自己的输出路径或 dry-run 打印。
+- **不实现** §D 末尾提的「净值统计交叉校验」建议（只记录，未实现）。

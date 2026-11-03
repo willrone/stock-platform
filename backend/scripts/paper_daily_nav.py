@@ -27,6 +27,17 @@
     env -u PYTHONPATH .venv-py313/bin/python3 scripts/paper_daily_nav.py
     env -u PYTHONPATH .venv-py313/bin/python3 scripts/paper_daily_nav.py --dry-run
     env -u PYTHONPATH .venv-py313/bin/python3 scripts/paper_daily_nav.py --backfill 60
+
+历史区间回溯（方案 D，2026-11-03 新增）：
+    env -u PYTHONPATH .venv-py313/bin/python3 scripts/paper_daily_nav.py \\
+        --as-of 2026-10-26 --dry-run
+    env -u PYTHONPATH .venv-py313/bin/python3 scripts/paper_daily_nav.py \\
+        --range 2026-10-16:2026-10-30 --dry-run
+
+⚠️ **默认行为完全不变**（不带 --as-of/--range 时，逐位等同改造前）。
+`--as-of` / `--range` 只**收窄**要产出的净值点区间，
+持仓重放与现金重算统一走 `scripts/ledger_replay.py`（**单一实现**，
+口径纪律：同一件事只写一遍，见方案书 §2.2）。
 """
 
 from __future__ import annotations
@@ -50,6 +61,22 @@ _spec = importlib.util.spec_from_file_location("paper_portfolio_mod", _SCRIPT)
 assert _spec and _spec.loader
 pp = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(pp)
+
+# 方案 D：持仓重放 / 现金重算的**单一实现**放在 ledger_replay.py。
+# 为什么不让本脚本自己再写一遍：项目最贵的错误类型是「口径漂移」
+# （同一件事两份实现，迟早分叉）。§12.53 记录过一次真实教训。
+_LR_SCRIPT = os.path.join(BACKEND_ROOT, "scripts", "ledger_replay.py")
+_lr_spec = importlib.util.spec_from_file_location("ledger_replay_mod", _LR_SCRIPT)
+assert _lr_spec and _lr_spec.loader
+lr = importlib.util.module_from_spec(_lr_spec)
+# ⚠️ 必须**先注册进 sys.modules 再 exec_module**：
+# `ledger_replay.LedgerRow` 是 `@dataclass`，且模块里有 `from __future__ import
+# annotations` → 字段注解是**字符串** → dataclasses 装饰器要回 `sys.modules`
+# 里找类所在的模块（`sys.modules.get(cls.__module__).__dict__`）来解析注解。
+# 不注册 → `sys.modules.get(...)` 返回 None → `AttributeError: 'NoneType'
+# object has no attribute '__dict__'`（pytest 收集期直接报错）。
+sys.modules["ledger_replay_mod"] = lr
+_lr_spec.loader.exec_module(lr)
 
 # 日频盯市覆盖的线：6 条单条线。
 # multi_asset_final 暂**不纳入**：它的估值是"A腿(总回报口径) + 袖套(前复权口径)"
@@ -128,31 +155,29 @@ def replay_holdings(rows: List[Dict[str, str]],
 
     返回：{成交日: {"positions": {code: {...}}, "cash": float}}
 
+    ## ⚠️ 本函数是 `scripts/ledger_replay.py` 的**薄封装**（方案 D，2026-11-03）
+
+    重放逻辑（持仓 + 现金）**只有一份实现** → `ledger_replay.replay_rows`。
+    为什么不给本脚本另写一份：项目最贵的错误类型是**口径漂移**
+    （同一件事两份实现，迟早分叉；§12.53 记录过真实教训）。
+
+    本封装保留 **移动平均成本**语义（`semantics="moving_average"`），
+    与本脚本改造前的行为**逐位一致**（既有门禁测试 `test_paper_daily_nav.py`
+    依赖它）；方案 D 的历史回溯路径用**全清仓**语义（与生产 `run_line` 一致），
+    两者在当前账本上结果相同（实测 6 条线 0 部分卖出、0 重复买入）。
+
     重放规则（与 paper_portfolio 的记账口径一致）：
       BUY : positions[code] = {shares, cost(每股), buy_date, adj_cost}
-            cash ← 该行 `cash_after`（ledger 直接给了，不用自己算）
+            cash ← 按生产费率从 `amount` 重算（**不读 cash_after**，§12.53）
       SELL: shares 扣减；**每股成本不变**（总成本按股数比例扣减 = 移动平均成本法）；
-            shares 归零 → 移除该 code；cash ← 该行 `cash_after`
+            shares 归零 → 移除该 code；cash ← 按生产费率从 `amount` 重算
 
     ⚠️ 已知假设：卖出的 `cost` 按**股数比例**扣减（每股成本不变）。
     现有账本里卖出案例都是"全清仓后重建"（清仓时该比例假设不影响结果），
     所以本假设**未被现有数据证伪**；若将来出现"部分卖出仍持有"的案例，
     需要用 §3 门禁 a 重新验证（回放重建的持仓必须与真实 holdings 逐位相等）。
     """
-    positions: Dict[str, Dict[str, Any]] = {}
-    cash = float(initial_capital or 0.0)
-    snaps: Dict[str, Dict[str, Any]] = {}
-
-    def _adj_at(date: str, code: str) -> Optional[float]:
-        """≤ date 的最后有效后复权价（与 paper_portfolio.last_valid_adj 同口径）。"""
-        if adj_close is None:
-            return None
-        try:
-            v, _d = pp.last_valid_adj(adj_close, code, pd.Timestamp(date))
-        except (KeyError, TypeError, ValueError):
-            return None
-        return v
-
+    parsed: List[Any] = []
     for r in rows:
         d = str(r.get("date") or "").strip()
         code = str(r.get("code") or "").strip()
@@ -160,63 +185,41 @@ def replay_holdings(rows: List[Dict[str, str]],
         if not d or not code:
             continue
         try:
-            sh = float(r.get("shares") or 0)
-            px = float(r.get("price") or 0)
+            float(r.get("shares") or 0)
+            float(r.get("price") or 0)
         except (TypeError, ValueError):
             continue
-
-        if action == "BUY":
-            p = positions.setdefault(code, {
-                "shares": 0.0, "cost": 0.0, "buy_date": d, "adj_cost": None})
-            p["shares"] += sh
-            # 每股成本：多笔买入取**加权平均**（cost 是每股成本，不是总成本）
-            new_shares = p["shares"]
-            p["cost"] = round((p["cost"] * (new_shares - sh) + px * sh)
-                              / new_shares, 3) if new_shares else 0.0
-            p["buy_date"] = d
-            a = _adj_at(d, code)
-            if a is not None:
-                p["adj_cost"] = round(a, 6)
-            # 现金：与 paper_portfolio._record_buy **完全同口径**
-            #   cost = gross + max(5, gross×万3) + gross×千1
-            #   gross 优先用**账本 amount 字段**（ledger 记的就是成交额，权威），
-            #   没有才用 shares×price 兜底。
-            gross = _num(r.get("amount"))
-            if gross is None or gross <= 0:
-                gross = sh * px
-            cash -= gross + max(MIN_COMMISSION, gross * COMMISSION) + gross * SLIPPAGE
-        elif action == "SELL":
-            p = positions.get(code)
-            if p is not None:
-                # 卖出所得用**总回报口径**（与 paper_portfolio.run_line 的 sells 一致）：
-                #   gross = 每股成本 × 股数 × 后复权比值
-                #   → 这就是"总回报口径账本"的定义：账户现金与持仓估值同源
-                ratio = 1.0
-                a_cost = p.get("adj_cost")
-                a_now = _adj_at(d, code)
-                if a_cost and a_now:
-                    try:
-                        if np.isfinite(float(a_cost)) and float(a_cost) > 0:
-                            ratio = float(a_now) / float(a_cost)
-                    except (TypeError, ValueError):
-                        ratio = 1.0
-                # 卖出的 gross 用**账本 amount 字段**（= 总回报口径成交额，
-                #   ledger 记的就是它，权威）；没有才按 cost×股数×比值自算。
-                gross = _num(r.get("amount"))
-                if gross is None or gross <= 0:
-                    gross = float(p.get("cost") or 0.0) * sh * ratio
-                cash += (gross - max(MIN_COMMISSION, gross * COMMISSION)
-                         - gross * STAMP_TAX - gross * SLIPPAGE)
-                p["shares"] = max(0.0, float(p["shares"]) - sh)
-                # 每股成本不变（总成本随股数同比例减少）
-                if p["shares"] <= 0:
-                    positions.pop(code, None)
-        else:
+        if action not in ("BUY", "SELL"):
             continue
+        parsed.append(lr.LedgerRow(
+            date=d, action=action, code=code,
+            name=str(r.get("name") or "").strip(),
+            price=_num(r.get("price")), shares=_num(r.get("shares")),
+            amount=_num(r.get("amount")),
+            commission=_num(r.get("commission")),
+            stamp_tax=_num(r.get("stamp_tax")),
+            slippage=_num(r.get("slippage")),
+            score=_num(r.get("score")),
+            cost_amount=_num(r.get("cost_amount")),
+            realized_pnl=_num(r.get("realized_pnl")),
+            cash_after=_num(r.get("cash_after")),
+            portfolio_value=_num(r.get("portfolio_value")),
+        ))
 
-        snaps[d] = {"positions": {k: dict(v) for k, v in positions.items()},
-                    "cash": cash}
-
+    snaps: Dict[str, Dict[str, Any]] = {}
+    if parsed:
+        snapshots, _diag = lr.replay_rows(
+            parsed, initial_capital=initial_capital,
+            adj_close=adj_close,
+            last_valid_fn=pp.last_valid_adj,
+            semantics="moving_average",
+            cash_model="rate",
+        )
+        for snap in snapshots:
+            snaps[str(snap["date"])[:10]] = {
+                "positions": {k: dict(v) for k, v in (snap["positions"] or {}).items()},
+                "cash": float(snap["cash"]),
+            }
     return snaps
 
 
@@ -224,6 +227,20 @@ def trading_days(master: pd.DatetimeIndex, start: pd.Timestamp,
                  end: pd.Timestamp) -> List[pd.Timestamp]:
     days = [d for d in master if start <= d <= end]
     return sorted(days)
+
+
+def _nearest_trading_day(master: pd.DatetimeIndex,
+                          ts: pd.Timestamp) -> Optional[str]:
+    """离 `ts` 最近的**有交易日**（用于报错提示，不用于静默取整）。"""
+    if master is None or len(master) == 0:
+        return None
+    before = [d for d in master if d <= ts]
+    after = [d for d in master if d > ts]
+    if before:
+        return str(before[-1].date())
+    if after:
+        return str(after[0].date())
+    return None
 
 
 def nav_daily_path(strategy: str) -> str:
@@ -257,8 +274,22 @@ def write_nav_daily(strategy: str, points: List[Dict[str, Any]]) -> None:
 def build_line_points(strategy: str, adj_close: Optional[pd.DataFrame],
                        master: pd.DatetimeIndex,
                        backfill_days: Optional[int] = None,
+                       as_of: Optional[str] = None,
+                       range_: Optional[str] = None,
                        ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-    """算出一条线的日频序列 + 诊断信息。"""
+    """算出一条线的日频序列 + 诊断信息。
+
+    ## `as_of` / `range_`（方案 D：历史区间回溯）
+
+    - 两者都为空 → **默认行为**（首次建仓日 ~ 数据末日，逐位等同改造前）
+    - `as_of="YYYY-MM-DD"` → 只产出**该交易日**那一个点
+    - `range_="START:END"` → 只产出 **[START, END] 区间**内的点
+      （两个端点都要是交易日；非交易日 → 报错，不静默取整）
+
+    ⚠️ 区间收窄只影响**产出哪些点**，不影响**重放口径**：
+    持仓与现金仍然从**账本开头**开始逐笔重放
+    （区间起点之前的持仓必须算对，否则区间内的市值就是错的）。
+    """
     paper = pp.load_holdings(strategy, 1_000_000.0)
     cap0 = float(paper.get("initial_capital") or 1_000_000.0)
     rows = read_ledger(strategy)
@@ -275,9 +306,49 @@ def build_line_points(strategy: str, adj_close: Optional[pd.DataFrame],
     first_trade = min(snaps.keys())
     start = pd.Timestamp(first_trade)
     end = master[-1]
+
+    # ── 区间收窄（方案 D）───────────────────────────────────────────
+    win_start: Optional[pd.Timestamp] = None
+    win_end: Optional[pd.Timestamp] = None
+    if range_:
+        parts = str(range_).split(":")
+        if len(parts) != 2 or not all(p.strip() for p in parts):
+            raise ValueError(f"--range 格式应为 START:END，收到 {range_!r}")
+        win_start = pd.Timestamp(parts[0].strip())
+        win_end = pd.Timestamp(parts[1].strip())
+        if win_start > win_end:
+            raise ValueError(f"--range 起点晚于终点：{range_}")
+        for label, ts in (("START", win_start), ("END", win_end)):
+            if ts not in master:
+                raise ValueError(
+                    f"--range {label}={ts.date()} 不是交易日"
+                    f"（最近的有交易日：{_nearest_trading_day(master, ts)}）")
+    if as_of:
+        ts = pd.Timestamp(str(as_of).strip()[:10])
+        if ts not in master:
+            raise ValueError(
+                f"--as-of {ts.date()} 不是交易日"
+                f"（最近的有交易日：{_nearest_trading_day(master, ts)}）")
+        # `--as-of` 单独给 → 窗口 = [as_of, as_of]（**只产出那一个点**）
+        # `--as-of` 与 `--range` 同给 → 保留 range 的起点，终点取**更早**的那个
+        if win_start is None:
+            win_start = ts
+        win_end = ts if win_end is None else min(win_end, ts)
+    diag["window_start"] = str(win_start.date()) if win_start is not None else None
+    diag["window_end"] = str(win_end.date()) if win_end is not None else None
+
     days = trading_days(master, start, end)
     if backfill_days:
         days = days[-int(backfill_days):]
+    if win_start is not None:
+        days = [d for d in days if d >= win_start]
+    if win_end is not None:
+        days = [d for d in days if d <= win_end]
+    if win_start is not None and win_end is not None and win_start > win_end:
+        # 交集为空（如 --as-of 早于 --range 起点）→ 不产出点，但**明确记录**
+        diag["status"] = (f"区间为空（{win_start.date()} > {win_end.date()}）"
+                          f" —— --as-of 与 --range 没有交集")
+        return [], diag
 
     points: List[Dict[str, Any]] = []
     cur_pos: Dict[str, Any] = {}
@@ -344,6 +415,10 @@ def main() -> None:
     ap.add_argument("--backfill", type=int, default=None,
                     help="只保留最近 N 个交易日（默认全量）")
     ap.add_argument("--strategies", nargs="*", default=DAILY_LINES)
+    ap.add_argument("--as-of", default=None,
+                    help="方案 D：只产出该交易日那一个点（如 2026-10-26）")
+    ap.add_argument("--range", dest="range_", default=None,
+                    help="方案 D：只产出该区间的点，格式 START:END（两端都要是交易日）")
     args = ap.parse_args()
 
     # ── 互斥锁（§12.52）───────────────────────────────────────────
@@ -360,7 +435,9 @@ def main() -> None:
     print(f"数据末日 = {master[-1].date()}", flush=True)
 
     for s in args.strategies:
-        points, diag = build_line_points(s, adj_close, master, args.backfill)
+        points, diag = build_line_points(s, adj_close, master, args.backfill,
+                                         as_of=args.as_of,
+                                         range_=args.range_)
         if not points:
             print(f"  [{s}] {diag.get('status', '无点')}", flush=True)
             continue
