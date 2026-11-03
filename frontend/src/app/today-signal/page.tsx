@@ -42,8 +42,18 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { RefreshCw, TrendingUp, TrendingDown, Info, Wallet, Target, ShieldAlert } from 'lucide-react';
+import {
+  RefreshCw,
+  TrendingUp,
+  TrendingDown,
+  Info,
+  Wallet,
+  Target,
+  ShieldAlert,
+  LineChart,
+} from 'lucide-react';
 import { ErrorState } from '@/components/mobile/ErrorState';
+import DailyNavChart, { type DailyNavData } from './DailyNavChart';
 import { MobileTradeCard } from '@/components/mobile/MobileTradeCard';
 import { ResponsiveTable } from '@/components/mobile/ResponsiveTable';
 import { DeltaValue } from '@/components/mobile/DeltaValue';
@@ -52,6 +62,7 @@ import { BOTTOM_NAV_CONTENT_PADDING, MIN_TOUCH_TARGET } from '@/components/mobil
 import { SafeAreaTop } from '@/components/mobile/SafeAreaTop';
 import { tradingGet, daysSince } from '@/components/mobile/tradingClient';
 import { trackEventOnce } from '@/services/funnel';
+import { primaryColors } from '@/theme/tokens';
 
 type Trade = {
   code: string;
@@ -138,7 +149,15 @@ type Performance = {
   nav_end?: string | null;
   n_trades?: number;
   locked_detail?: boolean;
+  /** 付费墙升级提示（免费档位命中时后端会带上） */
+  upgrade_hint?: string | null;
   recent_trades?: Array<Record<string, string | number | undefined>>;
+  /**
+   * 日频盯市净值点（total_return@trade_day 口径，~12 点 / 1 月）。
+   * ⚠️ 与周频 `nav_basis`（调仓日净值点）、以及 paper-portfolio 页的
+   * 「月频复利还原」是**三套互不相同的口径**，不可混画。
+   */
+  nav_daily?: DailyNavData;
 };
 
 type SignalQuality = {
@@ -207,8 +226,7 @@ const fmtScore = (v?: number | string | null) => {
   return Number.isFinite(n) ? n.toFixed(3) : String(v);
 };
 
-const feeOf = (t: Trade) =>
-  (t.commission ?? 0) + (t.stamp_tax ?? 0) + (t.slippage ?? 0);
+const feeOf = (t: Trade) => (t.commission ?? 0) + (t.stamp_tax ?? 0) + (t.slippage ?? 0);
 
 export default function TodaySignalPage() {
   const router = useRouter();
@@ -238,9 +256,9 @@ export default function TodaySignalPage() {
       setDelayDays(res.delay_days ?? 0);
       setHasDetail(res.include_execution_detail !== false);
       setStrategiesLoaded(true);
-      const usable = (res.strategies || []).filter((s) => !s.locked);
+      const usable = (res.strategies || []).filter(s => !s.locked);
       if (usable.length) {
-        const withPaper = usable.find((s) => s.n_positions > 0) || usable[0];
+        const withPaper = usable.find(s => s.n_positions > 0) || usable[0];
         setActive(withPaper.key);
       }
     } catch (e) {
@@ -268,7 +286,9 @@ export default function TodaySignalPage() {
     setError(null);
     setErrorDetail(null);
     try {
-      const res = await tradingGet<DailySignal>(`/trading/signal?strategy=${encodeURIComponent(active)}`);
+      const res = await tradingGet<DailySignal>(
+        `/trading/signal?strategy=${encodeURIComponent(active)}`
+      );
       setSignal(res);
       // 漏斗埋点：用户真的看到了一条信号（不是只进了页面）
       trackEventOnce('view_signal', { source: 'today-signal', strategy: active });
@@ -470,10 +490,10 @@ export default function TodaySignalPage() {
         <Select
           size="small"
           value={active}
-          onChange={(e) => setActive(e.target.value)}
+          onChange={e => setActive(e.target.value)}
           sx={{ minWidth: { xs: '100%', sm: 260 }, minHeight: MIN_TOUCH_TARGET }}
         >
-          {strategies.map((s) => (
+          {strategies.map(s => (
             <MenuItem key={s.key} value={s.key} disabled={s.locked}>
               <Stack direction="row" spacing={1} alignItems="center" sx={{ width: '100%' }}>
                 <span>
@@ -510,9 +530,7 @@ export default function TodaySignalPage() {
         </Box>
       )}
 
-      {!loading && signal?.status === 'no_data' && (
-        <Alert severity="info">{signal.message}</Alert>
-      )}
+      {!loading && signal?.status === 'no_data' && <Alert severity="info">{signal.message}</Alert>}
 
       {!loading && !error && signal?.status === 'ok' && (
         <>
@@ -547,7 +565,7 @@ export default function TodaySignalPage() {
                     {navCaption}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    周频调仓口径，回撤会被低估
+                    周频调仓口径，回撤会被低估 —— 以日频盯市曲线为准
                   </Typography>
                 </CardContent>
               </Card>
@@ -624,6 +642,41 @@ export default function TodaySignalPage() {
             </Typography>
           </Alert>
 
+          {/* ── 日频盯市净值曲线（口径③）────────────────────────────
+           * ⚠️ 与上方卡片里的周频「调仓日净值点」（口径②）、以及
+           *    paper-portfolio 页的「月频复利还原」（口径①）是三套不同口径，
+           *    绝不同框、不可直接对比。见 DailyNavChart 组件头注释。
+           */}
+          <Card sx={{ mb: 2 }} data-testid="daily-nav-card">
+            <CardContent>
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+                <LineChart size={18} color={primaryColors.DEFAULT} />
+                <Typography variant="subtitle1">日频盯市净值</Typography>
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  label="每个交易日盯市"
+                  sx={{ height: 22, fontSize: 11 }}
+                />
+              </Stack>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                纸面盘组合在<strong>每个交易日收盘后按总回报口径盯市</strong>算出的净值点。
+                与上方「最大回撤 / 年化夏普」卡片使用的周频调仓日净值点
+                <strong>不是同一口径</strong> —— 周频会漏掉持仓期内的回撤，回撤以本曲线为准。
+              </Typography>
+              <DailyNavChart
+                data={perf?.nav_daily}
+                perfLoaded={perf !== null}
+                locked={perf?.locked_detail === true}
+                upgradeHint={perf?.upgrade_hint}
+                // 仅开发态开启「暂无日频数据」降级分支的前端级演示开关。
+                // 生产构建里 process.env.NODE_ENV !== 'development' → 该 prop 恒为 false，
+                // 且组件内部还会再判一次 isDev，页面上不会出现任何预览痕迹。
+                previewUnavailable={process.env.NODE_ENV === 'development'}
+              />
+            </CardContent>
+          </Card>
+
           {/* 信号质量：凭什么信这个信号 */}
           {quality && quality.status === 'ok' && quality.horizons && (
             <Card sx={{ mb: 2 }}>
@@ -650,7 +703,11 @@ export default function TodaySignalPage() {
                     </Grid>
                   ))}
                 </Grid>
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ mt: 1, display: 'block' }}
+                >
                   超额 = 该信号股票收益 − 同期全市场等权收益。中位{' '}
                   {Object.values(quality.horizons)[0]
                     ? (Object.values(quality.horizons)[0].median_excess * 100).toFixed(2)
@@ -677,7 +734,7 @@ export default function TodaySignalPage() {
                   买不进 {b.code} {b.name} —— {b.reason}
                 </Typography>
               ))}
-              {(signal?.blocked_sells ?? []).slice(0, 6).map((b) => (
+              {(signal?.blocked_sells ?? []).slice(0, 6).map(b => (
                 <Typography variant="caption" key={`s${b.code}`} sx={{ display: 'block' }}>
                   卖不出 {b.code} {b.name} —— {b.reason}
                 </Typography>
@@ -701,7 +758,7 @@ export default function TodaySignalPage() {
                   <>
                     {/* 移动端：卡片 */}
                     <Box sx={{ display: { xs: 'block', md: 'none' } }}>
-                      {signal.buys.map((b) => (
+                      {signal.buys.map(b => (
                         <MobileTradeCard
                           key={b.code}
                           trade={{
@@ -735,7 +792,7 @@ export default function TodaySignalPage() {
                             </TableRow>
                           </TableHead>
                           <TableBody>
-                            {signal.buys.map((b) => (
+                            {signal.buys.map(b => (
                               <TableRow key={b.code}>
                                 <TableCell sx={{ fontFamily: 'monospace' }}>{b.code}</TableCell>
                                 <TableCell>{b.name}</TableCell>
@@ -757,7 +814,9 @@ export default function TodaySignalPage() {
                                     {(b.factors ?? []).map(f => (
                                       <Tooltip
                                         key={f.factor}
-                                        title={`${f.factor} 贡献 ${f.contribution > 0 ? '+' : ''}${f.contribution}`}
+                                        title={`${f.factor} 贡献 ${f.contribution > 0 ? '+' : ''}${
+                                          f.contribution
+                                        }`}
                                       >
                                         <Chip
                                           size="small"
@@ -765,7 +824,8 @@ export default function TodaySignalPage() {
                                           variant="outlined"
                                           sx={{
                                             fontSize: 11,
-                                            color: f.contribution > 0 ? 'success.main' : 'error.main',
+                                            color:
+                                              f.contribution > 0 ? 'success.main' : 'error.main',
                                             borderColor:
                                               f.contribution > 0 ? 'success.light' : 'error.light',
                                           }}
@@ -804,7 +864,7 @@ export default function TodaySignalPage() {
                 ) : (
                   <>
                     <Box sx={{ display: { xs: 'block', md: 'none' } }}>
-                      {signal.sells.map((s) => (
+                      {signal.sells.map(s => (
                         <MobileTradeCard
                           key={s.code}
                           trade={{
@@ -835,7 +895,7 @@ export default function TodaySignalPage() {
                             </TableRow>
                           </TableHead>
                           <TableBody>
-                            {signal.sells.map((s) => (
+                            {signal.sells.map(s => (
                               <TableRow key={s.code}>
                                 <TableCell sx={{ fontFamily: 'monospace' }}>{s.code}</TableCell>
                                 <TableCell>{s.name}</TableCell>
@@ -870,7 +930,7 @@ export default function TodaySignalPage() {
                   <Typography variant="subtitle1">当前持仓（{signal.holds.length}）</Typography>
                 </Stack>
                 <Box sx={{ display: { xs: 'block', md: 'none' } }}>
-                  {signal.holds.map((h) => (
+                  {signal.holds.map(h => (
                     <MobileTradeCard
                       key={h.code}
                       trade={{
@@ -899,7 +959,7 @@ export default function TodaySignalPage() {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {signal.holds.map((h) => (
+                        {signal.holds.map(h => (
                           <TableRow key={h.code}>
                             <TableCell sx={{ fontFamily: 'monospace' }}>{h.code}</TableCell>
                             <TableCell>{h.name}</TableCell>
@@ -930,8 +990,8 @@ export default function TodaySignalPage() {
                 成本模型：佣金 {(signal.cost_model.commission * 10000).toFixed(1)}‱ · 印花税{' '}
                 {(signal.cost_model.stamp_tax * 10000).toFixed(1)}‱（卖出） · 滑点{' '}
                 {(signal.cost_model.slippage * 1000).toFixed(1)}‰（单边） · 现金预留{' '}
-                {(signal.cost_model.cash_reserve * 100).toFixed(0)}% ·{' '}
-                {signal.cost_model.board_lot} 股整手
+                {(signal.cost_model.cash_reserve * 100).toFixed(0)}% · {signal.cost_model.board_lot}{' '}
+                股整手
               </Typography>
             </>
           )}
@@ -939,7 +999,10 @@ export default function TodaySignalPage() {
       )}
 
       {/* 主内容底部留白，避免最后一行被固定底栏盖住 */}
-      <Box sx={{ height: BOTTOM_NAV_CONTENT_PADDING, display: { xs: 'block', md: 'none' } }} aria-hidden="true" />
+      <Box
+        sx={{ height: BOTTOM_NAV_CONTENT_PADDING, display: { xs: 'block', md: 'none' } }}
+        aria-hidden="true"
+      />
     </Box>
   );
 }
