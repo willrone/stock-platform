@@ -375,22 +375,37 @@ def build_line_points(strategy: str, adj_close: Optional[pd.DataFrame],
             "stale_price": stale or None,
         })
 
-    # ── 门禁 a：日频末点必须与周频 nav_history 末点**逐位一致** ──────────
+    # ── 门禁 a：日频必须与周频 nav_history 末点**逐位一致** ──────────────
     # 两者本该是同一口径（同一估值函数、同一持仓、同一 as_of）。
     # 不一致 = 两套口径漂移 → 直接报出来，不许悄悄通过。
+    #
+    # ⚠️ 比对对象的选取（2026-11-03 修正）：
+    #   原来只在「日频末点日期 == 周频末点日期」时才比对。但数据末日常常**比周频末日新**
+    #   （当天盘中数据未出 → 末点整屏 stale_price），于是门禁永远落到「无法比对」分支
+    #   → 门禁形同虚设（实测 2026-11-03：日频末点 11-03、周频末点 11-02 → 无法比对）。
+    #   现在改成：**按周频末点日期去日频点里取对应点**来比对；
+    #   该点带滞后价 → 仍判「无法比对」（值不可信）；日频里没有该日期 → 也判「无法比对」。
     nav = list(paper.get("nav_history") or [])
     if nav and points:
         last_nav = nav[-1]
-        if str(last_nav.get("date")) == points[-1]["date"]:
-            diff = abs(points[-1]["value"] - float(last_nav.get("value") or 0))
-            diag["nav_consistency_date"] = points[-1]["date"]
+        nav_date = str(last_nav.get("date"))
+        pt = next((p for p in reversed(points)
+                   if str(p.get("date")) == nav_date), None)
+        if pt is None:
+            diag["nav_consistency_ok"] = None
+            diag["nav_consistency_note"] = (
+                f"日频点里没有 {nav_date}（周频末点日期）→ 无法比对")
+        elif pt.get("stale_price"):
+            diag["nav_consistency_ok"] = None
+            diag["nav_consistency_note"] = (
+                f"{nav_date} 的日频点带滞后价（{len(pt['stale_price'])} 只）"
+                f"→ 值不可信，不作比对")
+        else:
+            diff = abs(float(pt["value"]) - float(last_nav.get("value") or 0))
+            diag["nav_consistency_date"] = nav_date
             diag["nav_consistency_diff"] = round(diff, 2)
             # 阈值 0.05 元：逐票 round(value, 2) 的舍入累积（实测最大 0.02 元）
             diag["nav_consistency_ok"] = bool(diff < 0.05)
-        else:
-            diag["nav_consistency_ok"] = None
-            diag["nav_consistency_note"] = (
-                f"周频末点日期 {last_nav.get('date')} ≠ 日频末点 {points[-1]['date']}")
 
     diag.update({"first_trade": first_trade, "last_day": str(end.date()),
                  "n_points": len(points),
@@ -434,6 +449,7 @@ def main() -> None:
     adj_close = pp.load_adjusted_close(codes, master)
     print(f"数据末日 = {master[-1].date()}", flush=True)
 
+    gate_failures: List[str] = []
     for s in args.strategies:
         points, diag = build_line_points(s, adj_close, master, args.backfill,
                                          as_of=args.as_of,
@@ -460,12 +476,28 @@ def main() -> None:
                     ("**不一致 ✗**" if cons is False else "无法比对"))
         if cons is False:
             cons_txt += f"（差 {diag.get('nav_consistency_diff')}）"
+        elif cons is None and diag.get("nav_consistency_note"):
+            cons_txt += f"（{diag['nav_consistency_note']}）"
+        # ⚠️ 打印口径：窗口模式（--as-of / --range）下要报**本次产出点**的区间与末值，
+        #    不能用 merged（合并后的全量）—— 否则 --range 2026-10-20:2026-10-30
+        #    会打印出「区间 ~ 2026-11-02、末日市值 ¥978,983」，而它实际只产到 10-30，
+        #    与下面的「与周频末点」比对口径也对不上（比的是 points 末日）。
+        _last = points[-1]
         print(f"  [{s}] 点数 {len(merged)}（新增 {len(points)}，"
-              f"区间 {merged[0]['date']} ~ {merged[-1]['date']}）| "
+              f"本次区间 {points[0]['date']} ~ {_last['date']}）| "
               f"停牌/缺价日 {diag.get('n_stale_days', 0)} | "
-              f"末日市值 ¥{merged[-1]['value']:,.0f} "
-              f"（{(merged[-1]['return_pct'] or 0):+.2f}%）| 与周频末点{cons_txt}",
+              f"末日市值 ¥{_last['value']:,.0f} "
+              f"（{(_last['return_pct'] or 0):+.2f}%）| 与周频末点{cons_txt}",
               flush=True)
+        # 门禁 a 失败（日频末点与周频 nav_history 末点不一致）必须让**退出码**变非 0，
+        #    否则 cron 每天跑完都是 0，曲线与周频不一致没人会发现（静默失效）。
+        if cons is False:
+            gate_failures.append(s)
+
+    if gate_failures:
+        print(f"\n❌ 门禁 a 失败（日频末点与周频 nav_history 末点不一致）："
+              f"{', '.join(gate_failures)}", flush=True)
+        sys.exit(1)
 
     if args.dry_run:
         print("\n[dry-run] 未写盘", flush=True)
