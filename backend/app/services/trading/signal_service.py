@@ -29,6 +29,8 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import pandas as pd
 
+from app.services.trading.latest_quote import enrich_orders
+
 # ── 成本模型（必须与 backend/scripts/paper_portfolio.py 一致）──
 COMMISSION = 0.0003
 MIN_COMMISSION = 5.0
@@ -445,6 +447,14 @@ class TradingSignalService:
                 else (f"{float(_pnl):.2f}%" if _pnl is not None else "—"))
         )
 
+        # ── 建设项 C（2026-11-05）：可下单清单 ────────────────────────────
+        # 按行情层**最新收盘**补：最新价 / 涨跌幅 / 可成交性（涨停·跌停·停牌·无行情）
+        # / 整手校验 / 参考金额 / 目标权重。撮合口径字段（price/shares/amount）不动，
+        # 否则下单清单会和纸面账本对不上。不可成交的标的**保留在清单里**，
+        # 由前端标红 —— 静默剔除会让人以为「策略选了 69 只、实际只有 64 只能买」。
+        _orders = enrich_orders(buys, sells, portfolio_value=value)
+        buys, sells = _orders["buys"], _orders["sells"]
+
         return {
             "strategy": strategy,
             "display_name": spec.display_name,
@@ -478,6 +488,15 @@ class TradingSignalService:
             # 因可成交性被拦下的标的 —— 让用户知道「信号里有它但没成交」
             "blocked_buys": (line or {}).get("blocked_buys") or [],
             "blocked_sells": (line or {}).get("blocked_sells") or [],
+            # ── 可下单清单的行情新鲜度与拦单计数（建设项 C，只增不改）──
+            # price_as_of = 这批订单里**最旧**的行情日期（整批能不能照着下单取决于最旧那行）；
+            # price_as_of_newest = 最新的那行。两者不同说明行情层更新不同步。
+            "price_as_of": _orders["price_as_of"],
+            "price_as_of_newest": _orders["price_as_of_newest"],
+            "n_price_dates": _orders["n_price_dates"],
+            "n_orders": _orders["n_orders"],
+            "n_not_tradable": _orders["n_not_tradable"],
+            "n_no_quote": _orders["n_no_quote"],
             "cost_model": {
                 "commission": COMMISSION,
                 "stamp_tax": STAMP_TAX,

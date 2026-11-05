@@ -79,6 +79,24 @@ type Trade = {
   limit_pct?: number;
   /** 因子归因：为什么买它（42f 专用） */
   factors?: { factor: string; contribution: number; direction: string }[];
+  // ── 可下单清单（后端 latest_quote 补的字段，2026-11-05）──
+  /** 行情层最新一根 bar 的收盘价（未复权）；null = 没有行情 */
+  latest_price?: number | null;
+  /** 上面那根 bar 的日期 */
+  price_as_of?: string | null;
+  /** 当日涨跌幅（百分数，-0.58 = -0.58%）；ETF 层无此字段 → null */
+  latest_pct_chg_pct?: number | null;
+  /** true=能成交 / false=买不进或卖不出 / null=无行情或当日 bar 未收盘 */
+  tradable?: boolean | null;
+  tradable_reason?: string;
+  /** 涨跌停判定是否真的跑过（false = 那一层没有涨跌幅） */
+  limit_check?: boolean;
+  /** 收盘价 or 盘中未收盘 */
+  price_basis?: string;
+  lots?: number;
+  lot_ok?: boolean;
+  ref_amount_latest?: number | null;
+  target_weight_pct?: number | null;
 };
 
 type Hold = {
@@ -133,6 +151,14 @@ type DailySignal = {
   execution_detail_locked?: boolean;
   blocked_buys?: { code: string; name?: string; reason: string }[];
   blocked_sells?: { code: string; name?: string; reason: string }[];
+  // ── 可下单清单的行情新鲜度与拦单计数（2026-11-05）──
+  /** 这批订单里**最旧**的一根行情 bar（能不能照着下单取决于它） */
+  price_as_of?: string | null;
+  price_as_of_newest?: string | null;
+  n_price_dates?: number;
+  n_orders?: number;
+  n_not_tradable?: number;
+  n_no_quote?: number;
 };
 
 type Performance = {
@@ -225,6 +251,18 @@ const fmtScore = (v?: number | string | null) => {
   const n = Number(v);
   return Number.isFinite(n) ? n.toFixed(3) : String(v);
 };
+
+/**
+ * 可下单清单专用色。为什么不用主题的 success.main / error.main：
+ * 用 scripts/ui_audit_today_signal.js 实测过 WCAG 相对亮度对比度 ——
+ *   success.main #16A34A：白底 3.30、浅红底 2.91（AA 要求 4.5，不及格）
+ *   error.main   #DC2626：浅红底 4.26（不及格）
+ * 换成深一档同色相后：#166534 白底 7.13 / 浅红底 6.29；
+ * #B91C1C 6.47 / 5.71；#B54708 5.43 / 4.79。
+ */
+const ORDER_OK = '#166534';
+const ORDER_BAD = '#B91C1C';
+const ORDER_WARN = '#B54708';
 
 const feeOf = (t: Trade) => (t.commission ?? 0) + (t.stamp_tax ?? 0) + (t.slippage ?? 0);
 
@@ -373,6 +411,18 @@ export default function TodaySignalPage() {
   const totalSellAmount = (signal?.sells ?? []).reduce((s, b) => s + (b.amount ?? 0), 0);
   const totalCost = (signal?.buys ?? []).reduce((s, b) => s + feeOf(b), 0);
 
+  // 可下单清单（2026-11-05）：买 + 卖合成一批订单行。
+  // 顺序**保持后端撮合顺序**（不重排）——重排会让人以为平台按某种优先级排单。
+  // 不可成交的行留在原位并标红，配「不可成交 N 笔」计数，让漏掉的笔数看得见。
+  const orderRows = useMemo(
+    () => [
+      ...(signal?.buys ?? []).map(t => ({ side: 'buy' as const, t })),
+      ...(signal?.sells ?? []).map(t => ({ side: 'sell' as const, t })),
+    ],
+    [signal]
+  );
+  const nLotWarn = orderRows.filter(r => r.t.lot_ok === false).length;
+
   // 风险指标统一从 performance 读（signal 端点不返回）
   const sharpe = perf?.sharpe_ratio ?? null;
   const maxDd = perf?.max_drawdown_pct ?? null;
@@ -460,16 +510,10 @@ export default function TodaySignalPage() {
               sx={{ height: 28 }}
             />
           )}
-          {tier === 'free' && (
-            <Button
-              size="small"
-              variant="contained"
-              onClick={() => router.push('/pricing')}
-              sx={{ ml: 'auto !important', minHeight: MIN_TOUCH_TARGET }}
-            >
-              升级解锁全部信号线
-            </Button>
-          )}
+          {/* 自用口径（2026-11-05）：档位 Chip **保留但不跳转** ——
+           * 不删档位标识（它说明这份数据是给谁看的、延迟多少），
+           * 但删掉「升级解锁」按钮：/pricing 已冻结，点了没有意义，
+           * 而且对外挂升级引导本身就是合规红线（向公众收费的个股信号）。 */}
         </Stack>
       )}
 
@@ -740,6 +784,196 @@ export default function TodaySignalPage() {
                 </Typography>
               ))}
             </Alert>
+          )}
+
+          {/* ── 可下单清单（自用口径，2026-11-05 建设项 C）──────────────────
+           * 目标：打开页面到能照着下单 ≤10 分钟。
+           * 口径两条，写死在这里：
+           *   1. **数量** = 纸面撮合结果（整手），与 ledger.csv 一致，不按最新价重新撮合；
+           *   2. **价格/金额** = 行情层最后一根 bar 的收盘价重算的参考值，只用于下单前对金额。
+           * 不可成交的标的（涨停/跌停/停牌/无行情/盘中未收盘）**保留在清单里并标红**：
+           * 静默剔除会让人以为「策略选了 69 只、实际只有 64 只能买」。
+           * 门禁沿用买卖明细的档位门禁（hasDetail），免费档看不到数量与金额。
+           */}
+          {hasDetail && orderRows.length > 0 && (
+            <Card sx={{ mb: 2 }} data-testid="orderable-list-card">
+              <CardContent>
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  alignItems="center"
+                  useFlexGap
+                  sx={{ mb: 0.5, flexWrap: 'wrap' }}
+                >
+                  <Wallet size={18} color={primaryColors.DEFAULT} />
+                  <Typography variant="subtitle1">可下单清单</Typography>
+                  <Chip
+                    size="small"
+                    variant="outlined"
+                    label={`价格截至 ${signal.price_as_of ?? '未知'}${
+                      (signal.n_price_dates ?? 1) > 1 ? `（最新到 ${signal.price_as_of_newest}）` : ''
+                    }`}
+                    sx={{ height: 24, fontSize: 12 }}
+                  />
+                  {(signal.n_not_tradable ?? 0) > 0 && (
+                    <Chip
+                      size="small"
+                      color="error"
+                      variant="outlined"
+                      label={`${signal.n_not_tradable} 笔不可成交`}
+                      sx={{ height: 24, fontSize: 12 }}
+                    />
+                  )}
+                  {(signal.n_no_quote ?? 0) > 0 && (
+                    <Chip
+                      size="small"
+                      color="warning"
+                      variant="outlined"
+                      label={`${signal.n_no_quote} 笔无行情`}
+                      sx={{ height: 24, fontSize: 12 }}
+                    />
+                  )}
+                  {nLotWarn > 0 && (
+                    <Chip
+                      size="small"
+                      color="warning"
+                      variant="outlined"
+                      label={`${nLotWarn} 笔不是整手`}
+                      sx={{ height: 24, fontSize: 12 }}
+                    />
+                  )}
+                </Stack>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+                  股数来自纸面撮合（整手，与账本一致）；最新价与参考金额按<strong>行情层最后一根收盘价</strong>
+                  重算，<strong>不等于</strong>信号日撮合价。红色行 = 这个价买不进／卖不出，仍然列在这里。
+                </Typography>
+                <ResponsiveTable minWidth={880}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>方向</TableCell>
+                        <TableCell>代码 / 名称</TableCell>
+                        <TableCell align="right">最新价</TableCell>
+                        <TableCell align="right">当日涨跌</TableCell>
+                        <TableCell align="right">股数（整手）</TableCell>
+                        <TableCell align="right">参考金额</TableCell>
+                        <TableCell align="right">占组合</TableCell>
+                        <TableCell>可成交性</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {orderRows.map(({ side, t }) => {
+                        const blocked = t.tradable === false;
+                        const unknown = t.tradable === null;
+                        return (
+                          <TableRow
+                            key={`${side}-${t.code}`}
+                            sx={{
+                              bgcolor: blocked
+                                ? 'rgba(198,40,40,0.08)'
+                                : unknown
+                                ? 'rgba(237,108,2,0.07)'
+                                : 'transparent',
+                            }}
+                          >
+                            <TableCell
+                              sx={{
+                                fontWeight: 700,
+                                color: side === 'buy' ? ORDER_OK : ORDER_BAD,
+                              }}
+                            >
+                              {side === 'buy' ? '买' : '卖'}
+                            </TableCell>
+                            <TableCell>
+                              <Box component="span" sx={{ fontFamily: 'monospace' }}>{t.code}</Box>
+                              <Typography variant="caption" color="text.secondary" component="span">
+                                {' '}
+                                {t.name ?? ''}
+                              </Typography>
+                            </TableCell>
+                            <TableCell align="right">
+                              {t.latest_price != null ? (
+                                <>
+                                  <Box component="span" sx={{ fontFamily: 'monospace' }}>
+                                    {t.latest_price.toFixed(2)}
+                                  </Box>
+                                  <Typography variant="caption" color="text.secondary" component="span">
+                                    {' '}
+                                    {t.price_as_of ?? ''}
+                                    {t.price_basis === '盘中未收盘' ? ' 盘中' : ''}
+                                  </Typography>
+                                </>
+                              ) : (
+                                <Typography variant="caption" color="text.secondary">
+                                  无行情
+                                </Typography>
+                              )}
+                            </TableCell>
+                            <TableCell align="right">
+                              {t.latest_pct_chg_pct != null ? (
+                                <Box
+                                  component="span"
+                                  sx={{
+                                    color: t.latest_pct_chg_pct >= 0 ? ORDER_OK : ORDER_BAD,
+                                  }}
+                                >
+                                  {t.latest_pct_chg_pct >= 0 ? '+' : ''}
+                                  {t.latest_pct_chg_pct.toFixed(2)}%
+                                </Box>
+                              ) : (
+                                <Typography variant="caption" color="text.secondary">
+                                  未判定
+                                </Typography>
+                              )}
+                            </TableCell>
+                            <TableCell align="right">
+                              <Box
+                                component="span"
+                                sx={{ color: t.lot_ok === false ? ORDER_BAD : 'text.primary' }}
+                              >
+                                {fmtShares(t.shares)}
+                              </Box>
+                              <Typography variant="caption" color="text.secondary" component="span">
+                                {' '}
+                                {t.lots ?? 0} 手{t.lot_ok === false ? ' ⚠ 非整手' : ''}
+                              </Typography>
+                            </TableCell>
+                            <TableCell align="right">
+                              {t.ref_amount_latest != null ? fmtMoney(t.ref_amount_latest) : '—'}
+                            </TableCell>
+                            <TableCell align="right">
+                              {t.target_weight_pct != null ? `${t.target_weight_pct.toFixed(2)}%` : '—'}
+                            </TableCell>
+                            <TableCell sx={{ maxWidth: 260 }}>
+                              {blocked ? (
+                                <Typography variant="caption" sx={{ color: ORDER_BAD, fontWeight: 700 }}>
+                                  {t.tradable_reason || '不可成交'}
+                                </Typography>
+                              ) : unknown ? (
+                                <Typography variant="caption" sx={{ color: ORDER_WARN }}>
+                                  {t.tradable_reason || '行情不明，按不可成交处理'}
+                                </Typography>
+                              ) : (
+                                <Stack direction="row" spacing={0.5} alignItems="center" useFlexGap>
+                                  <Typography variant="caption" sx={{ color: ORDER_OK, fontWeight: 700 }}>
+                                    可成交
+                                  </Typography>
+                                  {t.limit_check === false && (
+                                    <Typography variant="caption" color="text.secondary">
+                                      （涨跌停未判定）
+                                    </Typography>
+                                  )}
+                                </Stack>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </ResponsiveTable>
+              </CardContent>
+            </Card>
           )}
 
           <Stack spacing={2}>
