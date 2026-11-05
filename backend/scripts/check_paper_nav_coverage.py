@@ -112,6 +112,19 @@ def main() -> int:
             "basis": (nav or {}).get("basis"),
         }
 
+        # 门禁 e（2026-11-05 建设项 B）：净值点必须带零技巧基准两列。
+        # 理由：自用 KPI 是"相对零技巧基准的超额"，一个没有基准的净值点
+        # 只能说明"赚了多少"，不能说明"做对了没有"——不许出表。
+        bench_missing = sum(
+            1 for p in points
+            if p.get("benchmark_return_pct") is None or p.get("excess_pp") is None)
+        row["bench_missing_points"] = bench_missing
+        row["excess_pp_last"] = (nav_last or {}).get("excess_pp")
+        if points and bench_missing:
+            problems.append(
+                f"{line}：{bench_missing}/{len(points)} 个净值点缺基准列"
+                "（跑 build_benchmark_index.py 后重跑 paper_daily_nav.py）")
+
         if last_trade and not points:
             problems.append(f"{line}：有成交（{last_trade}）却没有日频产物")
         if nav and nav.get("_error"):

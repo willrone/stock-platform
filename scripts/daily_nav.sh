@@ -79,6 +79,18 @@ PYEOF
     echo "[$(date '+%F %T')] ⚠ 取不到袖套 ETF 代码清单（SLEEVE_HELD 为空？）"
   fi
 
+  # ── 零技巧基准电平（2026-11-05 建设项 B）──────────────────────────────
+  # 必须在盯市之前跑：`paper_daily_nav.py` 要在净值点里写
+  # benchmark_return_pct / excess_pp，没有基准产物它的门禁 d 会直接判失败。
+  # 口径 = 全池等权买入持有（A）/ 9 只定稿 ETF 等权买入持有（袖套）/ 两者各 50%（母线）。
+  echo "[$(date '+%F %T')] 构建零技巧基准电平（全池等权买入持有 + 9 ETF 等权）"
+  if env -u PYTHONPATH -u PYTHONHOME backend/.venv-py313/bin/python3 \
+       backend/scripts/build_benchmark_index.py --start 2026-01-01 --incremental; then
+    echo "[$(date '+%F %T')] 基准电平构建完成"
+  else
+    echo "[$(date '+%F %T')] ✗ 基准构建失败 → 盯市门禁 d 会判失败（不许没有基准就谈超额）"
+  fi
+
   env -u PYTHONPATH -u PYTHONHOME backend/.venv-py313/bin/python3 \
     backend/scripts/paper_daily_nav.py
   rc=$?

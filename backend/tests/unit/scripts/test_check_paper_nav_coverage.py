@@ -44,18 +44,26 @@ def _write(dirpath: Path, name: str, payload: Dict[str, Any]) -> None:
 BASE_LINES: Dict[str, Any] = {
     "22f": {"holdings": {"last_trade": "2026-11-02", "cash": 1.0,
                          "positions": {}},
-            "nav": {"points": [{"date": "2026-11-03", "value": 990000.0}]}},
+            "nav": {"points": [{"date": "2026-11-03", "value": 990000.0,
+                                "benchmark_return_pct": -3.39,
+                                "excess_pp": 3.17}]}},
     "multi_asset_final": {
         "holdings": {"last_trade": "2026-11-02", "cash": 1.0,
                      "positions": {}, "legs": {"a": {}, "sleeve": {}}},
         "nav": {"points": [{"date": "2026-11-03", "value": 1000000.0,
-                            "legs": {"a": 500000.0, "sleeve": 500000.0}}]}},
+                            "legs": {"a": 500000.0, "sleeve": 500000.0},
+                            "benchmark_return_pct": 0.78,
+                            "excess_pp": 0.23}]}},
     "multi_asset_final_a": {"holdings": {"last_trade": "2026-11-02"},
                             "nav": {"points": [{"date": "2026-11-03",
-                                                "value": 500000.0}]}},
+                                                "value": 500000.0,
+                                                "benchmark_return_pct": 1.65,
+                                                "excess_pp": 0.05}]}},
     "multi_asset_final_sleeve": {"holdings": {"last_trade": "2026-11-02"},
                                  "nav": {"points": [{"date": "2026-11-03",
-                                                     "value": 500000.0}]}},
+                                                     "value": 500000.0,
+                                                     "benchmark_return_pct": -0.09,
+                                                     "excess_pp": 0.41}]}},
 }
 
 
@@ -121,6 +129,21 @@ def test_red_when_leg_dates_mismatch(wired):
 def test_red_when_nav_last_date_is_older_than_last_trade(wired):
     def mutate(data):
         data["22f"]["nav"]["points"][0]["date"] = "2026-10-30"
+    assert wired(mutate) == 1
+
+
+# ── 红 6：净值点缺零技巧基准两列（2026-11-05 建设项 B 的门禁 e）────────
+def test_red_when_points_have_no_benchmark_columns(wired):
+    """没有基准的净值点只能说明"赚了多少"，不能说明"做对了没有" → 不许出表。"""
+    def mutate(data):
+        for k in ("benchmark_return_pct", "excess_pp"):
+            data["22f"]["nav"]["points"][0].pop(k, None)
+    assert wired(mutate) == 1
+
+
+def test_red_when_benchmark_value_is_null(wired):
+    def mutate(data):
+        data["multi_asset_final"]["nav"]["points"][0]["excess_pp"] = None
     assert wired(mutate) == 1
 
 

@@ -95,6 +95,8 @@ _lr_spec.loader.exec_module(lr)
 
 # 袖套腿的估值/行情实现就在 app 层（生产同一份），直接复用，不另立公式。
 from app.services.trading import multi_asset_service as mas  # noqa: E402
+# 零技巧基准（自用 KPI 对照组）的读取与锚定，口径定义见 benchmark_service 文档串。
+from app.services.trading import benchmark_service as bsvc  # noqa: E402
 
 # 日频盯市覆盖的线。
 #
@@ -754,6 +756,48 @@ def main() -> None:
     gate_failures: List[str] = []          # 门禁 a：日频 vs 周频
     residual_failures: List[str] = []      # 门禁 b：重放现金 vs holdings 现金
     freshness_failures: List[str] = []     # 门禁 c：行情新鲜度（不许旧价冒充）
+    benchmark_failures: List[str] = []     # 门禁 d：基准列（缺基准 = 不许出表）
+
+    # ── 门禁 d：零技巧基准必须存在（自用 KPI 的对照组，缺了就没有"跑赢"可言）─
+    try:
+        b_levels, b_sleeve, b_meta = bsvc.load_benchmark()
+        print(f"基准电平：{b_meta['pool_size']} 只，{b_meta['first_date']} → "
+              f"{b_meta['last_date']}（覆盖率最低 {b_meta['coverage_min']:.2%}"
+              f" @ {b_meta['coverage_min_date']}）", flush=True)
+    except FileNotFoundError as exc:
+        b_levels, b_sleeve, b_meta = None, {}, {}
+        benchmark_failures.append(f"基准产物缺失：{exc}")
+        print(f"❌ {exc}", flush=True)
+
+    def attach_bench(line: str, merged: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """给这条线的全部净值点加 benchmark_return_pct / excess_pp（锚在最早点）。
+
+        ⚠️ 必须在 `write_nav_daily` **之前**调用，否则 json 里没有这两列。
+        """
+        if b_levels is None:
+            return {}
+        kind = bsvc.LINE_KIND.get(line)
+        if kind is None:
+            # 新线没在 LINE_KIND 里表态 → 不许默认当 A 股基准
+            benchmark_failures.append(f"{line} 未声明基准类型（benchmark_service.LINE_KIND）")
+            return {}
+        diag = bsvc.attach_benchmark_columns(merged, kind, b_levels, b_sleeve, b_meta)
+        if diag.get("missing_benchmark_days"):
+            benchmark_failures.append(
+                f"{line}（{diag['missing_benchmark_days']} 天缺基准）")
+        if diag.get("coverage_low_days"):
+            benchmark_failures.append(
+                f"{line}（{diag['coverage_low_days']} 天基准覆盖率<"
+                f"{bsvc.MIN_COVERAGE:.0%}）")
+        return diag
+
+    def bench_txt(last: Dict[str, Any], diag: Dict[str, Any]) -> str:
+        if not diag:
+            return "基准 ✗（未加载）"
+        if last.get("benchmark_return_pct") is None or last.get("excess_pp") is None:
+            return "基准 ✗（末日缺基准）"
+        return (f"基准 {last['benchmark_return_pct']:+.2f}% → "
+                f"超额 {last['excess_pp']:+.2f}pp（锚 {diag.get('anchor')}）")
 
     for s in args.strategies:
         points, diag = build_line_points(s, adj_close, master, args.backfill,
@@ -765,6 +809,7 @@ def main() -> None:
             continue
         old = load_nav_daily(s)
         merged = merge_points(list(old.get("points") or []), points)
+        b_diag = attach_bench(s, merged)          # 必须在写盘前，基准列要进 json
         if not args.dry_run:
             cap0 = float((pp.load_holdings(s, 1_000_000.0) or {}).get(
                 "initial_capital") or 1_000_000.0)
@@ -778,7 +823,8 @@ def main() -> None:
               f"本次区间 {points[0]['date']} ~ {_last['date']}）| "
               f"停牌/缺价日 {diag.get('n_stale_days', 0)} | "
               f"末日市值 ¥{_last['value']:,.0f} "
-              f"（{(_last['return_pct'] or 0):+.2f}%）| 与周频末点"
+              f"（{(_last['return_pct'] or 0):+.2f}%）| {bench_txt(_last, b_diag)} | "
+              f"与周频末点"
               f"{_consistency_text(diag)}", flush=True)
         # 门禁 a 失败（日频末点与周频 nav_history 末点不一致）必须让**退出码**变非 0，
         #    否则 cron 每天跑完都是 0，曲线与周频不一致没人会发现（静默失效）。
@@ -807,6 +853,7 @@ def main() -> None:
         else:
             old = load_nav_daily(MULTI_ASSET_SLEEVE)
             merged = merge_points(list(old.get("points") or []), s_points)
+            sb_diag = attach_bench(MULTI_ASSET_SLEEVE, merged)
             if not args.dry_run:
                 write_nav_daily(MULTI_ASSET_SLEEVE, merged,
                                 s_diag.get("initial_capital"), SLEEVE_NAV_BASIS)
@@ -823,7 +870,8 @@ def main() -> None:
                   f"（新增 {len(s_points)}，本次区间 {s_points[0]['date']} ~ "
                   f"{_last['date']}）| ETF 滞后日 {s_diag.get('n_stale_days', 0)} | "
                   f"末日市值 ¥{_last['value']:,.0f} "
-                  f"（{(_last['return_pct'] or 0):+.2f}%）| {resid_txt} | "
+                  f"（{(_last['return_pct'] or 0):+.2f}%）| {bench_txt(_last, sb_diag)} | "
+                  f"{resid_txt} | "
                   f"{fresh_txt} | 与周频末点{_consistency_text(s_diag)}",
                   flush=True)
             if s_diag.get("nav_consistency_ok") is False:
@@ -846,6 +894,7 @@ def main() -> None:
         else:
             old = load_nav_daily(MULTI_ASSET_PARENT)
             merged = merge_points(list(old.get("points") or []), p_points)
+            pb_diag = attach_bench(MULTI_ASSET_PARENT, merged)
             if not args.dry_run:
                 write_nav_daily(MULTI_ASSET_PARENT, merged, parent_cap,
                                 PARENT_NAV_BASIS)
@@ -860,7 +909,7 @@ def main() -> None:
                   f"{_last['date']}）| 腿：A ¥{_last['legs']['a']:,.0f} + "
                   f"袖套 ¥{_last['legs']['sleeve']:,.0f} | "
                   f"末日市值 ¥{_last['value']:,.0f} "
-                  f"（{(_last['return_pct'] or 0):+.2f}%）| "
+                  f"（{(_last['return_pct'] or 0):+.2f}%）| {bench_txt(_last, pb_diag)} | "
                   f"缺一条腿的日期 A_only {len(p_diag.get('dates_only_a') or [])} / "
                   f"S_only {len(p_diag.get('dates_only_sleeve') or [])} | "
                   f"与周频末点{_consistency_text(_cons_diag)}", flush=True)
@@ -883,7 +932,10 @@ def main() -> None:
     if freshness_failures:
         print(f"❌ 门禁 c 失败（行情新鲜度 / 两条腿日期不齐）："
               f"{', '.join(freshness_failures)}", flush=True)
-    if gate_failures or residual_failures or freshness_failures:
+    if benchmark_failures:
+        print(f"❌ 门禁 d 失败（零技巧基准列缺失/覆盖率不足 —— 没有基准就不许谈超额）："
+              f"{', '.join(benchmark_failures)}", flush=True)
+    if gate_failures or residual_failures or freshness_failures or benchmark_failures:
         sys.exit(1)
 
     if args.dry_run:
