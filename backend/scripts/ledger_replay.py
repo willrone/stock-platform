@@ -115,6 +115,15 @@ MIN_COMMISSION = 5.0
 STAMP_TAX_RATE = 0.0005
 SLIPPAGE_RATE = 0.001
 
+# ── ETF 袖套费率（2026-11-05 新增）──────────────────────────────────────
+# ⚠️ **从 app 层 import，不在这里抄数字**：袖套的生产实现在
+# `app/services/trading/multi_asset_service.py`（`rebalance_sleeve`）。
+# 抄一遍就是「口径漂移」的起点（本项目最贵的错误类型）。
+from app.services.trading.multi_asset_service import (  # noqa: E402
+    ETF_COMMISSION as ETF_COMMISSION_RATE,
+    ETF_SLIPPAGE as ETF_SLIPPAGE_RATE,
+)
+
 #: 15 列契约（当前 `paper_portfolio.LEDGER_FIELDS`）
 LEDGER_FIELDS_15 = [
     "date", "action", "code", "name", "price", "shares", "amount",
@@ -309,8 +318,25 @@ def cash_delta(row: LedgerRow,
       ⚠️ 这三列是**写盘时 `round(x, 2)` 后的值**，生产算现金用的是未舍入值
       → 逐行舍入误差累积（实测 `factor_ranking` 残差 +0.11 元，超 0.05 门禁）。
       **仅保留作对照/审计，默认不用。**
+
+    - `"etf_rate"`（**ETF 袖套腿专用**，2026-11-05 新增）：
+      ```
+      BUY : -(amount × (1 + ETF_COMMISSION))
+      SELL: +(amount × (1 − ETF_COMMISSION))
+      ```
+      为什么**不能**用默认的 `rate` 重放袖套账本（三处实质差异）：
+      ① ETF **无印花税**（`rate` 会给每笔卖出扣 0.0005）；
+      ② ETF 的滑点**不在现金里** —— `rebalance_sleeve` 把滑点做进成交价
+      （`buy_px = p×(1+ETF_SLIPPAGE)` / `sell_px = p×(1−ETF_SLIPPAGE)`），
+      账本 `slippage` 列只是展示值，`rate` 会**再扣一遍** 0.001；
+      ③ ETF **没有 5 元最低佣金**（`max(5, ...)` 会把小额腿的佣金放大）。
+      实测量级（2026-11-05，袖套账本 9 笔首建、成交额 ¥499,980）：
+      `rate` → 重放出现金 **−479.57**（真值 +20.27，残差 −499.84，现金被算成负数）；
+      `ledger_columns` → 残差 **−50.00**（`slippage` 列被重复扣）；
+      `etf_rate` → 残差 **−0.0089** ✓ 过 ≤0.05 门禁。
+      费率 **import 自 `multi_asset_service`**（生产实现），不在本文件抄数字。
     """
-    if cash_model not in ("rate", "ledger_columns"):
+    if cash_model not in ("rate", "ledger_columns", "etf_rate"):
         raise ValueError(f"未知 cash_model: {cash_model}")
 
     if row.is_buy:
@@ -321,6 +347,14 @@ def cash_delta(row: LedgerRow,
     if gross is None or gross <= 0:
         # SELL 的 gross 兜底（cost×股数×后复权比值）需要持仓上下文 →
         # 由 `replay_rows` 处理（它知道当时的持仓）。
+        return None
+
+    if cash_model == "etf_rate":
+        commission = gross * ETF_COMMISSION_RATE
+        if row.is_buy:
+            return -(gross + commission)
+        if row.is_sell:
+            return gross - commission
         return None
 
     if cash_model == "ledger_columns":
@@ -417,11 +451,16 @@ def replay_rows(rows: Sequence[LedgerRow],
                     ratio = 1.0
                 gross = float(held.get("cost") or 0.0) * sh * ratio
                 if gross > 0:
-                    # 兜底时账本三列可能也缺失 → 统一用费率
-                    commission = max(MIN_COMMISSION, gross * COMMISSION_RATE)
-                    slippage = gross * SLIPPAGE_RATE
-                    d_cash = (gross - commission - gross * STAMP_TAX_RATE
-                              - slippage)
+                    # 兜底时账本三列可能也缺失 → 按 cash_model 对应的费率重算
+                    # （2026-11-05：袖套腿走 ETF 费率，不再沿用 A 股三项费用）
+                    if cash_model == "etf_rate":
+                        d_cash = gross * (1.0 - ETF_COMMISSION_RATE)
+                    else:
+                        commission = max(MIN_COMMISSION,
+                                         gross * COMMISSION_RATE)
+                        slippage = gross * SLIPPAGE_RATE
+                        d_cash = (gross - commission - gross * STAMP_TAX_RATE
+                                  - slippage)
         if d_cash is None:
             diag["cash_unavailable_rows"].append(row.index)
         else:

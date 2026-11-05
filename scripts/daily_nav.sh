@@ -53,6 +53,32 @@ PYEOF
     exit 0
   fi
 
+  # ── 刷新袖套 ETF 行情（2026-11-05 新增，盯市的前置条件）─────────────
+  # 为什么必须在这里刷：ETF 管道**没有自己的排期**，只有周一 17:40 调仓时
+  # 被 `paper_portfolio` 顺带刷一次 → 周二~周五袖套腿只能拿旧收盘价估值，
+  # 实测 2026-11-04：ETF 停在 11-02 → 袖套 11-03/11-04 两个点被估成**持平**
+  # （假的 0 收益点 → 压低波动、稀释夏普，正是方案书 §0 要避免的那种错）。
+  # 放在「锁已空闲」之后：此时不会有 paper_portfolio 在写 ETF parquet。
+  # 刷新失败**不阻断盯市**：袖套的新鲜度门禁（c）会把滞后的点标红并让退出码变非 0。
+  ETF_CODES=$(env -u PYTHONPATH -u PYTHONHOME "$PY" - <<'PYEOF'
+import os, sys
+sys.path.insert(0, os.path.join("backend"))
+from app.services.trading import multi_asset_service as mas
+print(",".join(c for lst in mas.SLEEVE_HELD.values() for c in lst))
+PYEOF
+)
+  if [ -n "$ETF_CODES" ]; then
+    echo "[$(date '+%F %T')] 刷新袖套 ETF 行情：$ETF_CODES"
+    if env -u PYTHONPATH -u PYTHONHOME backend/.venv-py313/bin/python3 \
+         backend/scripts/etf_data_pipeline.py --codes "$ETF_CODES" --incremental; then
+      echo "[$(date '+%F %T')] ETF 刷新完成"
+    else
+      echo "[$(date '+%F %T')] ⚠ ETF 刷新失败 → 继续盯市，但袖套新鲜度门禁会报滞后"
+    fi
+  else
+    echo "[$(date '+%F %T')] ⚠ 取不到袖套 ETF 代码清单（SLEEVE_HELD 为空？）"
+  fi
+
   env -u PYTHONPATH -u PYTHONHOME backend/.venv-py313/bin/python3 \
     backend/scripts/paper_daily_nav.py
   rc=$?

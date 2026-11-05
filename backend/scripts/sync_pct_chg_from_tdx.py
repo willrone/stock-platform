@@ -32,6 +32,7 @@ import argparse
 import os
 import sys
 import time
+from datetime import datetime as _dt
 from typing import Dict, List, Tuple
 
 import numpy as np
@@ -46,7 +47,44 @@ COLS = [
 ]
 
 
+def _normalize_since(since: str) -> str:
+    """把 `--since` 归一成 `YYYY-MM-DD`（分区目录名的格式是 `date=YYYY-MM-DD`）。
+
+    ⚠️ 2026-11-05 修的真实 bug（不是防御性代码）：
+    排期脚本 `scripts/daily_tdx_update.sh` 传的是 `date -v-7d +%Y%m%d`（如 `20261029`），
+    而分区名是 `2026-11-04` → 按**字符串**比较时
+    `"2026-11-04" < "20261029"` 恒为 True（第 5 位 `'-'`(45) < `'1'`(49)）
+    → **所有分区都被判成"太旧"而跳过** → 脚本打印「没有可用的 TDX raw 分区」
+    却**退出码 0** → shell 高高兴兴报 "✓ sync pct_chg done"。
+    后果：`baostock_daily`（真正喂后复权估值的涨跌幅层）自 2026-11-02 起没更新
+    → `adj_close` 在 11-03/11-04 整列 NaN → 纸面盘所有 A 股腿的市值被**冻在 11-02 的价**
+    （实测 `multi_asset_final_a` 11-04 = 11-02 = ¥499,225.89，60 只里 59 只标 stale）。
+
+    规则：能解析就归一；解析不了就**报错退出**，绝不静默什么也不做。
+    """
+    s = str(since or "").strip()
+    if not s:
+        return ""
+    digits = s.replace("-", "")
+    if len(digits) == 8 and digits.isdigit():
+        candidate = f"{digits[:4]}-{digits[4:6]}-{digits[6:]}"
+        try:
+            _dt.strptime(candidate, "%Y-%m-%d")
+        except ValueError:
+            raise SystemExit(
+                f"❌ --since 是 8 位数字但不是合法日期：{since!r} → {candidate!r}")
+        return candidate
+    try:
+        _dt.strptime(s, "%Y-%m-%d")
+    except ValueError:
+        raise SystemExit(
+            f"❌ --since 既不是 YYYYMMDD 也不是 YYYY-MM-DD：{since!r}"
+            "（分区名是 date=YYYY-MM-DD，格式错了会一个分区都选不中）")
+    return s
+
+
 def raw_partitions(since: str = "") -> List[Tuple[str, str]]:
+    since = _normalize_since(since)
     out = []
     for name in sorted(os.listdir(RAW_DIR)):
         if not name.startswith("date="):
@@ -60,15 +98,20 @@ def raw_partitions(since: str = "") -> List[Tuple[str, str]]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--since", default="", help="只同步该日期之后的分区")
+    ap.add_argument("--since", default="",
+                    help="只同步该日期之后的分区（YYYY-MM-DD 或 YYYYMMDD 都接受）")
     args = ap.parse_args()
 
-    parts = raw_partitions(args.since)
+    since = _normalize_since(args.since)
+    parts = raw_partitions(since)
     if not parts:
-        print("没有可用的 TDX raw 分区")
-        return
+        # ⚠️ 必须非 0 退出：这一步"什么也没做"却报成功，就是后复权层掉队的开始
+        print(f"❌ 没有可用的 TDX raw 分区（RAW_DIR={RAW_DIR}，since={since or '不限'}）"
+              " → 后复权涨跌幅层不会更新，本次判失败", flush=True)
+        sys.exit(1)
     print(f"[sync] TDX 分区 {len(parts)} 个："
-          f"{parts[0][0]} → {parts[-1][0]}", flush=True)
+          f"{parts[0][0]} → {parts[-1][0]}"
+          f"（since={since or '不限'}）", flush=True)
 
     # 白名单：stock_data 目录里的代码（= 我们真正的股票池）
     stock_dir = os.path.join(ROOT, "data", "parquet", "stock_data")

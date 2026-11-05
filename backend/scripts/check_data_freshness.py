@@ -23,6 +23,8 @@ sys.path.insert(0, os.path.join(ROOT, "back_test_data_service", "tdx_pipeline"))
 from trading_calendar import is_trading_day  # noqa: E402
 
 RAW_DIR = os.path.join(ROOT, "data", "tdx_daily", "raw")
+# 真正喂估值的层：后复权用的「交易所口径涨跌幅」存在这里（2026-11-05 新增校验）
+PCT_DIR = os.path.join(ROOT, "data", "parquet", "baostock_daily")
 # TDX 当日日线包的稳定发布时刻（早于此点当天包多半还没出）
 PUBLISH_TIME = dtime(17, 30)
 
@@ -36,6 +38,40 @@ def latest_partition_date() -> str | None:
         if d.startswith("date=")
     )
     return dates[-1] if dates else None
+
+
+def latest_pct_chg_date(sample: int = 24) -> str | None:
+    """涨跌幅层（`baostock_daily`）的最新日期。
+
+    ⚠️ 为什么必须单独查这一层（2026-11-05）：
+    `latest_partition_date()` 只看到 TDX 原始包到了 11-04，于是报
+    "✅ 数据已是最新（2026-11-04）"；但后复权估值用的是 `baostock_daily` 的 pct_chg，
+    那一层因为 `sync_pct_chg_from_tdx.py --since` 日期格式 bug 停在 **11-02**
+    → `adj_close` 11-03/11-04 全 NaN → 纸面盘所有 A 股腿净值被冻在旧价。
+    **原始包新鲜 ≠ 估值层新鲜**，这是原门禁的盲区。
+
+    抽样若干文件取最大日期（全表 5577 个文件全读太慢；抽样足够判断"掉队几天"）。
+    """
+    if not os.path.isdir(PCT_DIR):
+        return None
+    import pandas as pd
+    names = [n for n in os.listdir(PCT_DIR) if n.endswith(".parquet")]
+    if not names:
+        return None
+    # 按修改时间取最近的若干文件（活跃股更可能反映最新同步状态）
+    names.sort(key=lambda n: os.path.getmtime(os.path.join(PCT_DIR, n)), reverse=True)
+    latest: str | None = None
+    for n in names[:max(1, sample)]:
+        try:
+            df = pd.read_parquet(os.path.join(PCT_DIR, n), columns=["date"])
+        except Exception:
+            continue
+        if df is None or df.empty:
+            continue
+        d = str(df["date"].max())[:10]
+        if latest is None or d > latest:
+            latest = d
+    return latest
 
 
 def main() -> int:
@@ -59,6 +95,16 @@ def main() -> int:
         "--latest-override",
         default="",
         help="覆盖数据最新日（测试用，格式 YYYY-MM-DD）",
+    )
+    ap.add_argument(
+        "--check-pct-layer",
+        action="store_true",
+        help="额外校验后复权涨跌幅层（baostock_daily）不落后于原始包 —— 排期里应总是开",
+    )
+    ap.add_argument(
+        "--pct-latest-override",
+        default="",
+        help="覆盖涨跌幅层最新日（测试用，格式 YYYY-MM-DD）",
     )
     args = ap.parse_args()
 
@@ -86,6 +132,23 @@ def main() -> int:
         return 1 if args.fail_if_stale else 0
 
     latest_d = datetime.strptime(latest, "%Y-%m-%d").date()
+
+    # ── 第二道闸：估值层（涨跌幅）不许落后于原始包 ──────────────────────────
+    # 交易日与否都查：估值层掉队 = 纸面盘净值被冻在旧价（2026-11-03/11-04 实测）
+    if args.check_pct_layer:
+        pct_latest = args.pct_latest_override or latest_pct_chg_date()
+        print(f"涨跌幅层最新日: {pct_latest or '（无数据）'}")
+        if pct_latest is None:
+            print("❌ 找不到涨跌幅层（data/parquet/baostock_daily）—— 后复权估值无从算起")
+            return 1 if args.fail_if_stale else 0
+        if pct_latest < latest:
+            lag = (latest_d - datetime.strptime(pct_latest, "%Y-%m-%d").date()).days
+            print(
+                f"❌ 原始包已到 {latest}，但后复权涨跌幅层只到 {pct_latest}"
+                f"（落后 {lag} 个自然日）—— 估值层掉队，纸面盘/信号会用过期价格！"
+            )
+            print("   查 `sync_pct_chg_from_tdx.py` 是否真的同步了（它必须非 0 退出报失败）。")
+            return 1 if args.fail_if_stale else 0
 
     # 非交易日 → 数据停在上一个交易日即正常
     if td is False:

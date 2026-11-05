@@ -71,8 +71,12 @@ print(run_incremental())
   #      - **把 TDX 有、baostock(T+1) 还没有的当天整行补进来**（2026-11-02 修，
   #        原来 how="left" 会丢掉当天 → 后复权矩阵缺当天 → 纸面盘净值冻结）
   #    ⚠️ 失败 = 本次运行失败（不是"不影响主流程"）：后复权矩阵会缺当天。
+  #    ⚠️ `--since` 必须是 **YYYY-MM-DD**（2026-11-05 修）：原来传 `+%Y%m%d`
+  #       （如 20261029），而分区名是 `date=2026-11-04` → 字符串比较恒判"太旧"
+  #       → 所有分区被跳过 → python 什么都不做却退出 0 → 这里报 "✓ done"
+  #       → 后复权涨跌幅层从 11-02 起掉队（纸面盘净值被冻在旧价）。
   if ! env -u PYTHONPATH backend/.venv-py313/bin/python3 \
-        backend/scripts/sync_pct_chg_from_tdx.py --since "$(date -v-7d +%Y%m%d)"; then
+        backend/scripts/sync_pct_chg_from_tdx.py --since "$(date -v-7d +%Y-%m-%d)"; then
     echo "[$(date '+%F %T')] ✗ sync_pct_chg 失败（本次运行判失败）"
     return 1
   fi
@@ -81,8 +85,10 @@ print(run_incremental())
   # 4) 数据新鲜度校验（2026-10-25 新增）
   #    交易日过了 17:30 还没拿到当天数据 = 真失败 → 非零退出码，cron 报警到微信
   #    （原来 16:05 拉不到当天包被静默跳过，导致周频调仓两周没跑）
+  #    2026-11-05 加 `--check-pct-layer`：只查原始包是盲区——
+  #    原始包到 11-04 而涨跌幅层停在 11-02 时，它也报"✅ 已是最新"。
   if ! env -u PYTHONPATH backend/.venv-py313/bin/python3 \
-        backend/scripts/check_data_freshness.py --fail-if-stale; then
+        backend/scripts/check_data_freshness.py --fail-if-stale --check-pct-layer; then
     echo "[$(date '+%F %T')] ✗ 数据新鲜度校验失败（本次运行判失败）"
     return 1
   fi
