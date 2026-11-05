@@ -4788,3 +4788,89 @@ A 股腿、袖套腿、母线共用同一套 `--range` / `--as-of` 解析与"与
   门禁只保证覆盖率 ≥95%，不消除该偏差。
 
 项 B 结束。项 C（`/today-signal` → 可下单清单）待做。
+
+---
+
+## §12.58 `/today-signal` → 可下单清单（自用建设项 C 交付）—— 2026-11-05
+
+### A. 两项口径决定（用户拍的，写死在这里）
+
+1. **档位 Chip 保留但不跳转**：页面上留「专业版」标识（它说明这份数据是给谁看的、
+   延迟多少），删掉 `router.push('/pricing')` 那个「升级解锁全部信号线」按钮。
+   理由：对外挂升级引导 = 向公众收费的个股信号引导，本身就是合规红线（§12.44 三红线）。
+2. **不可成交标的保留并标红，不静默剔除**：涨停买不进 / 跌停卖不出 / 无行情 / 盘中未收盘
+   的票仍然列在清单里，整行浅红底 + 写明原因，外加「N 笔不可成交」计数 Chip。
+   理由：静默剔除会让人以为策略选了 19 只、实际只有 18 只能买 —— 这是对策略的伪装。
+
+### B. 后端 `latest_quote.py`（新）与单位口径
+
+- 每笔订单补：`latest_price / price_as_of / latest_pct_chg_pct / lots / lot_ok /
+  ref_amount_latest / target_weight_pct / tradable / tradable_reason / limit_check / price_basis`。
+- 行情层两条：A 股 `data/parquet/baostock_daily/`（有 `pct_chg/is_st/trade_status`）、
+  袖套 ETF `data/etf/parquet/`（**只有 OHLCV**）。
+- **单位口径坑（最容易悄悄错的一处）**：`baostock_daily.pct_chg` 是百分数（9.95 = +9.95%），
+  `execution_rules.check_tradability()` 要小数（0.0995）。除法只允许在 `latest_quote.py` 做一次。
+  测试 `test_double_division_silently_misses_limit_up` 守两头：
+  多除一次 → 涨停被当成可买；不除 → 任何 +10% 的票全被误判涨停（大面积假拦截）。
+- `price_as_of` 取整批**最陈旧**那一行的日期（不是最新）：整批能不能照着下单取决于最旧的那根 bar。
+  报最新值会把 9 行 11-04 的行情说成 11-05，那是假的新鲜。另给 `price_as_of_newest / n_price_dates`。
+- 盘中规则：bar 日期 = 今天且现在 < 15:10 → `tradable=None`、`price_basis="盘中未收盘"`，
+  不拿半根 K 线判涨跌停。
+- ETF 层没有 `pct_chg` → 涨跌停**实际没判**，用 `limit_check=false` 明写出来，
+  UI 显示「涨跌停未判定」。不把 tradable=true 冒充"已判涨跌停"。
+
+### C. 施工中撞到的工具坑（都记下来，别再撞）
+
+- `latest_quote.py` 早期用 `"etf" in path` 猜数据来源 → 测试里 `tmp_path` 名字含 "etf" 就串味，
+  A 股 bar 被当成 ETF。**改成调用点显式传 `source`**，不猜路径。
+- 本机 Chrome 的 `Page.captureScreenshot` 全线超时（GPU 进程 `exit_code=15`）：
+  browser daemon 截图超时、headless `printToPDF` 之外的路径也超时、连 CLI `--screenshot` 和
+  `about:blank` 都超时。结论：**这台机器不能用 CDP 截图做 UI 验收**，
+  改用 `Page.printToPDF` → `sips -s format png` → 看图。PDF 默认不打印背景色，
+  必须注入 `print-color-adjust:exact`，否则红行底色在图上消失（看起来像"颜色没生效"）。
+- MUI `<Select>` 不吃合成 `dispatchEvent`：可靠路径是 `Element.focus()` +
+  `Input.dispatchKeyEvent`（Enter → ArrowDown×n → Enter）。
+- CDP `/json/list` 抓 target 要按 URL 过滤：曾经抓到 `chrome://settings/help`，
+  后面所有点击都打空，看起来像"MUI 打不开"，其实是抓错页。
+- 自签 dev token 默认 30 分钟过期（`create_access_token` 跟 `ACCESS_TOKEN_EXPIRE_MINUTES`）；
+  长会话 UI 验证要显式传 `expires_delta`。
+- `backend/.env` 的 `JWT_SECRET` 还是占位值 → 每个进程随机生成 → 跨进程 token 必 401。
+  本地验证走 `scratch/local_jwt_secret.env`（0600，后端与 mint 共用）。**生产密钥必须你自己写，我不代写。**
+
+### D. UI 量化门禁（新脚本，能变绿也能变红）
+
+`frontend/scripts/ui_audit_today_signal.js`：不打印看看就算过，而是判
+文字截断（`scrollWidth > clientWidth`）、卡片溢出、WCAG 对比度 <4.5、页面上是否又长出升级按钮，
+任一不过 `exit 1`。带 `--sabotage`：把配色改回旧主题色，门禁必须变红。
+
+实测对比度（白底 / 浅红拦单底）：
+
+| 元素 | 旧配色 | 新配色 |
+|---|---|---|
+| 方向列 绿 | `#16A34A` 3.30 / **2.91** | `#166534` 7.13 / 6.29 |
+| 拦单红理由 | `#DC2626` 4.83 / **4.26** | `#B91C1C` 6.47 / 5.71 |
+| 代码/名称/数字 | `#0F172A` 17.85 | 不变 |
+
+**旧配色全部不达 AA 4.5**，肉眼和"看着还行"都发现不了 —— 只有量出来才发现。
+Chip 字号 11px → 12px（这两个 chip 是决策信息：价格新鲜度、不可成交笔数，不是装饰）。
+门禁运行结果：真实渲染 `exit 0`，sabotage `exit 1` ✓。
+
+### E. 测试与门禁汇总
+
+- `pytest tests/unit/trading tests/unit/scripts` → **178 条全绿（exit 0）**；
+  新增 `test_latest_quote_orders.py` 11 条（含单位口径、拦单计数、ETF bar、盘中判定）。
+- `npx tsc --noEmit` exit 0；`npm run build` exit 0（`/today-signal` 16.9 kB）。
+- UI 门禁：green exit 0 / sabotage exit 1。
+
+### F. 已知偏差与未闭口（不许装作没有）
+
+1. 清单里的金额是**研究口径收盘价**，不是盘口可成交价，也没有滑点/冲击成本。
+   真正下单前仍要自己看盘口。台账 §12.44 的成本口径不变。
+2. **停牌只在 A 股层判定**（靠 `is_st/trade_status`）；ETF 层没有这些列 →
+   ETF 的"停牌"这一项实际未判，只有 `limit_check=false` 说明涨跌停未判。
+3. `app/services/trading/execution_plan.py` 仍是**孤儿模块**（零调用方、零测试）。
+   本次新写的 `latest_quote.py` 覆盖了它的一部分职责。要么把它接进来，要么删掉，
+   不能留两份"看起来能用"的下单逻辑。（下一步决定）
+4. 项 B 的 **API/前端两列（`benchmark_return_pct` / `excess_pp`）仍未接**：
+   这两列目前只存在于 `*_nav_daily.json`，没有任何 API 输出、前端也没显示。
+   项 B 的"接口与页面展示"这半没闭口 —— 这是下一项，不是已完成。
