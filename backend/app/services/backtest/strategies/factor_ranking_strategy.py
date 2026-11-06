@@ -50,6 +50,11 @@ class FactorRankingStrategy(BaseStrategy):
         # 把非调仓日分数置 NaN，执行器自然不换仓。
         self.rebalance_days = str(config.get("rebalance_days", "daily")).lower()
         self.rebalance_weekday = int(config.get("rebalance_weekday", 4))  # 4=周五
+        # lag（2026-11-06 补，与 honest_composite 同一契约）：
+        #   0 = 当日分数当日收盘成交（**实盘做不到**，读数系统性偏乐观）
+        #   1 = 用前一调仓日的分数、当日收盘成交（= 纸面盘 lag1 口径）
+        # 默认 0 保持既有各线行为不变；对照实验/真实盘口径必须显式传 lag=1。
+        self.lag = int(config.get("lag", 0))
         self.deal_price = str(config.get("deal_price", "close"))
         self.momentum_window = int(config.get("momentum_window", 126))
         self.momentum_skip = int(config.get("momentum_skip", 20))
@@ -203,6 +208,15 @@ class FactorRankingStrategy(BaseStrategy):
             composite[master.dayofweek != self.rebalance_weekday] = np.nan
         elif self.rebalance_days == "monthly":
             composite[master.day != 1] = np.nan
+
+        # lag: 0 = 当日分数当日成交；1 = 用前一日分数、当日成交（纸面盘口径）。
+        # 与 honest_composite 同一实现：整列下移，master 只含交易日 → 周五的分数落到下一个交易日。
+        if self.lag > 0:
+            if self.lag >= n_dates:
+                raise ValueError(f"lag={self.lag} 大于日期数 {n_dates}")
+            lagged = np.full_like(composite, np.nan)
+            lagged[self.lag:] = composite[: n_dates - self.lag]
+            composite = lagged
 
         stored = 0
         for j, code in enumerate(codes):

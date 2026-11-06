@@ -38,6 +38,12 @@ from app.services.backtest.strategies.control_strategies import (  # noqa: E402
 )
 from app.services.backtest.strategies.strategy_factory import StrategyFactory  # noqa: E402
 
+# --lag 1 = 真实盘口径（周五收盘出信号，下一交易日收盘成交），与纸面盘一致；
+# --lag 0 = 当日分数当日收盘成交（引擎旧默认，实盘做不到）。由 main 设定。
+LAG = 0
+# 这些策略没有 lag 实现 —— 传 lag=1 会被静默忽略，必须直接拒绝，不许挂错口径
+_STRATEGIES_WITHOUT_LAG = {"low_volatility"}
+
 START = datetime(2023, 5, 12)
 END = datetime(2026, 5, 8)
 TOPK, NDROP = 60, 5
@@ -111,6 +117,14 @@ async def run_line(name: str) -> dict:
         f"window={START.date()}..{END.date()} topk={TOPK} n_drop={NDROP} weekly(Fri)",
         flush=True,
     )
+    cfg = dict(spec["config"])
+    if LAG > 0:
+        if spec["strategy"] in _STRATEGIES_WITHOUT_LAG:
+            raise SystemExit(
+                f"[{name}] 策略 {spec['strategy']} 没有 lag 实现，lag={LAG} 会被静默忽略 → 拒绝运行"
+            )
+        cfg["lag"] = LAG
+
     executor = BacktestExecutor(
         data_dir=str(settings.DATA_ROOT_PATH),
         enable_parallel=True,
@@ -124,7 +138,7 @@ async def run_line(name: str) -> dict:
         stock_codes=codes,
         start_date=START,
         end_date=END,
-        strategy_config=dict(spec["config"]),
+        strategy_config=cfg,
         backtest_config=backtest_config(),
     )
     wall = time.perf_counter() - t0
@@ -150,11 +164,14 @@ async def run_line(name: str) -> dict:
         "window": [START.isoformat(), END.isoformat()],
         "topk": TOPK,
         "n_drop": NDROP,
+        "lag": LAG,
+        "caliber": "real_execution_lag1" if LAG > 0 else "signal_day_close_fill_lag0",
         "wall_seconds": wall,
         "run_at": datetime.now().isoformat(),
     }
     os.makedirs(OUT_DIR, exist_ok=True)
-    out = os.path.join(OUT_DIR, f"ablation_2026-11-06_{name}.json")
+    suffix = "" if LAG == 0 else f"_lag{LAG}"
+    out = os.path.join(OUT_DIR, f"ablation_2026-11-06_{name}{suffix}.json")
     with open(out, "w") as f:
         json.dump(res, f, default=_conv, ensure_ascii=False)
 
@@ -170,7 +187,11 @@ async def run_line(name: str) -> dict:
 async def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--line", required=True, help="|".join(LINES) + " | all")
+    ap.add_argument("--lag", type=int, choices=(0, 1), default=0,
+                    help="1 = 真实盘口径（信号日次一交易日成交）；0 = 旧口径（当日收盘成交）")
     args = ap.parse_args()
+    global LAG
+    LAG = args.lag
     names = list(LINES) if args.line == "all" else [args.line]
     if args.line != "all" and args.line not in LINES:
         raise SystemExit(f"未知 line: {args.line}（可选 {list(LINES)} 或 all）")
