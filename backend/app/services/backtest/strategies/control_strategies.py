@@ -65,6 +65,16 @@ class RandomTopKControlStrategy(FactorRankingStrategy):
             rng = np.random.default_rng(self.seed + int(master[k].toordinal()))
             composite[k, :] = rng.random(n_stocks)
 
+        # lag 与 FactorRankingStrategy 同一语义（整列下移）。
+        # 本类自己写分数、不走父类的打分路径，所以 lag 必须在这里补一遍，
+        # 否则对照线会顶着 lag=1 的名字跑成 lag=0（2026-11-06 实测踩过：lag1 与 lag0 数字一模一样）。
+        if self.lag > 0:
+            if self.lag >= n_dates:
+                raise ValueError(f"lag={self.lag} 大于日期数 {n_dates}")
+            lagged = np.full_like(composite, np.nan)
+            lagged[self.lag:] = composite[: n_dates - self.lag]
+            composite = lagged
+
         stored = 0
         for j, code in enumerate(codes):
             column = composite[:, j]
