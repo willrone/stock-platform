@@ -69,6 +69,10 @@ LINES: dict[str, dict] = {
     # 对照 C′：仓库里已注册的 low_volatility 策略（= −波动(63d) 与 −风险调整收益(21d) 两个 z 等权，
     #              不是纯低波动）—— 用来确认「C 的结论」不依赖于我挑了哪个低波动定义
     "lowvol_registered": {"strategy": "low_volatility", "config": {**_WEEKLY}},
+    # 2×2 设计的最后一格：25 因子 + 行业中性 —— 用来判断「行业中性」是否对公式因子也有效
+    # （只有 42f_neu 高、25f_neu 不高，才说明中性是与面板因子配套的）
+    "honest_25f_neu": {"strategy": "honest_composite",
+                       "config": {**_WEEKLY, "use_panel": False, "industry_neutral": True}},
     # 现役淘汰候选：42 因子 + 申万一级行业中性（纸面盘 15 个盯市点里 −1.90pp）
     "honest_42f_neu": {"strategy": "honest_composite",
                        "config": {**_WEEKLY, "use_panel": True, "industry_neutral": True}},
