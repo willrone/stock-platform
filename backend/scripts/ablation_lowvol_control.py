@@ -198,7 +198,6 @@ async def run_line(name: str) -> dict:
             "report": gate_report_path(str(settings.DATA_ROOT_PATH)),
         },
         "cap_tier": CAP_TIER_STATS or None,
-        },
         "window": [START.isoformat(), END.isoformat()],
         "topk": TOPK,
         "n_drop": NDROP,
