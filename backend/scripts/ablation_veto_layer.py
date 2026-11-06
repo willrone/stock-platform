@@ -58,6 +58,9 @@ from app.services.backtest.strategies.honest_composite_strategy import (  # noqa
     HonestCompositeStrategy,
 )
 from app.services.backtest.strategies.strategy_factory import StrategyFactory  # noqa: E402
+from app.services.backtest.universe_gate import gate_report_path, gated_universe  # noqa: E402
+
+GATE_ENABLED = True  # 可筛选性闸门：风控库看不见的票不许进宇宙（查不到 = 排除）
 
 START = datetime(2023, 5, 12)
 END = datetime(2026, 5, 8)
@@ -226,8 +229,9 @@ def backtest_config(record_positions: bool = False) -> BacktestConfig:
 
 async def run_line(name: str, tag: str = "", record_positions: bool = False) -> None:
     spec = LINES[name]
-    files = glob.glob(os.path.join(str(settings.DATA_ROOT_PATH), "qlib_data", "features", "day", "*.parquet"))
-    codes = sorted(os.path.basename(f)[: -len(".parquet")].replace("_", ".") for f in files)
+    codes, gate_rep = gated_universe(str(settings.DATA_ROOT_PATH), START, END, enabled=GATE_ENABLED)
+    if gate_rep is not None:
+        print(f"[闸门] {gate_rep.summary()}", flush=True)
     print(f"[{name}] strategy={spec['strategy']} universe={len(codes)} "
           f"window={START.date()}..{END.date()} topk={TOPK} n_drop={NDROP} weekly(Fri) lag=1 veto=ON",
           flush=True)
@@ -259,7 +263,14 @@ async def run_line(name: str, tag: str = "", record_positions: bool = False) -> 
         "record_positions": record_positions,
         "veto_rules": [f"ST(is_st=1)", f"LOWLIQ(此前{LIQ_WINDOW}交易日日均 amount<{LIQ_MIN_AMOUNT/1e7:.0f}千万)",
                        "HALT(trade_status=0)"],
-        "universe_requested": len(codes), "window": [START.isoformat(), END.isoformat()],
+        "universe_requested": gate_rep.universe_size if gate_rep else len(codes),
+        "universe_after_gate": len(codes),
+        "coverage_gate": None if gate_rep is None else {
+            "min_screen_ratio": gate_rep.min_ratio, "dropped": len(gate_rep.dropped),
+            "dropped_share_pct": round(gate_rep.dropped_share * 100, 2),
+            "report": gate_report_path(str(settings.DATA_ROOT_PATH)),
+        },
+        "window": [START.isoformat(), END.isoformat()],
         "wall_seconds": wall, "run_at": datetime.now().isoformat(),
     }
     os.makedirs(OUT_DIR, exist_ok=True)
@@ -274,7 +285,7 @@ async def run_line(name: str, tag: str = "", record_positions: bool = False) -> 
 
 
 def main() -> None:
-    global LIQ_MIN_AMOUNT, VETO_PATH, RULES
+    global LIQ_MIN_AMOUNT, VETO_PATH, RULES, GATE_ENABLED
     ap = argparse.ArgumentParser()
     ap.add_argument("--build-veto", action="store_true")
     ap.add_argument("--line", help="|".join(LINES))
@@ -286,10 +297,14 @@ def main() -> None:
                     help="掩码文件后缀；默认与 --tag 相同。跑 _pos 这种「复用默认掩码」的实验时传空串")
     ap.add_argument("--record-positions", action="store_true", help="记录逐日持仓（机制核查用）")
     ap.add_argument("--rules", default="", help="只用指定规则，逗号分隔，例：ST,HALT 或 LOWLIQ（默认三条全用）")
+    ap.add_argument("--no-gate", action="store_true",
+                    help="关掉可筛选性闸门（只为复现 2026-11-06 闸门前的旧数字）")
     args = ap.parse_args()
 
     LIQ_MIN_AMOUNT = args.liq_min
     RULES = {r.strip() for r in args.rules.split(",") if r.strip()}
+    GATE_ENABLED = not args.no_gate
+    print(f"[口径] 可筛选性闸门={'开' if GATE_ENABLED else '关（复现旧数字）'}", flush=True)
     veto_suffix = args.tag if args.veto_tag is None else args.veto_tag
     VETO_PATH = os.path.join(OUT_DIR, f"veto_mask_2026-11-06{veto_suffix}.parquet")
     if args.tag and not args.tag.startswith("_"):

@@ -37,10 +37,13 @@ from app.services.backtest.strategies.control_strategies import (  # noqa: E402
     RandomTopKControlStrategy,
 )
 from app.services.backtest.strategies.strategy_factory import StrategyFactory  # noqa: E402
+from app.services.backtest.universe_gate import gate_report_path  # noqa: E402
 
 # --lag 1 = 真实盘口径（周五收盘出信号，下一交易日收盘成交），与纸面盘一致；
 # --lag 0 = 当日分数当日收盘成交（引擎旧默认，实盘做不到）。由 main 设定。
 LAG = 0
+GATE_ENABLED = True  # 可筛选性闸门；--no-gate 关掉（只为复现旧数字）
+TAG = ""  # 产物后缀，区分闸门前后两套数字
 # 这些策略没有 lag 实现 —— 传 lag=1 会被静默忽略，必须直接拒绝，不许挂错口径
 _STRATEGIES_WITHOUT_LAG = {"low_volatility"}
 
@@ -79,9 +82,15 @@ LINES: dict[str, dict] = {
 }
 
 
-def list_universe() -> list[str]:
-    files = glob.glob(os.path.join(str(settings.DATA_ROOT_PATH), "qlib_data", "features", "day", "*.parquet"))
-    return sorted(os.path.basename(f)[: -len(".parquet")].replace("_", ".") for f in files)
+def list_universe() -> tuple[list[str], object]:
+    """宇宙要过「可筛选性闸门」：风控库(baostock_daily)看不见的票不许进宇宙 —— 查不到 = 排除。
+    关掉闸门只为了复现旧数字（--no-gate），正常实验一律带闸门。见 app/services/backtest/universe_gate.py。"""
+    from app.services.backtest.universe_gate import gated_universe
+
+    codes, rep = gated_universe(str(settings.DATA_ROOT_PATH), START, END, enabled=GATE_ENABLED)
+    if rep is not None:
+        print(f"[闸门] {rep.summary()}", flush=True)
+    return codes, rep
 
 
 def backtest_config() -> BacktestConfig:
@@ -115,7 +124,7 @@ def backtest_config() -> BacktestConfig:
 
 async def run_line(name: str) -> dict:
     spec = LINES[name]
-    codes = list_universe()
+    codes, gate_rep = list_universe()
     print(
         f"[{name}] strategy={spec['strategy']} universe={len(codes)} "
         f"window={START.date()}..{END.date()} topk={TOPK} n_drop={NDROP} weekly(Fri)",
@@ -164,7 +173,14 @@ async def run_line(name: str) -> dict:
         "ablation_line": name,
         "strategy": spec["strategy"],
         "strategy_config": spec["config"],
-        "universe_requested": len(codes),
+        "universe_requested": gate_rep.universe_size if gate_rep else len(codes),
+        "universe_after_gate": len(codes),
+        "coverage_gate": None if gate_rep is None else {
+            "min_screen_ratio": gate_rep.min_ratio,
+            "dropped": len(gate_rep.dropped),
+            "dropped_share_pct": round(gate_rep.dropped_share * 100, 2),
+            "report": gate_report_path(str(settings.DATA_ROOT_PATH)),
+        },
         "window": [START.isoformat(), END.isoformat()],
         "topk": TOPK,
         "n_drop": NDROP,
@@ -175,7 +191,8 @@ async def run_line(name: str) -> dict:
     }
     os.makedirs(OUT_DIR, exist_ok=True)
     suffix = "" if LAG == 0 else f"_lag{LAG}"
-    out = os.path.join(OUT_DIR, f"ablation_2026-11-06_{name}{suffix}.json")
+    # TAG 让「带闸门 / 不带闸门」两套产物并存，别互相覆盖
+    out = os.path.join(OUT_DIR, f"ablation_2026-11-06_{name}{TAG}{suffix}.json")
     with open(out, "w") as f:
         json.dump(res, f, default=_conv, ensure_ascii=False)
 
@@ -191,11 +208,19 @@ async def run_line(name: str) -> dict:
 async def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--line", required=True, help="|".join(LINES) + " | all")
+    ap.add_argument("--tag", default="", help="产物文件后缀（必须以 _ 开头），例：_gate")
+    ap.add_argument("--no-gate", action="store_true",
+                    help="关掉可筛选性闸门（只为复现 2026-11-06 之前的旧数字，正常实验别用）")
     ap.add_argument("--lag", type=int, choices=(0, 1), default=0,
                     help="1 = 真实盘口径（信号日次一交易日成交）；0 = 旧口径（当日收盘成交）")
     args = ap.parse_args()
-    global LAG
+    global LAG, GATE_ENABLED, TAG
     LAG = args.lag
+    TAG = args.tag
+    if TAG and not TAG.startswith("_"):
+        raise SystemExit("--tag 必须以 _ 开头，避免和已有产物混名")
+    GATE_ENABLED = not args.no_gate
+    print(f"[口径] 可筛选性闸门={'开' if GATE_ENABLED else '关（复现旧数字）'}", flush=True)
     names = list(LINES) if args.line == "all" else [args.line]
     if args.line != "all" and args.line not in LINES:
         raise SystemExit(f"未知 line: {args.line}（可选 {list(LINES)} 或 all）")
