@@ -117,9 +117,20 @@ def build_levels(start: str, incremental: bool) -> pd.DataFrame:
         lvl = pd.DataFrame(cols).astype("float32").sort_index()
     else:
         lvl = prev
-        last = str(lvl.index.max())[:10]
+        last_ts = lvl.index.max()
+        last = str(last_ts)[:10]
         print(f"[bench] 增量：既有电平到 {last}，{lvl.shape[1]} 只", flush=True)
-        appended = 0
+
+        # ⚠️ 基准必须锚在**已知完整的那一行** `last_ts`，不能用 `iloc[-1]`。
+        # 旧写法 `base = float(lvl[code].iloc[-1])` + 逐格 `lvl.loc[d, code] = ...`：
+        # 列序第一个 code 会把新日期那一整行先插出来（整行 NaN），此后每个 code 的
+        # `iloc[-1]` 读到的就是那行空值 → base=NaN → 整条链变 NaN。
+        # 实测后果：新追加那天 5596 只里只有 1 只有值（000001_SZ），且因为
+        # `last = lvl.index.max()` 已是该日，之后每次增量 `date > last` 恒为空
+        # → **坏尾巴永不自愈**，所有 excess_pp 都是拿一只平安银行算的。
+        # 修法：锚点取 `lvl.at[last_ts, code]`；新值先攒进 dict 再**一次性** concat
+        # （逐格 .loc 插入还会让每次赋值复制整张矩阵，5577 次）。
+        new_cols: Dict[str, pd.Series] = {}
         for code in lvl.columns:
             try:
                 df = pd.read_parquet(os.path.join(PCT_DIR, f"{code}.parquet"),
@@ -127,20 +138,50 @@ def build_levels(start: str, incremental: bool) -> pd.DataFrame:
             except Exception:
                 continue
             df["date"] = pd.to_datetime(df["date"].astype(str), errors="coerce")
-            df = df[df["date"] > pd.Timestamp(last)]
+            df = df[df["date"] > last_ts]
             if df.empty:
                 continue
             r = pd.to_numeric(df["pct_chg"], errors="coerce") / 100.0
             s = pd.Series(r.values, index=df["date"]).groupby(level=0).last()
-            base = float(lvl[code].iloc[-1])
-            for d, v in s.items():          # 按日期顺序连乘，基准 = 上一条电平 × (1+r)
+            anchor = lvl.at[last_ts, code] if last_ts in lvl.index else np.nan
+            if not np.isfinite(anchor):
+                known = lvl[code].loc[:last_ts].dropna()
+                if known.empty:
+                    continue               # 这只票在锚点之前就没有电平 → 无法连乘，跳过
+                anchor = known.iloc[-1]
+            base = float(anchor)
+            vals: Dict[pd.Timestamp, "np.float32"] = {}
+            for d, v in s.items():         # 按日期顺序连乘，基准 = 上一条电平 × (1+r)
                 if not np.isfinite(v):
-                    continue
+                    continue               # 停牌/缺涨跌幅：不连乘，该日留 NaN
                 base *= 1.0 + float(v)
-                lvl.loc[d, code] = np.float32(base)
-        appended = int((lvl.index > pd.Timestamp(last)).sum())
-        lvl = lvl.sort_index().astype("float32")
+                vals[d] = np.float32(base)
+            if vals:
+                new_cols[code] = pd.Series(vals)
+
+        if new_cols:
+            # 新日期是**新行**，不是新列：reindex 到既有列集合再按行堆叠。
+            # ⚠️ 别写成 `concat([lvl, added], axis=1)` —— 那会按列做外连接，
+            # 同名列被复制成两份（实测 4 列变 8 列）。
+            added = pd.DataFrame(new_cols).astype("float32").reindex(columns=lvl.columns)
+            lvl = pd.concat([lvl, added], axis=0).sort_index()
+            lvl = lvl[~lvl.index.duplicated(keep="first")]
+        new_dates = [d for d in lvl.index if d > last_ts]
+        appended = len(new_dates)
+        lvl = lvl.astype("float32")
         print(f"[bench] 追加交易日 {appended} 个", flush=True)
+
+        # 尾巴自检：新追加的每一行都应当和锚点行一样"几乎全员有价"。
+        # 覆盖率塌了 = 追加逻辑又坏了（正是 11-05 那个 NaN 中毒的样子）。
+        # 直接非零退出，绝不把 1/5596 的尾巴写进盘让下游算出假超额。
+        anchor_n = int(lvl.loc[last_ts].notna().sum()) if last_ts in lvl.index else 0
+        for d in new_dates:
+            n = int(lvl.loc[d].notna().sum())
+            ratio = n / max(anchor_n, 1)
+            if ratio < 0.5:
+                print(f"❌ 追加日 {str(d)[:10]} 覆盖率异常：{n}/{anchor_n} 只有值"
+                      f"（{ratio:.2%}）→ 增量追加逻辑有问题，拒绝落盘")
+                sys.exit(1)
 
     return lvl
 
