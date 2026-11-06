@@ -194,7 +194,7 @@ StrategyFactory.register_strategy("factor_ranking_veto", VetoedFactorRanking)
 StrategyFactory.register_strategy("random_topk_control_veto", VetoedRandomTopK)
 
 
-def backtest_config() -> BacktestConfig:
+def backtest_config(record_positions: bool = False) -> BacktestConfig:
     """与 ablation_lowvol_control.py 完全一致的真实成本口径（不是档案里 slippage 0.0001 + 免印花税那种）。"""
     return BacktestConfig(
         initial_cash=1_000_000.0,
@@ -215,11 +215,12 @@ def backtest_config() -> BacktestConfig:
         rebalance_frequency="daily",
         record_portfolio_history=True,
         portfolio_history_stride=1,
-        record_positions_in_history=False,
+        # --record-positions 打开：做「为什么 25f_neu_veto 崩了」的机制核查要看持仓集中度
+        record_positions_in_history=record_positions,
     )
 
 
-async def run_line(name: str) -> None:
+async def run_line(name: str, tag: str = "", record_positions: bool = False) -> None:
     spec = LINES[name]
     files = glob.glob(os.path.join(str(settings.DATA_ROOT_PATH), "qlib_data", "features", "day", "*.parquet"))
     codes = sorted(os.path.basename(f)[: -len(".parquet")].replace("_", ".") for f in files)
@@ -233,7 +234,7 @@ async def run_line(name: str) -> None:
     res = await executor.run_backtest(
         strategy_name=spec["strategy"], stock_codes=codes,
         start_date=START, end_date=END,
-        strategy_config=dict(spec["config"]), backtest_config=backtest_config(),
+        strategy_config=dict(spec["config"]), backtest_config=backtest_config(record_positions),
     )
     wall = time.perf_counter() - t0
 
@@ -249,13 +250,16 @@ async def run_line(name: str) -> None:
         raise TypeError(str(type(o)))
 
     res["__meta__"] = {
-        "ablation_line": name, "strategy": spec["strategy"], "strategy_config": spec["config"],
-        "veto_rules": ["ST(is_st=1)", "LOWLIQ(60日均 amount<5000万)", "HALT(trade_status=0)"],
+        "ablation_line": name, "strategy": spec["strategy"], "strategy_config": dict(spec["config"]),
+        "liq_min_amount": LIQ_MIN_AMOUNT, "veto_mask_path": VETO_PATH, "tag": tag,
+        "record_positions": record_positions,
+        "veto_rules": [f"ST(is_st=1)", f"LOWLIQ(此前{LIQ_WINDOW}交易日日均 amount<{LIQ_MIN_AMOUNT/1e7:.0f}千万)",
+                       "HALT(trade_status=0)"],
         "universe_requested": len(codes), "window": [START.isoformat(), END.isoformat()],
         "wall_seconds": wall, "run_at": datetime.now().isoformat(),
     }
     os.makedirs(OUT_DIR, exist_ok=True)
-    out = os.path.join(OUT_DIR, f"ablation_2026-11-06_{name}_lag1.json")
+    out = os.path.join(OUT_DIR, f"ablation_2026-11-06_{name}{tag}_lag1.json")
     with open(out, "w") as f:
         json.dump(res, f, default=_conv, ensure_ascii=False)
     print(f"[{name}] sharpe={res['sharpe_ratio']:.4f} total={res['total_return']*100:.2f}% "
@@ -266,16 +270,30 @@ async def run_line(name: str) -> None:
 
 
 def main() -> None:
+    global LIQ_MIN_AMOUNT, VETO_PATH
     ap = argparse.ArgumentParser()
     ap.add_argument("--build-veto", action="store_true")
     ap.add_argument("--line", help="|".join(LINES))
+    # 阈值敏感性用：同一个线跑不同流动性闸门，掩码和产物各自带 tag，不互相覆盖。
+    ap.add_argument("--liq-min", type=float, default=LIQ_MIN_AMOUNT,
+                    help="R2 流动性闸门（元/日均成交额），默认 5000 万")
+    ap.add_argument("--tag", default="", help="产物与掩码文件后缀，例如 _liq20m")
+    ap.add_argument("--record-positions", action="store_true", help="记录逐日持仓（机制核查用）")
     args = ap.parse_args()
+
+    LIQ_MIN_AMOUNT = args.liq_min
+    VETO_PATH = os.path.join(OUT_DIR, f"veto_mask_2026-11-06{args.tag}.parquet")
+    if args.tag and not args.tag.startswith("_"):
+        raise SystemExit("--tag 必须以 _ 开头，避免和已有产物混名")
+
     if args.build_veto:
         build_veto_mask()
         return
     if not args.line or args.line not in LINES:
         raise SystemExit(f"用 --build-veto 或 --line {{{'|'.join(LINES)}}}")
-    asyncio.run(run_line(args.line))
+    print(f"[口径] liq_min={LIQ_MIN_AMOUNT/1e7:.0f}千万 掩码={os.path.basename(VETO_PATH)} tag={args.tag}",
+          flush=True)
+    asyncio.run(run_line(args.line, tag=args.tag, record_positions=args.record_positions))
 
 
 if __name__ == "__main__":
