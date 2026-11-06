@@ -44,6 +44,8 @@ from app.services.backtest.universe_gate import gate_report_path  # noqa: E402
 LAG = 0
 GATE_ENABLED = True  # 可筛选性闸门；--no-gate 关掉（只为复现旧数字）
 TAG = ""  # 产物后缀，区分闸门前后两套数字
+CAP_TIER = ""  # ""=不分层；low/mid/high = 按估算自由流通市值分位切宇宙（判"是否 size β"用）
+CAP_TIER_STATS: dict = {}  # 分层口径随产物一起落盘，便于事后审计
 # 这些策略没有 lag 实现 —— 传 lag=1 会被静默忽略，必须直接拒绝，不许挂错口径
 _STRATEGIES_WITHOUT_LAG = {"low_volatility"}
 
@@ -84,12 +86,26 @@ LINES: dict[str, dict] = {
 
 def list_universe() -> tuple[list[str], object]:
     """宇宙要过「可筛选性闸门」：风控库(baostock_daily)看不见的票不许进宇宙 —— 查不到 = 排除。
-    关掉闸门只为了复现旧数字（--no-gate），正常实验一律带闸门。见 app/services/backtest/universe_gate.py。"""
+    关掉闸门只为了复现旧数字（--no-gate），正常实验一律带闸门。见 app/services/backtest/universe_gate.py。
+    --tier low/mid/high 再按估算自由流通市值切一刀（判"因子收益是不是 size β"），查不到市值的票同样排除。"""
+    global CAP_TIER_STATS
     from app.services.backtest.universe_gate import gated_universe
 
     codes, rep = gated_universe(str(settings.DATA_ROOT_PATH), START, END, enabled=GATE_ENABLED)
     if rep is not None:
         print(f"[闸门] {rep.summary()}", flush=True)
+    if CAP_TIER:
+        from app.services.backtest.cap_estimate import estimate_caps, filter_tier, tier_stats
+
+        cache = os.path.join(OUT_DIR, "cap_cache_2026-11-06.json")
+        caps = estimate_caps(str(settings.DATA_ROOT_PATH), START.strftime("%Y-%m-%d"),
+                             END.strftime("%Y-%m-%d"), codes, cache)
+        kept = filter_tier(codes, caps, CAP_TIER)
+        CAP_TIER_STATS = {"tier": CAP_TIER, **tier_stats(caps), "kept": len(kept)}
+        print(f"[分层] tier={CAP_TIER} 宇宙 {len(codes)} → {len(kept)} "
+              f"（市值中位 {CAP_TIER_STATS['median_yi']} 亿，q25 {CAP_TIER_STATS['q25_yi']} 亿，"
+              f"q75 {CAP_TIER_STATS['q75_yi']} 亿）", flush=True)
+        codes = kept
     return codes, rep
 
 
@@ -181,6 +197,8 @@ async def run_line(name: str) -> dict:
             "dropped_share_pct": round(gate_rep.dropped_share * 100, 2),
             "report": gate_report_path(str(settings.DATA_ROOT_PATH)),
         },
+        "cap_tier": CAP_TIER_STATS or None,
+        },
         "window": [START.isoformat(), END.isoformat()],
         "topk": TOPK,
         "n_drop": NDROP,
@@ -209,14 +227,17 @@ async def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--line", required=True, help="|".join(LINES) + " | all")
     ap.add_argument("--tag", default="", help="产物文件后缀（必须以 _ 开头），例：_gate")
+    ap.add_argument("--tier", default="", choices=("", "low", "mid", "high"),
+                    help="按估算自由流通市值切宇宙：low=<q25，mid=中间，high=>q75（判因子收益是否 size β）")
     ap.add_argument("--no-gate", action="store_true",
                     help="关掉可筛选性闸门（只为复现 2026-11-06 之前的旧数字，正常实验别用）")
     ap.add_argument("--lag", type=int, choices=(0, 1), default=0,
                     help="1 = 真实盘口径（信号日次一交易日成交）；0 = 旧口径（当日收盘成交）")
     args = ap.parse_args()
-    global LAG, GATE_ENABLED, TAG
+    global LAG, GATE_ENABLED, TAG, CAP_TIER
     LAG = args.lag
     TAG = args.tag
+    CAP_TIER = args.tier
     if TAG and not TAG.startswith("_"):
         raise SystemExit("--tag 必须以 _ 开头，避免和已有产物混名")
     GATE_ENABLED = not args.no_gate
