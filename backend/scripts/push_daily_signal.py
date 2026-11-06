@@ -5,8 +5,11 @@
   - **不经过 LLM**：cron 用 `--no-agent` 跑本脚本，stdout 原样推送 → 零延迟零成本
   - **空输出 = 静默**：非交易日 / 无新信号时不打扰用户
   - **内容要能照着做**：代码 + 名称 + 价格 + 股数 + 金额 + 成本
-  - **只推主线策略**：默认推 honest_42f（周频夏普最高的一条），
+  - **只推主线策略**：默认推 honest_42f（= 25 个诚实公式因子，面板已关），
     --all 可推全部有信号的线
+  - ⚠️ 口径诚实性：这条注释以前写「honest_42f 周频夏普最高」。**2026-11-06 的 lag1 真实成本回测不是这个结论**：
+    honest_42f(25因子无中性) 0.7609 < honest_42f_neu(25因子+行业中性) 0.8074 < honest_25f_veto 0.8346。
+    推送默认线**暂未改**（等纸面盘赛马 + 否决层定性出结果再定），但别再以为推的是夏普最高的那条。
 
 用法:
   env -u PYTHONPATH backend/.venv-py313/bin/python3 backend/scripts/push_daily_signal.py
@@ -25,10 +28,11 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 PAPER_DIR = os.path.join(ROOT, "data", "paper")
 RAW_DIR = os.path.join(ROOT, "data", "tdx_daily", "raw")
 
-# 主线策略（按 3 年全市场周频夏普排序）
+# 主线策略。注意：key 里的 "42f" 是历史遗留，实际打分是 25 个公式因子（USE_PANEL=False）。
+# 2026-11-06 lag1 真实成本 3 年夏普排序：25f+中性 0.8074 > 25f 0.7609 > 低波动 0.7002 > 随机 0.5659。
 DEFAULT_STRATEGY = "honest_42f"
 DISPLAY = {
-    "honest_42f": "42 因子等权",
+    "honest_42f": "25 因子等权（面板已关）",
     "rsi_71421": "RSI 7/14/21",
     "gbm_voltgt": "LightGBM + 波动率目标",
     "factor_ranking": "动量/低波动/低振幅",
@@ -241,10 +245,10 @@ def main() -> None:
                   f"   成交价用 {trade_date} 收盘价，涨停买不进、跌停卖不出")
     else:
         header = f"📊 每日信号 {sig_date}（{meta.get('data_latest', sig_date)} 数据）"
-    # 多资产线与 42f 线的 A 腿是同一批股票（多资产线是半仓 + 袖套）→
+    # 多资产线与 honest_42f(=25 因子) 线的 A 腿是同一批股票（多资产线是半仓 + 袖套）→
     # 两条一起推时必须说清楚「二选一」，否则用户会重复下单。
     if len(chunks) > 1 and "multi_asset_final" in keys and "honest_42f" in keys:
-        header += ("\n   ⚠️ 多资产线的 A 腿 = 42f 的 Top60（**一半仓位**）+ 9 只 ETF 袖套；"
+        header += ("\n   ⚠️ 多资产线的 A 腿 = 25 因子线的 Top60（**一半仓位**）+ 9 只 ETF 袖套；"
                    "两条线**二选一**，不要同时执行。")
     print(header)
     print("=" * 28)
