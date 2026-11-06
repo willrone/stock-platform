@@ -87,6 +87,10 @@ LINES: dict[str, dict] = {
     # 注意：两个改良**必须实测叠加效果**，不许假设「各自有效 → 加起来更有效」。
     "honest_25f_neu_veto": {"strategy": "honest_composite_veto",
                             "config": {**_WEEKLY_LAG1, "use_panel": False, "industry_neutral": True}},
+    # 机制核查需要「同一套持仓记录」的无否决基线，否则只能看加了否决的两条，无从对照
+    "base_25f": {"strategy": "honest_composite", "config": {**_WEEKLY_LAG1, "use_panel": False}},
+    "base_25f_neu": {"strategy": "honest_composite",
+                     "config": {**_WEEKLY_LAG1, "use_panel": False, "industry_neutral": True}},
 }
 
 
@@ -270,19 +274,24 @@ async def run_line(name: str, tag: str = "", record_positions: bool = False) -> 
 
 
 def main() -> None:
-    global LIQ_MIN_AMOUNT, VETO_PATH
+    global LIQ_MIN_AMOUNT, VETO_PATH, RULES
     ap = argparse.ArgumentParser()
     ap.add_argument("--build-veto", action="store_true")
     ap.add_argument("--line", help="|".join(LINES))
     # 阈值敏感性用：同一个线跑不同流动性闸门，掩码和产物各自带 tag，不互相覆盖。
     ap.add_argument("--liq-min", type=float, default=LIQ_MIN_AMOUNT,
                     help="R2 流动性闸门（元/日均成交额），默认 5000 万")
-    ap.add_argument("--tag", default="", help="产物与掩码文件后缀，例如 _liq20m")
+    ap.add_argument("--tag", default="", help="产物文件后缀，例如 _liq20m / _pos")
+    ap.add_argument("--veto-tag", default=None,
+                    help="掩码文件后缀；默认与 --tag 相同。跑 _pos 这种「复用默认掩码」的实验时传空串")
     ap.add_argument("--record-positions", action="store_true", help="记录逐日持仓（机制核查用）")
+    ap.add_argument("--rules", default="", help="只用指定规则，逗号分隔，例：ST,HALT 或 LOWLIQ（默认三条全用）")
     args = ap.parse_args()
 
     LIQ_MIN_AMOUNT = args.liq_min
-    VETO_PATH = os.path.join(OUT_DIR, f"veto_mask_2026-11-06{args.tag}.parquet")
+    RULES = {r.strip() for r in args.rules.split(",") if r.strip()}
+    veto_suffix = args.tag if args.veto_tag is None else args.veto_tag
+    VETO_PATH = os.path.join(OUT_DIR, f"veto_mask_2026-11-06{veto_suffix}.parquet")
     if args.tag and not args.tag.startswith("_"):
         raise SystemExit("--tag 必须以 _ 开头，避免和已有产物混名")
 
@@ -291,8 +300,8 @@ def main() -> None:
         return
     if not args.line or args.line not in LINES:
         raise SystemExit(f"用 --build-veto 或 --line {{{'|'.join(LINES)}}}")
-    print(f"[口径] liq_min={LIQ_MIN_AMOUNT/1e7:.0f}千万 掩码={os.path.basename(VETO_PATH)} tag={args.tag}",
-          flush=True)
+    print(f"[口径] liq_min={LIQ_MIN_AMOUNT/1e7:.0f}千万 掩码={os.path.basename(VETO_PATH)} "
+          f"rules={sorted(RULES) or '全部'} tag={args.tag}", flush=True)
     asyncio.run(run_line(args.line, tag=args.tag, record_positions=args.record_positions))
 
 
