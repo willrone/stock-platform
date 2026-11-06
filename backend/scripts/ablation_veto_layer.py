@@ -21,8 +21,8 @@
 
 跑法：
     python scripts/ablation_veto_layer.py --build-veto              # 先建否决掩码（一次性）
-    python scripts/ablation_veto_layer.py --line honest_25f_veto
-    python scripts/ablation_veto_layer.py --line honest_42f_veto
+    python scripts/ablation_veto_layer.py --line honest_25f_veto|honest_42f_veto|lowvol_veto|random_veto
+    # 对照基线（同口径，无否决）在 ablation_lowvol_control.py：honest_25f / honest_42f / lowvol_ctrl / random_ctrl
 对照基线（同口径，已跑过，不必重跑）：`--line honest_25f_base` / `honest_42f_base`（见 ablation_lowvol_control.py 的 *_lag1 产物）。
 """
 
@@ -48,6 +48,12 @@ if BACKEND_ROOT not in sys.path:
 from app.core.config import settings  # noqa: E402
 from app.services.backtest import BacktestExecutor  # noqa: E402
 from app.services.backtest.models import BacktestConfig  # noqa: E402
+from app.services.backtest.strategies.control_strategies import (  # noqa: E402
+    RandomTopKControlStrategy,
+)
+from app.services.backtest.strategies.factor_ranking_strategy import (  # noqa: E402
+    FactorRankingStrategy,
+)
 from app.services.backtest.strategies.honest_composite_strategy import (  # noqa: E402
     HonestCompositeStrategy,
 )
@@ -72,6 +78,15 @@ LINES: dict[str, dict] = {
                         "config": {**_WEEKLY_LAG1, "use_panel": False}},
     "honest_42f_veto": {"strategy": "honest_composite_veto",
                         "config": {**_WEEKLY_LAG1, "use_panel": True}},
+    # 关键对照：同一套否决规则扣在**对照策略**上。
+    # 如果对照组加了否决也一样变好，那这层是「宇宙清洗 / 可交易性卫生」，不是我们策略的增量。
+    "lowvol_veto": {"strategy": "factor_ranking_veto",
+                    "config": {**_WEEKLY_LAG1, "weights": {"low_vol": 1.0}}},
+    "random_veto": {"strategy": "random_topk_control_veto", "config": {**_WEEKLY_LAG1}},
+    # 2026-11-06 §12.63：2×2 里最合理的候选 = 25 因子 + 行业中性；再叠 Layer2 否决。
+    # 注意：两个改良**必须实测叠加效果**，不许假设「各自有效 → 加起来更有效」。
+    "honest_25f_neu_veto": {"strategy": "honest_composite_veto",
+                            "config": {**_WEEKLY_LAG1, "use_panel": False, "industry_neutral": True}},
 }
 
 
@@ -153,16 +168,30 @@ def apply_veto(stock_data: dict[str, pd.DataFrame]) -> int:
     return removed
 
 
-class VetoedHonestComposite(HonestCompositeStrategy):
-    """honest_composite + Layer-2 否决：打分照旧，被否决的 (只,日) 分数直接删掉。"""
+class _VetoMixin:
+    """打分照旧，被否决的 (只,日) 分数直接删掉 → 执行器那天不可能选到它。"""
 
     async def prepare_backtest_data(self, stock_data, start_date, end_date) -> None:
         await super().prepare_backtest_data(stock_data, start_date, end_date)
         removed = apply_veto(stock_data)
-        logger.info(f"[Layer2 否决层] 删除分数条目 {removed}（规则 ST/LOWLIQ/HALT）")
+        print(f"[Layer2 否决层] 删除分数条目 {removed}（规则 ST/LOWLIQ/HALT）", flush=True)
+
+
+class VetoedFactorRanking(_VetoMixin, FactorRankingStrategy):
+    """纯低波动对照 + 同一套否决（对照用）"""
+
+
+class VetoedRandomTopK(_VetoMixin, RandomTopKControlStrategy):
+    """随机对照 + 同一套否决（对照用）"""
+
+
+class VetoedHonestComposite(_VetoMixin, HonestCompositeStrategy):
+    """honest_composite + Layer-2 否决"""
 
 
 StrategyFactory.register_strategy("honest_composite_veto", VetoedHonestComposite)
+StrategyFactory.register_strategy("factor_ranking_veto", VetoedFactorRanking)
+StrategyFactory.register_strategy("random_topk_control_veto", VetoedRandomTopK)
 
 
 def backtest_config() -> BacktestConfig:
