@@ -48,6 +48,7 @@ CAP_TIER = ""  # ""=不分层；low/mid/high = 按估算自由流通市值分位
 CAP_TIER_STATS: dict = {}  # 分层口径随产物一起落盘，便于事后审计
 SEED = 0  # --seed：随机对照线的种子（0 = 用策略默认 20261106）
 ALLOW = ""  # --allow：因子族消融（族名或具体因子名，逗号分隔）。判「哪些因子真在出力、哪些只是噪声」
+CADENCE = ""  # --cadence：daily/weekly/monthly 换仓节奏（判"成本与无效换手"用）
 # 这些策略没有 lag 实现 —— 传 lag=1 会被静默忽略，必须直接拒绝，不许挂错口径
 _STRATEGIES_WITHOUT_LAG = {"low_volatility"}
 
@@ -171,6 +172,11 @@ async def run_line(name: str) -> dict:
         cfg["topk"], cfg["n_drop"] = TOPK, NDROP  # _WEEKLY 在导入时已固化，必须显式覆盖
     if SEED and spec["strategy"] == "random_topk_control":
         cfg["seed"] = SEED  # 随机对照必须能换种子，否则一次抽样就当结论
+    if CADENCE:
+        if spec["strategy"] != "honest_composite":
+            raise SystemExit("[" + name + "] --cadence 只对 honest_composite 有意义 → 拒绝运行")
+        cfg["rebalance_days"] = CADENCE
+        print("[" + name + "] 换仓节奏: " + CADENCE, flush=True)
     if ALLOW:
         if spec["strategy"] != "honest_composite":
             raise SystemExit("[" + name + "] --allow 只对 honest_composite 有意义，当前策略 " + str(spec["strategy"]) + " → 拒绝运行")
@@ -265,15 +271,17 @@ async def main() -> None:
     ap.add_argument("--n-drop", type=int, default=5, help="每次换仓淘汰只数")
     ap.add_argument("--seed", type=int, default=0, help="随机对照线种子（0=默认）；同一层跑多个种子才知道 Δ 是不是噪声")
     ap.add_argument("--allow", default="", help="因子族消融：MIN/MAX/STD/CORR/CORD（逗号分隔）或具体因子名 MIN5,CORD20")
+    ap.add_argument("--cadence", default="", choices=("", "daily", "weekly", "monthly"), help="换仓节奏（默认用 line 自带 weekly）")
     ap.add_argument("--no-gate", action="store_true",
                     help="关掉可筛选性闸门（只为复现 2026-11-06 之前的旧数字，正常实验别用）")
     ap.add_argument("--lag", type=int, choices=(0, 1), default=0,
                     help="1 = 真实盘口径（信号日次一交易日成交）；0 = 旧口径（当日收盘成交）")
     args = ap.parse_args()
-    global LAG, GATE_ENABLED, TAG, CAP_TIER, SEED, CAPITAL, TOPK, NDROP, ALLOW
+    global LAG, GATE_ENABLED, TAG, CAP_TIER, SEED, CAPITAL, TOPK, NDROP, ALLOW, CADENCE
     LAG = args.lag
     TAG = args.tag
     ALLOW = args.allow
+    CADENCE = args.cadence
     CAP_TIER = args.tier
     SEED = args.seed
     CAPITAL = args.capital
