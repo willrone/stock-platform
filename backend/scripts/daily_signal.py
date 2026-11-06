@@ -1,15 +1,22 @@
 #!/usr/bin/env python3
-"""每日交易信号: honest_composite (42f 等权复合) → TopK-Dropout 当日买卖清单。
+"""每日因子排名清单 (研究工具) —— 不是纸面盘的一条线, 不要照着下单。
 
-用途: 收盘后跑一遍, 输出"今天该买/卖/留哪 60 只", 直接可操作。
-口径与正式策略 honest_composite 完全一致:
-  - 23 个诚实公式因子 (MIN/MAX/STD/CORR/CORD × n∈{5,10,20,30,60})
-  - 17 个 Alpha158 面板因子 (data/qlib_data/features/day/)
+【口径定位 2026-11-05 定 / 2026-11-06 写死】
+本脚本产出的清单 **没有接入** paper_portfolio / 每日盯市 (daily_nav) / 微信推送 / 前端 UI。
+纸面盘实际在跑、且在计超额的是 `honest_42f` (周频 topk60/ndrop5) 与 `multi_asset_final` (定稿线),
+推送脚本写死 `--strategy honest_42f multi_asset_final`, 与本脚本无关。
+=> 这里的清单是**研究侧快照**: 用来观察因子排名的日间变化, 不是可执行指令。
+拿它当"今天买什么"下单 = 用一个没有盯市曲线、没有成本核算、没有基准对照的口径真钱交易。
+
+实际默认口径 (旧文档写的 "42f / TopK=60, n_drop=5" 与代码不符, 已改):
+  - 因子: 25 个诚实公式因子 (默认 use_panel=False, 不含 17 个 Alpha158 面板因子)
   - 等权截面 z-score, 涨停掩码 (当日涨幅 >= 9.5% 不可买, 分数置 NaN)
-  - TopK=60, n_drop=5: 今天进 top60 的是买入, 掉出的是卖出, 留下的是持有。
+  - TopK=30, n_drop=3 (--topk/--ndrop 可改; 但日频 ndrop3 的换手上限 ~1400 笔/年,
+    与自用纪律 <=800 笔/年 冲突, 见 docs/PERSONAL_USE_PIVOT_2026-11-05.md)
+  - 与 22f 线近乎共线 (25 因子 vs 22 因子, 只差 MAX30/MAX60 的符号) —— 不会给出新信息
 
 数据要求: 先用 tdx_pipeline 拉当日数据 + merge_to_stock_data 落 parquet。
-输出: 终端表格 + data/strategy_baseline/daily_signal_<date>.json
+输出: 终端表格 + data/strategy_baseline/daily_signal_<date>_topk<N>.json (meta.caliber 标明研究口径)
 """
 from __future__ import annotations
 
@@ -432,6 +439,12 @@ def main() -> None:
             "n_stocks": len(frames), "topk": topk, "n_drop": ndrop,
             "max_position_size": round((1.0 - 0.05) / topk, 6),
             "generated_at": datetime.now().isoformat(),
+            # 口径声明: 这张清单不在纸面盘的 7 条线里, 没有盯市曲线/成本核算/基准对照,
+            # 也不在微信推送与前端 UI 的数据源里。研究快照, 不是可执行指令。
+            "caliber": "research_only",
+            "tracked_in_paper_book": False,
+            "pushed_to_wechat": False,
+            "note": "纸面盘在计超额的是 honest_42f(周频 topk60/ndrop5) 与 multi_asset_final; 本清单与其口径不同 (25 因子/日频 topk%d/ndrop%d)" % (topk, ndrop),
         },
         "buys": [{"code": c, "score": round(float(rank_today[c]), 4),
                   "close": round(float(close_today[c]), 2)} for c in buys],
@@ -445,6 +458,7 @@ def main() -> None:
         json.dump(result, fh, ensure_ascii=False, indent=1)
 
     print(f"\n{'='*60}", flush=True)
+    print("口径: research_only —— 不在纸面盘 7 条线内, 无盯市曲线/成本核算/基准对照, 别照着下单", flush=True)
     print(f"每日信号  {today.date()}  (vs {prev.date()})", flush=True)
     print(f"宇宙 {len(frames)} 只 | 持仓 top{topk} | 每天最多换 {ndrop} 只 "
           f"| 单仓上限 {(1.0-0.05)/topk*100:.1f}%", flush=True)
