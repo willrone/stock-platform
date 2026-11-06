@@ -46,6 +46,7 @@ GATE_ENABLED = True  # 可筛选性闸门；--no-gate 关掉（只为复现旧�
 TAG = ""  # 产物后缀，区分闸门前后两套数字
 CAP_TIER = ""  # ""=不分层；low/mid/high = 按估算自由流通市值分位切宇宙（判"是否 size β"用）
 CAP_TIER_STATS: dict = {}  # 分层口径随产物一起落盘，便于事后审计
+SEED = 0  # --seed：随机对照线的种子（0 = 用策略默认 20261106）
 # 这些策略没有 lag 实现 —— 传 lag=1 会被静默忽略，必须直接拒绝，不许挂错口径
 _STRATEGIES_WITHOUT_LAG = {"low_volatility"}
 
@@ -53,6 +54,7 @@ START = datetime(2023, 5, 12)
 END = datetime(2026, 5, 8)
 TOPK, NDROP = 60, 5
 CASH_RESERVE = 0.05
+CAPITAL = 1_000_000.0  # --capital：真钱本金。低于 100 万时最低佣金 5 元/笔会吃掉成本假设，必须实测
 OUT_DIR = os.path.join(os.path.dirname(BACKEND_ROOT), "data", "strategy_baseline")
 
 # 对照 D 只在本脚本注册，不进生产策略表（生产行为不变）。
@@ -116,7 +118,7 @@ def backtest_config() -> BacktestConfig:
     单仓上限显式给成 (1-现金预留)/topk —— 靠默认 0.2 会把 60 只的组合冻结成 9 只（陷阱 21/25）。
     """
     return BacktestConfig(
-        initial_cash=1_000_000.0,
+        initial_cash=CAPITAL,
         commission_rate=0.0003,
         slippage_rate=0.001,
         open_cost=0.0,
@@ -147,6 +149,10 @@ async def run_line(name: str) -> dict:
         flush=True,
     )
     cfg = dict(spec["config"])
+    if TOPK != 60 or NDROP != 5:
+        cfg["topk"], cfg["n_drop"] = TOPK, NDROP  # _WEEKLY 在导入时已固化，必须显式覆盖
+    if SEED and spec["strategy"] == "random_topk_control":
+        cfg["seed"] = SEED  # 随机对照必须能换种子，否则一次抽样就当结论
     if LAG > 0:
         if spec["strategy"] in _STRATEGIES_WITHOUT_LAG:
             raise SystemExit(
@@ -188,7 +194,7 @@ async def run_line(name: str) -> dict:
     res["__meta__"] = {
         "ablation_line": name,
         "strategy": spec["strategy"],
-        "strategy_config": spec["config"],
+        "strategy_config": cfg,  # 记实际生效的配置（含 --topk/--seed 覆盖），别记原始模板
         "universe_requested": gate_rep.universe_size if gate_rep else len(codes),
         "universe_after_gate": len(codes),
         "coverage_gate": None if gate_rep is None else {
@@ -198,6 +204,7 @@ async def run_line(name: str) -> dict:
             "report": gate_report_path(str(settings.DATA_ROOT_PATH)),
         },
         "cap_tier": CAP_TIER_STATS or None,
+        "capital": CAPITAL,
         "window": [START.isoformat(), END.isoformat()],
         "topk": TOPK,
         "n_drop": NDROP,
@@ -209,7 +216,8 @@ async def run_line(name: str) -> dict:
     os.makedirs(OUT_DIR, exist_ok=True)
     suffix = "" if LAG == 0 else f"_lag{LAG}"
     # TAG 让「带闸门 / 不带闸门」两套产物并存，别互相覆盖
-    out = os.path.join(OUT_DIR, f"ablation_2026-11-06_{name}{TAG}{suffix}.json")
+    tier_tag = f"_tier{CAP_TIER}" if CAP_TIER else ""  # 分层必须进文件名，否则同 tag 的层间产物会互相覆盖
+    out = os.path.join(OUT_DIR, f"ablation_2026-11-06_{name}{TAG}{tier_tag}{suffix}.json")
     with open(out, "w") as f:
         json.dump(res, f, default=_conv, ensure_ascii=False)
 
@@ -228,15 +236,25 @@ async def main() -> None:
     ap.add_argument("--tag", default="", help="产物文件后缀（必须以 _ 开头），例：_gate")
     ap.add_argument("--tier", default="", choices=("", "low", "mid", "high"),
                     help="按估算自由流通市值切宇宙：low=<q25，mid=中间，high=>q75（判因子收益是否 size β）")
+    ap.add_argument("--capital", type=float, default=1_000_000.0,
+                    help="本金（元）。真钱不足 10 万时必须用它实测：最低佣金 5 元/笔会让成本翻数倍")
+    ap.add_argument("--topk", type=int, default=60, help="持仓只数（默认 60）；本金小时要减只数才买得动手")
+    ap.add_argument("--n-drop", type=int, default=5, help="每次换仓淘汰只数")
+    ap.add_argument("--seed", type=int, default=0, help="随机对照线种子（0=默认）；同一层跑多个种子才知道 Δ 是不是噪声")
     ap.add_argument("--no-gate", action="store_true",
                     help="关掉可筛选性闸门（只为复现 2026-11-06 之前的旧数字，正常实验别用）")
     ap.add_argument("--lag", type=int, choices=(0, 1), default=0,
                     help="1 = 真实盘口径（信号日次一交易日成交）；0 = 旧口径（当日收盘成交）")
     args = ap.parse_args()
-    global LAG, GATE_ENABLED, TAG, CAP_TIER
+    global LAG, GATE_ENABLED, TAG, CAP_TIER, SEED, CAPITAL, TOPK, NDROP
     LAG = args.lag
     TAG = args.tag
     CAP_TIER = args.tier
+    SEED = args.seed
+    CAPITAL = args.capital
+    TOPK, NDROP = args.topk, args.n_drop
+    if NDROP * 2 > TOPK:
+        raise SystemExit(f"n_drop({NDROP}) 不能超过 topk({TOPK}) 的一半，否则每次换仓清空组合")
     if TAG and not TAG.startswith("_"):
         raise SystemExit("--tag 必须以 _ 开头，避免和已有产物混名")
     GATE_ENABLED = not args.no_gate
