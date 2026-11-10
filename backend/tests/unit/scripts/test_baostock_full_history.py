@@ -69,10 +69,11 @@ def test_chain_consistency_catches_small_caliber_drift():
 
 def test_fetch_layer_writes_new_dir_not_the_live_layer():
     """新层必须落在 baostock_full，不许覆盖现役 baostock_daily（否则现役回测口径会被静默改掉）。"""
-    from scripts.fetch_akshare_full_history import OUT_DIR, START, out_name
+    from scripts.fetch_akshare_full_history import DEFAULT_START, OUT_DIR, out_name
     assert os.path.basename(OUT_DIR) == "akshare_full"
     assert "baostock_daily" not in OUT_DIR
-    assert START == "20120101"
+    # 默认起点仍是 2012；拉到 2008 必须显式传 --start（起点变了就等于换口径，不许默认发生）
+    assert DEFAULT_START == "20120101"
     assert out_name("600000", "SH") == "600000_SH.parquet"
     assert out_name("300104", "SZ") == "300104_SZ.parquet"
     from scripts.fetch_akshare_full_history import COLS
