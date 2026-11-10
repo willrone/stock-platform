@@ -6408,3 +6408,25 @@ K=10（单价上限 90 元）时低波动更强：3y 命中 90%、年化 19.42%�
 3. 逐日配对两条链做口径比对是假的：两侧停牌日不同会把两天涨跌当成一天（曾造出 15.7 倍的假分歧）。
    比对必须用「按共同日期对齐的累计比值」。
 4. baostock 并行/高频拉取会把 IP 打进黑名单（`10001011`）。以后 baostock 只当注册表用，不当行情主力。
+
+### 12.85 门禁红灯复盘（2026-11-10，push 到 main 后 CI 三条红）
+
+**现象**：`1c8c8e47` 合入 main 后，GitHub Actions 三个 job 红：后端测试、后端代码质量、前端代码质量。
+
+**根因（不是运气差，是流程洞）**：
+1. `code-quality.yml` / `test.yml` 只在 **main/develop 的 push 和 PR** 上触发。分支 `feat/vwap-below-optin` 从 2026-10-14 起 27 天没有跑过任何门禁，攒下 **61 个文件未被 black 格式化 + 89 条 flake8 违规**。合进 main 那一刻一次性爆。
+2. `scripts/paper_portfolio.py` 把 `BACKEND_ROOT` 写死成 `/Users/rone/Projects/stock-platform/backend`。CI runner 是 `/home/runner/...`，且该脚本被测试 import（`test_paper_portfolio_api` 等）→ **import 期直接 FileNotFoundError**。本地永远发现不了这种 bug：本地路径恰好对。
+
+**已修**：
+- `paper_portfolio.py`：`BACKEND_ROOT` 改为由 `__file__` 推导；顺带全仓扫 `Path("/Users/` 与 `open("/Users/`，其余命中项都是「默认值 + 环境变量覆盖」或测试夹具，不是硬依赖。
+- 风格：`autoflake` 清掉 18 条 F401（未用 import）与 7 条 F841（未用局部变量）；black/isort 重放到全 `app/`；E741（`l` 变量名，2 处，含 `h == l` 引用）、E201/E202（ensemble f-string 里的 dict 推导，改为先赋值 `weight_repr`）、B007（循环变量未用 → `_ts0`）、B010（`setattr(user, "subscription_tier", …)` → 直接属性赋值 + `# type: ignore`）逐条手改。
+- **明确放松的一条**：`E226`（算术运算符空格）加入 `.flake8` 的 ignore。理由：pycodestyle 自己默认就忽略 E226，本仓库 `select=E` 把它打开，于是与 black 直接打架（`r*100`、`amt/1e4`、`lagged[self.lag :]`）。CI 先 black 后 flake8，两条必须同时为真。
+- **明确保留的例外**：`official_lgbm_model.py` 的 E402 —— 必须在 `import qlib/lightgbm` 之前设 `OMP_NUM_THREADS=1`，否则 macOS+3.13+libomp 在 predict 阶段 SIGSEGV（§12.44）。顺序是硬要求，不是风格。
+
+**登记的复杂度债（C901，10 个函数，不是修好，是亮出来）**：
+`tradability.build_tradability` 28、`trade_modes.execute` 22、`gbm_lab_strategy.execute` 26、`gbm_voltgt_strategy.execute` 47、`honest_composite_strategy.execute` 39、`methods_composite_strategy.execute` 25、`regime_switched_strategy.execute` 30、`execution_plan.build_execution_plan` 29、`multi_asset_service._build_portfolio_metrics` 43、`signal_service._rebalance_to_target` 26。
+全部在真钱链路（撮合/调仓/策略执行）上，盲拆会改行为 → 先写进 `per-file-ignores` 并登记，重构单独排期。`.flake8` 里写明规则：**新写的复杂函数必须拆，不许往这个清单里加**。
+
+**新增本地门禁**：`backend/tests/unit/test_backend_style_gate.py` —— 在本地测试里跑 CI 的 black/isort/flake8 三条，push 前就能看见红灯（工具没装则跳过）。
+
+**基础设施发现（未解决，需要本人操作）**：gh 登录 token 的 scope 只有 `gist, read:org, repo`，**没有 `workflow`** → 任何改 `.github/workflows/*` 的 commit 推不上去。想把 CI 的 `pip install black isort flake8`（不钉版本）换成 `requirements-quality.txt`（钉 black==26.3.1/isort==8.0.1/flake8==7.3.0，与本地一致）的补丁存在 `~/.hermes/cache/scratch/ci_pin_tools.patch`，等 token 补 scope 后再推。风险提示：CI 现装最新 black，本地用 26.3.1，**版本漂移会让格式化门禁自己变红**。

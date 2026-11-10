@@ -7,7 +7,8 @@
    A 乐观=按摘牌前最后一根收盘价卖出；B 悲观=这份仓位归零。真值在两者之间（实务上多在退市整理期出，
    累计已跌 6–8 成），两个口径都报，差值就是诚实边界；
 3. 入场年份 2013–2022 共 10 期 × K=20 = 200 只/规则（§12.83 只有 40 只，SE≈7.8pp；这次 SE≈3.5pp）；
-4. 回报一律用 `close_hfq` 比值（含分红送转）。`pct_chg_raw` 是未复权口径，**禁止**用来算收益（§12.83 的坑）。
+4. 回报一律用**自建总回报面板** tr_panel（未复权价 × 分红再投 × 送转扩股，§12.84 口径审计的结论）。
+   `close_hfq`（东财后复权）与 `pct_chg_raw`（实测就是未复权）都**禁止**用来算收益。
 
 规则只保留「价格行为类」：随机、低波动、12 月动量、大成交额、低波动∩大成交额。
 PE/PB/ROE/股息率类规则在这个宇宙里**凑不齐无偏数据**（qlib 层只有 OHLCV 且不含退市股；
@@ -30,7 +31,7 @@ import numpy as np
 import pandas as pd
 
 ROOT = "/Users/rone/Projects/stock-platform"
-PRICE_DIR = os.path.join(ROOT, "data", "parquet", "akshare_full")
+PRICE_DIR = os.path.join(ROOT, "data", "parquet", "tr_panel")   # 自建总回报面板（§12.84 口径）
 REGISTRY = os.path.join(ROOT, "data", "parquet", "baostock_full", "_registry.parquet")
 OUT = os.path.join(ROOT, "data", "stocks", "buy_and_hold_hitrate_long.json")
 
@@ -57,11 +58,11 @@ def fee(buy_value: float, sell_value: float | None) -> float:
 
 
 class Panel:
-    """全宇宙价格面板：每只票存 (日期序列, 未复权收盘, 后复权收盘, 成交额)。float32 省内存。"""
+    """全宇宙价格面板：每只票存 (日期序列, 未复权收盘, 自建总回报指数, 成交额)。float32 省内存。"""
 
     def __init__(self) -> None:
         self.close: dict[str, np.ndarray] = {}
-        self.hfq: dict[str, np.ndarray] = {}
+        self.tr: dict[str, np.ndarray] = {}
         self.amount: dict[str, np.ndarray] = {}
         self.dates: dict[str, np.DatetimeIndex] = {}
         self.cal = None
@@ -79,12 +80,12 @@ class Panel:
             files[f"{num}.{mkt}"] = os.path.join(PRICE_DIR, f)
         self.files = files
         for key, path in files.items():
-            d = pd.read_parquet(path, columns=["date", "close", "close_hfq", "amount"])
+            d = pd.read_parquet(path, columns=["date", "close", "tr_index", "amount"])
             d["date"] = pd.to_datetime(d["date"])
             d = d.sort_values("date")
             self.dates[key] = pd.DatetimeIndex(d["date"])
             self.close[key] = d["close"].astype("float32").to_numpy()
-            self.hfq[key] = d["close_hfq"].astype("float32").to_numpy()
+            self.tr[key] = d["tr_index"].astype("float32").to_numpy()
             self.amount[key] = d["amount"].astype("float32").to_numpy()
             alld.append(d["date"].to_numpy())
         self.cal = pd.DatetimeIndex(sorted(np.unique(np.concatenate(alld))))
@@ -118,7 +119,7 @@ class Panel:
 def features_at(p: Panel, key: str, i: int) -> dict | None:
     """点位特征：只用 ≤ 入场日的 bar（后视数据一律不许用）。"""
     c = p.close[key][: i + 1].astype(float)
-    h = p.hfq[key][: i + 1].astype(float)
+    h = p.tr[key][: i + 1].astype(float)
     a = p.amount[key][: i + 1].astype(float)
     if len(c) < MIN_BARS_AT_ENTRY or c[-1] <= 0:
         return None
@@ -181,7 +182,7 @@ def settle(p: Panel, codes: list[str], entry: pd.Timestamp, horizon_y: int) -> d
     for code in codes:
         i = p.asof_index(code, entry)
         price = float(p.close[code][i])
-        h_in = float(p.hfq[code][i])
+        h_in = float(p.tr[code][i])
         lots = int(each // (price * LOT))
         if lots <= 0 or price <= 0 or h_in <= 0:
             continue
@@ -191,18 +192,23 @@ def settle(p: Panel, codes: list[str], entry: pd.Timestamp, horizon_y: int) -> d
         fees += f_buy
 
         d = p.dates[code]
-        j = int(np.searchsorted(d.values, np.datetime64(exit_target), side="right") - 1)
         last = len(d) - 1
-        caliber = "到期卖出"
-        if j < last:                                     # 到期前就没 bar 了 → 被摘牌
-            j = last
-            caliber = "退市A(末根卖出)"
-        elif p.meta[code]["outDate"] is not None and p.meta[code]["outDate"] <= exit_target:
-            caliber = "退市A(末根卖出)"
-        if caliber != "到期卖出":
+        out = p.meta[code]["outDate"]
+        # 判摘牌只能看「面板是否提前结束」：最后一根 bar 早于到期日 = 这只票没 bar 了。
+        # （这里曾写反成 `j < last` —— 那是「面板比到期日还长」= 活得好好的正常情况，
+        #   结果全部持仓被误判成退市、结算日被推到面板最后一根，3 年持有变成 4~14 年，整份结果作废。）
+        ends_early = bool(d[last] < exit_target)
+        j = last if ends_early else int(np.searchsorted(d.values, np.datetime64(exit_target), side="right") - 1)
+        if out is not None and out <= exit_target:       # 注册表说到期前摘牌：结算不许越过摘牌日
+            k = int(np.searchsorted(d.values, np.datetime64(out), side="left") - 1)
+            j = min(j, max(k, i))
+            ends_early = True
+        assert i <= j <= last, f"结算日跑到了买入日之前 {code} {entry.date()}"
+        caliber = "退市A(末根卖出)" if ends_early else "到期卖出"
+        if ends_early:
             delisted_in_horizon += 1
 
-        h_out = float(p.hfq[code][j])
+        h_out = float(p.tr[code][j])
         gross = h_out / h_in - 1.0
         sell_val = lots * LOT * price * (1.0 + gross)
         f_sell = max(sell_val * COMM_RATE, COMM_MIN) + sell_val * STAMP

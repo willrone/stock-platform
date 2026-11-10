@@ -21,25 +21,25 @@ OUT_JSON = os.path.join(M.ROOT, "data", "stocks", "buy_and_hold_hitrate_long.jso
 
 
 def _synthetic_panel() -> M.Panel:
-    """三只票：A 分红连续（hfq 平滑、raw 除息跳空）、B 上市后 1 年被摘牌、C 入场后暴涨（后视陷阱）。"""
+    """三只票：A 分红连续（tr_index 平滑、raw 除息跳空）、B 上市后 1 年被摘牌、C 入场后暴涨（后视陷阱）。"""
     cal = pd.DatetimeIndex(pd.bdate_range("2010-01-04", periods=1200))
     p = M.Panel()
     p.cal = cal
     p.meta = {}
     p.dates = {}
     p.close = {}
-    p.hfq = {}
+    p.tr = {}
     p.amount = {}
 
     def fill(key, close, hfq, out=None, delisted=False):
         p.dates[key] = cal
         p.close[key] = np.asarray(close, dtype="float32")
-        p.hfq[key] = np.asarray(hfq, dtype="float32")
+        p.tr[key] = np.asarray(hfq, dtype="float32")
         p.amount[key] = np.full(len(cal), 5e8, dtype="float32")
         p.meta[key] = {"delisted": delisted, "outDate": out}
 
     n = len(cal)
-    # A：raw 每年除息 5 元，hfq 恒定 → 用 raw 算会得出巨额亏损，用 hfq 算是 0
+    # A：raw 每年除息 5 元，tr_index 恒定 → 用 raw 算会得出巨额亏损，用总回报算是 0 ± 费用
     raw_a, hfq_a = [], []
     price = 100.0
     for i in range(n):
@@ -57,7 +57,7 @@ def _synthetic_panel() -> M.Panel:
     hfq_b = hfq_b[:cut] + [np.nan] * (n - cut)
     p.dates["000005.SZ"] = cal[:cut]
     p.close["000005.SZ"] = np.asarray(raw_b[:cut], dtype="float32")
-    p.hfq["000005.SZ"] = np.asarray(hfq_b[:cut], dtype="float32")
+    p.tr["000005.SZ"] = np.asarray(hfq_b[:cut], dtype="float32")
     p.amount["000005.SZ"] = np.full(cut, 3e8, dtype="float32")
     p.meta["000005.SZ"] = {"delisted": True, "outDate": pd.Timestamp("2013-01-04")}
 
@@ -76,11 +76,11 @@ def _entry() -> pd.Timestamp:
     return pd.Timestamp("2012-01-03")
 
 
-def test_hfq_caliber_makes_dividends_a_zero_not_a_loss():
+def test_total_return_caliber_makes_dividends_a_zero_not_a_loss():
     p = _synthetic_panel()
     r = settle(p, ["600001.SH"], _entry(), 1)
     assert r["n"] == 1
-    # raw 口径会被算成一年亏 5%（除息），hfq 口径必须是 0 ± 费用量级
+    # raw 口径会被算成一年亏 5%（除息），自建总回报口径必须是 0 ± 费用量级
     assert abs(r["picks"][0]["ret_pct"]) < 0.05, f"分红没进收益：{r['picks'][0]['ret_pct']}"
     assert r["nav_a"] < CAPITAL, "费用必须真的离开净值"
     assert CAPITAL - r["nav_a"] < 300, f"只有两只手的佣金，拖累不该超过 300 元：{CAPITAL - r['nav_a']}"
@@ -119,6 +119,22 @@ def test_cash_never_negative_and_lots_are_integers():
     assert abs(replay - r["nav_a"]) <= 1.0, f"净值与逐笔复算差 {replay - r['nav_a']:.2f} 元"
 
 
+def test_survivor_settles_at_exit_date_not_at_panel_end():
+    """活着的票必须按到期日结算、不许被算成退市 —— 否则持有期会被悄悄拉长成「拿到面板末尾」。"""
+    p = _synthetic_panel()
+    entry, horizon = _entry(), 2
+    d = p.dates["600002.SH"]
+    exit_target = entry + pd.DateOffset(years=horizon)
+    assert exit_target < d[-1], "合成面板太短，这条测试失去意义"
+    res = M.settle(p, ["600002.SH"], entry, horizon)
+    assert res["n"] == 1
+    assert res["delisted_in_horizon"] == 0, res
+    assert res["picks"][0]["caliber"] == "到期卖出", res["picks"][0]
+    j = int(np.searchsorted(d.values, np.datetime64(exit_target), side="right") - 1)
+    assert j < len(d) - 1, (d[j], d[-1])
+    assert abs((d[j] - exit_target).days) <= 15, (d[j], exit_target)
+
+
 def test_price_cap_excludes_unaffordable_stocks():
     """K 只等权分 9 万 → 单价超过 9万/K/100 的票根本买不起，必须在选择阶段剔除。"""
     p = _synthetic_panel()
@@ -129,7 +145,7 @@ def test_price_cap_excludes_unaffordable_stocks():
         assert p.close[c][i] <= CAPITAL / k / LOT + 1e-9
     # 造一只 500 元的票：K=2 上限 450 元 → 即便波动率最低也不许选
     p.close["600999.SH"] = np.full(1200, 500.0, dtype="float32")
-    p.hfq["600999.SH"] = np.full(1200, 500.0, dtype="float32")
+    p.tr["600999.SH"] = np.full(1200, 500.0, dtype="float32")
     p.amount["600999.SH"] = np.full(1200, 9e9, dtype="float32")
     p.dates["600999.SH"] = p.dates["600001.SH"]
     p.meta["600999.SH"] = {"delisted": False, "outDate": None}
