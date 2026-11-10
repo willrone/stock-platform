@@ -24,7 +24,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-QLIB_DIR = "/Users/rone/Projects/stock-platform/data/qlib_data/features/day"
+from pathlib import Path  # noqa: E402
+
+QLIB_DIR = str(Path(__file__).resolve().parents[4] / "data" / "qlib_data" / "features" / "day")
 PROBE_FILE = "000001_SZ.parquet"
 
 from app.services.backtest.strategies.strategies import (  # noqa: E402

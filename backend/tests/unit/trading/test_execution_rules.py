@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
 
-sys.path.insert(0, "/Users/rone/Projects/stock-platform/backend")
+# 不许写死绝对路径：CI 的 checkout 在 /home/runner/...，写死就等于「本地绿、CI 红」
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from app.services.trading.execution_rules import (  # noqa: E402
     DEFAULT_MIN_TURNOVER,

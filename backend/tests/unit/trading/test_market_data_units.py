@@ -17,7 +17,9 @@ import sys
 
 import pandas as pd
 
-BACKEND = "/Users/rone/Projects/stock-platform/backend"
+from pathlib import Path  # noqa: E402
+
+BACKEND = str(Path(__file__).resolve().parents[3])
 sys.path.insert(0, BACKEND)
 sys.path.insert(0, os.path.join(BACKEND, "scripts"))
 

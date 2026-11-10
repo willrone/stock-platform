@@ -11,7 +11,8 @@
 可反复用: 加新因子/换周期/定期更新, 都跑这个脚本。
 """
 import argparse, os, importlib.util, json, sys
-os.chdir(os.path.expanduser("~/Projects/stock-platform"))
+# 不许写死家目录：脚本在 backend/scripts/ 下，往上三层就是仓库根
+os.chdir(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 os.environ.setdefault("PYTHONPATH", "backend")
 ds_s = importlib.util.spec_from_file_location("ds", "backend/scripts/daily_signal.py")
 ds = importlib.util.module_from_spec(ds_s); ds_s.loader.exec_module(ds)
