@@ -7,9 +7,11 @@
 import asyncio
 import sys
 from decimal import Decimal
+from pathlib import Path
 
 # 添加项目根目录到路径
-sys.path.insert(0, "/Users/ronghui/Projects/stock-platform")
+# 从项目根解析（旧机器硬编码路径在本机无效）
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine

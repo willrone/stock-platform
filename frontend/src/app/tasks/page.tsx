@@ -11,7 +11,7 @@ import { logger } from '@/utils/logger';
  * - 实时状态更新
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Card,
   CardContent,
@@ -40,6 +40,7 @@ import {
   InputLabel,
   Switch,
   FormControlLabel,
+  Alert,
 } from '@mui/material';
 import {
   Plus,
@@ -62,19 +63,23 @@ import { MobileTaskCard } from '../../components/mobile/MobileTaskCard';
 
 export default function TasksPage() {
   const router = useRouter();
-  const {
-    tasks,
-    total,
-    currentPage,
-    pageSize,
-    statusFilter,
-    loading,
-    setTasks,
-    setLoading,
-    setPagination,
-    setStatusFilter,
-    updateTask,
-  } = useTaskStore();
+  const { currentPage, pageSize, statusFilter, setPagination, setStatusFilter } = useTaskStore();
+
+  /**
+   * 【state P0-8】服务端任务列表**由本页本地持有**，不再放全局 store。
+   * 原因：旧的全局实现让 /tasks 与 /backtest 互相污染（各写各的 tasks 数组），
+   * 且 total 与实际渲染条数来自不同请求，"共 N 条"对不上。
+   */
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  /** 加载失败原因（非 null → 显示错误条，且不显示"0 个任务"） */
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  /** 局部更新单条任务（WebSocket 实时进度用） */
+  const updateTask = useCallback((taskId: string, patch: Partial<Task>) => {
+    setTasks(prev => prev.map(t => (t.task_id === taskId ? { ...t, ...patch } : t)));
+  }, []);
 
   const [searchText, setSearchText] = useState('');
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
@@ -93,12 +98,19 @@ export default function TasksPage() {
   // 加载任务列表
   const loadTasks = async (page = currentPage, size = pageSize, status = statusFilter) => {
     setLoading(true);
+    setLoadError(null);
     try {
       const offset = (page - 1) * size;
       const result = await TaskService.getTasks(status || undefined, size, offset);
-      setTasks(result.tasks, result.total);
+      setTasks(result.tasks ?? []);
+      setTotal(result.total ?? 0);
     } catch (error) {
+      // 【P1-06】失败必须让用户看见，不能静默呈现"0 个任务"
       logger.error('加载任务失败:', error);
+      const message = error instanceof Error ? error.message : '加载任务失败，请稍后重试';
+      setLoadError(message);
+      setTasks([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
@@ -441,12 +453,38 @@ export default function TasksPage() {
       {/* 任务列表 */}
       <Card>
         <CardContent>
+          {/* 【P1-06】加载失败 → 显示错误条 + 重试，绝不静默呈现"0 个任务" */}
+          {loadError && (
+            <Alert
+              severity="error"
+              sx={{ mb: 2 }}
+              action={
+                <Button
+                  color="inherit"
+                  size="small"
+                  onClick={() => {
+                    loadTasks();
+                    loadStats();
+                  }}
+                >
+                  重试
+                </Button>
+              }
+            >
+              任务列表加载失败：{loadError}
+            </Alert>
+          )}
+
           {/* 移动端：卡片列表 */}
           <Box sx={{ display: { xs: 'block', md: 'none' } }}>
             {filteredTasks.length === 0 ? (
               <Box sx={{ textAlign: 'center', py: 4 }}>
                 <Typography variant="body2" color="text.secondary">
-                  {statusFilter ? '该状态下暂无任务' : '暂无任务'}
+                  {loadError
+                    ? '加载失败，请点击上方"重试"'
+                    : statusFilter
+                      ? '该状态下暂无任务'
+                      : '暂无任务'}
                 </Typography>
               </Box>
             ) : (

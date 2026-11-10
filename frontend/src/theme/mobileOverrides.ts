@@ -1,8 +1,11 @@
 import { Theme } from '@mui/material/styles';
+import { mobileTypography, radii, spacing } from './tokens';
 
 /**
  * 移动端主题覆盖配置
  * 优化触摸交互和视觉体验
+ *
+ * 数值全部来自 `src/theme/tokens.ts`（唯一真相源），这里只做断点编排。
  */
 export const getMobileOverrides = (theme: Theme) => ({
   components: {
@@ -10,27 +13,32 @@ export const getMobileOverrides = (theme: Theme) => ({
       styleOverrides: {
         h4: {
           [theme.breakpoints.down('sm')]: {
-            fontSize: '1.5rem', // 从 2.125rem 缩小
+            fontSize: mobileTypography.h4.fontSize,
           },
         },
         h5: {
           [theme.breakpoints.down('sm')]: {
-            fontSize: '1.25rem',
+            fontSize: mobileTypography.h5.fontSize,
           },
         },
         h6: {
           [theme.breakpoints.down('sm')]: {
-            fontSize: '1.125rem',
+            fontSize: mobileTypography.h6.fontSize,
           },
         },
         body1: {
           [theme.breakpoints.down('sm')]: {
-            fontSize: '0.95rem', // 稍微加大，移动端更易读
+            fontSize: mobileTypography.body1.fontSize,
           },
         },
         body2: {
           [theme.breakpoints.down('sm')]: {
-            fontSize: '0.875rem',
+            fontSize: mobileTypography.body2.fontSize,
+          },
+        },
+        caption: {
+          [theme.breakpoints.down('sm')]: {
+            fontSize: mobileTypography.caption.fontSize,
           },
         },
       },
@@ -41,22 +49,22 @@ export const getMobileOverrides = (theme: Theme) => ({
           // 触摸设备最小点击区域 44x44px
           '@media (pointer: coarse)': {
             minHeight: 44,
-            padding: '10px 16px',
+            padding: `${spacing.sm}px ${spacing.lg}px`,
           },
           [theme.breakpoints.down('sm')]: {
-            fontSize: '0.95rem',
+            fontSize: mobileTypography.body1.fontSize,
           },
         },
         sizeSmall: {
           '@media (pointer: coarse)': {
             minHeight: 40,
-            padding: '8px 12px',
+            padding: `${spacing.xs}px ${spacing.md}px`,
           },
         },
         sizeLarge: {
           '@media (pointer: coarse)': {
             minHeight: 48,
-            padding: '12px 20px',
+            padding: `${spacing.md}px ${spacing.xl}px`,
           },
         },
       },
@@ -87,7 +95,7 @@ export const getMobileOverrides = (theme: Theme) => ({
       styleOverrides: {
         root: {
           [theme.breakpoints.down('sm')]: {
-            borderRadius: 12, // 移动端圆角更明显
+            borderRadius: radii.lg, // 移动端圆角更明显
           },
         },
       },
@@ -96,12 +104,12 @@ export const getMobileOverrides = (theme: Theme) => ({
       styleOverrides: {
         root: {
           [theme.breakpoints.down('sm')]: {
-            fontSize: '0.8rem',
+            fontSize: mobileTypography.caption.fontSize,
           },
         },
         sizeSmall: {
           [theme.breakpoints.down('sm')]: {
-            fontSize: '0.75rem',
+            fontSize: mobileTypography.overline.fontSize,
           },
         },
       },
@@ -122,8 +130,8 @@ export const getMobileOverrides = (theme: Theme) => ({
       styleOverrides: {
         root: {
           [theme.breakpoints.down('md')]: {
-            padding: '12px 8px', // 移动端减少 padding
-            fontSize: '0.875rem',
+            padding: `${spacing.md}px ${spacing.sm}px`, // 移动端减少 padding
+            fontSize: mobileTypography.body2.fontSize,
           },
         },
       },
@@ -132,7 +140,7 @@ export const getMobileOverrides = (theme: Theme) => ({
       styleOverrides: {
         root: {
           [theme.breakpoints.down('sm')]: {
-            borderRadius: 12,
+            borderRadius: radii.lg,
           },
         },
       },
@@ -141,7 +149,7 @@ export const getMobileOverrides = (theme: Theme) => ({
       styleOverrides: {
         paper: {
           [theme.breakpoints.down('sm')]: {
-            margin: 16, // 移动端留更多边距
+            margin: spacing.lg, // 移动端留更多边距
             maxHeight: 'calc(100% - 32px)',
           },
         },
@@ -152,7 +160,7 @@ export const getMobileOverrides = (theme: Theme) => ({
         root: {
           [theme.breakpoints.down('sm')]: {
             fontSize: '1.25rem',
-            padding: '16px 20px',
+            padding: `${spacing.lg}px ${spacing.xl}px`,
           },
         },
       },
@@ -161,7 +169,7 @@ export const getMobileOverrides = (theme: Theme) => ({
       styleOverrides: {
         root: {
           [theme.breakpoints.down('sm')]: {
-            padding: '16px 20px',
+            padding: `${spacing.lg}px ${spacing.xl}px`,
           },
         },
       },
@@ -170,9 +178,9 @@ export const getMobileOverrides = (theme: Theme) => ({
       styleOverrides: {
         root: {
           [theme.breakpoints.down('sm')]: {
-            padding: '12px 20px 16px',
+            padding: `${spacing.md}px ${spacing.xl}px ${spacing.lg}px`,
             '& > :not(:first-of-type)': {
-              marginLeft: 12,
+              marginLeft: spacing.md,
             },
           },
         },
@@ -184,8 +192,8 @@ export const getMobileOverrides = (theme: Theme) => ({
           '& .MuiToolbar-root': {
             [theme.breakpoints.down('sm')]: {
               minHeight: 56, // 移动端降低高度
-              paddingLeft: 12,
-              paddingRight: 12,
+              paddingLeft: spacing.md,
+              paddingRight: spacing.md,
             },
           },
         },

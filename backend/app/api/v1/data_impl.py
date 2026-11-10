@@ -336,7 +336,7 @@ async def trigger_qlib_precompute(
 
     except Exception as e:
         session.rollback()
-        logger.error(f"创建Qlib预计算任务失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"创建Qlib预计算任务失败: {e}")
         raise HTTPException(status_code=500, detail=f"创建Qlib预计算任务失败: {str(e)}")
     finally:
         session.close()
@@ -404,7 +404,7 @@ async def get_data_service_status(
         )
 
     except Exception as e:
-        logger.error(f"获取数据服务状态失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取数据服务状态失败: {e}")
         return StandardResponse(
             success=False,
             message=f"获取数据服务状态失败: {str(e)}",
@@ -474,7 +474,7 @@ async def list_local_data_files(
             },
         )
     except Exception as e:
-        logger.error(f"获取本地数据文件列表失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取本地数据文件列表失败: {e}")
         raise HTTPException(
             status_code=500, detail=f"获取本地数据文件列表失败: {str(e)}"
         )
@@ -533,7 +533,7 @@ async def get_local_data_statistics() -> Any:
             },
         )
     except Exception as e:
-        logger.error(f"获取本地数据统计失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取本地数据统计失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取本地数据统计失败: {str(e)}")
 
 
@@ -556,7 +556,7 @@ async def get_remote_stock_list(
         stocks = await data_service.get_remote_stock_list()
 
         if stocks is None:
-            logger.warning("无法从远端服务获取股票列表，返回空列表")
+            logger.opt(exception=True).warning("无法从远端服务获取股票列表，返回空列表")
             return StandardResponse(
                 success=False,
                 message="无法从远端服务获取股票列表",
@@ -582,7 +582,7 @@ async def get_remote_stock_list(
         )
 
         if estimated_size > 5 * 1024 * 1024:  # 5MB
-            logger.warning(
+            logger.opt(exception=True).warning(
                 f"响应数据较大 ({estimated_size / 1024 / 1024:.2f} MB)，可能导致前端处理失败"
             )
 
@@ -593,7 +593,7 @@ async def get_remote_stock_list(
         )
 
     except Exception as e:
-        logger.error(f"获取远端股票列表失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取远端股票列表失败: {e}")
         return StandardResponse(
             success=False,
             message=f"获取远端股票列表失败: {str(e)}",
@@ -626,7 +626,7 @@ async def get_remote_data_summary(
             data=summary,
         )
     except Exception as e:
-        logger.error(f"获取数据服务汇总失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取数据服务汇总失败: {e}")
         return StandardResponse(
             success=False,
             message=f"获取数据服务汇总失败: {str(e)}",
@@ -668,7 +668,7 @@ async def get_remote_stock_daily_data(
         )
         return StandardResponse(success=success, message=message, data=payload)
     except Exception as e:
-        logger.error(f"获取远端股票日线数据失败: {stock_code}, {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取远端股票日线数据失败: {stock_code}, {e}")
         return StandardResponse(
             success=False,
             message=f"获取远端股票日线数据失败: {str(e)}",
@@ -703,7 +703,7 @@ async def trigger_remote_manual_fetch(
         )
         return StandardResponse(success=success, message=message, data=payload)
     except Exception as e:
-        logger.error(f"触发数据服务手动获取失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"触发数据服务手动获取失败: {e}")
         return StandardResponse(
             success=False,
             message=f"触发数据服务手动获取失败: {str(e)}",
@@ -742,7 +742,7 @@ async def get_remote_service_logs(
             data=payload,
         )
     except Exception as e:
-        logger.error(f"获取数据服务日志失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取数据服务日志失败: {e}")
         return StandardResponse(
             success=False,
             message=f"获取数据服务日志失败: {str(e)}",
@@ -790,7 +790,7 @@ async def get_local_stock_list() -> Any:
                 break
 
         if search_path is None:
-            logger.warning(
+            logger.opt(exception=True).warning(
                 f"未找到parquet目录，尝试的路径: {possible_paths}, DATA_ROOT_PATH={settings.DATA_ROOT_PATH}"
             )
             return StandardResponse(
@@ -832,7 +832,9 @@ async def get_local_stock_list() -> Any:
                     try:
                         df = pd.read_parquet(file_path, engine="fastparquet")
                     except Exception as e2:
-                        logger.error(f"使用 fastparquet 引擎也失败: {e2}")
+                        logger.opt(exception=True).error(
+                            f"使用 fastparquet 引擎也失败: {e2}"
+                        )
                         raise
                 if df.empty:
                     logger.debug(f"文件为空: {file_path}")
@@ -845,7 +847,7 @@ async def get_local_stock_list() -> Any:
                 elif "stock_code" in df.columns:
                     stock_code_col = "stock_code"
                 else:
-                    logger.warning(
+                    logger.opt(exception=True).warning(
                         f"文件缺少股票代码列: {file_path}, 列名: {df.columns.tolist()}"
                     )
                     continue
@@ -908,7 +910,9 @@ async def get_local_stock_list() -> Any:
 
             except Exception as e:
                 error_count += 1
-                logger.warning(f"读取parquet文件失败 {file_path}: {e}", exc_info=True)
+                logger.opt(exception=True).warning(
+                    f"读取parquet文件失败 {file_path}: {e}"
+                )
                 continue
 
         logger.info(
@@ -972,7 +976,9 @@ async def get_local_stock_list() -> Any:
 
                     total_days = (end_dt - start_dt).days + 1
                 except Exception as e:
-                    logger.warning(f"计算总天数失败 {stock_code}: {e}")
+                    logger.opt(exception=True).warning(
+                        f"计算总天数失败 {stock_code}: {e}"
+                    )
                     total_days = 0
 
                 stock_info["data_range"] = {
@@ -999,7 +1005,7 @@ async def get_local_stock_list() -> Any:
         )
 
     except Exception as e:
-        logger.error(f"获取本地股票列表失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取本地股票列表失败: {e}")
         return StandardResponse(
             success=False,
             message=f"获取本地股票列表失败: {str(e)}",
@@ -1043,7 +1049,9 @@ async def get_local_stock_list_simple() -> Any:
                     break
 
             if resolved_stock_data_path is None:
-                logger.warning(f"未找到stock_data目录，尝试的路径: {possible_paths}")
+                logger.opt(exception=True).warning(
+                    f"未找到stock_data目录，尝试的路径: {possible_paths}"
+                )
                 return StandardResponse(
                     success=False,
                     message="未找到parquet数据目录",
@@ -1117,7 +1125,7 @@ async def get_local_stock_list_simple() -> Any:
         )
 
     except Exception as e:
-        logger.error(f"快速获取本地股票列表失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"快速获取本地股票列表失败: {e}")
         return StandardResponse(
             success=False,
             message=f"获取本地股票列表失败: {str(e)}",
@@ -1217,8 +1225,8 @@ async def sync_remote_data(
 
     except Exception as e:
         duration = (datetime.now() - start_time).total_seconds()
-        logger.error(f"同步远端数据失败: {e}", exc_info=True)
-        logger.error(f"失败时已耗时: {duration:.1f}秒")
+        logger.opt(exception=True).error(f"同步远端数据失败: {e}")
+        logger.opt(exception=True).error(f"失败时已耗时: {duration:.1f}秒")
         return StandardResponse(
             success=False,
             message=f"同步远端数据失败: {str(e)}",
@@ -1285,7 +1293,7 @@ async def get_sync_event_history(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取事件历史失败: {e}")
+        logger.opt(exception=True).error(f"获取事件历史失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取事件历史失败: {str(e)}")
 
 
@@ -1306,7 +1314,7 @@ async def get_sync_event_stats() -> Any:
         )
 
     except Exception as e:
-        logger.error(f"获取事件统计失败: {e}")
+        logger.opt(exception=True).error(f"获取事件统计失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取事件统计失败: {str(e)}")
 
 
@@ -1325,5 +1333,5 @@ async def clear_sync_event_history() -> Any:
         return StandardResponse(success=True, message="事件历史已清空", data={})
 
     except Exception as e:
-        logger.error(f"清空事件历史失败: {e}")
+        logger.opt(exception=True).error(f"清空事件历史失败: {e}")
         raise HTTPException(status_code=500, detail=f"清空事件历史失败: {str(e)}")

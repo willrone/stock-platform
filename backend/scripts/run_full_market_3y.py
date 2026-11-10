@@ -19,7 +19,7 @@ from datetime import datetime
 
 BACKEND_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "stock-platform", "backend"))
 if not os.path.isdir(BACKEND_ROOT):
-    BACKEND_ROOT = "/Users/rone/Projects/stock-platform/backend"
+    BACKEND_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BACKEND_ROOT not in sys.path:
     sys.path.insert(0, BACKEND_ROOT)
 

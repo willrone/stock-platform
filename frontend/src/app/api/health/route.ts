@@ -3,6 +3,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { DEFAULT_BACKEND_HTTP_URL } from '@/config/backend';
 
 export async function GET(_request: NextRequest) {
   try {
@@ -23,7 +24,7 @@ export async function GET(_request: NextRequest) {
         // API请求通过Next.js代理转发，使用相对路径
         api_path: '/api/v1',
         // 后端服务器地址（用于信息显示）
-        backend_host: process.env.NEXT_PUBLIC_BACKEND_HOST || 'localhost:8000',
+        backend_host: process.env.NEXT_PUBLIC_BACKEND_HOST || DEFAULT_BACKEND_HTTP_URL,
         status: 'unknown', // 这里可以添加对后端的连接检查
       },
     };

@@ -88,7 +88,8 @@ def main():
     
     # 使用绝对路径
     import os
-    project_root = "/Users/ronghui/Documents/GitHub/willrone"
+    # 从本文件位置解析项目根（旧机器硬编码路径在本机无效）
+    project_root = str(Path(__file__).resolve().parent.parent)
     data_dir = os.path.join(project_root, "data")
     logger.info(f"  数据目录: {data_dir}")
     

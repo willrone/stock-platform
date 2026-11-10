@@ -9,7 +9,17 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Box, Typography, Button, Card, CardContent, Container, Grid, Chip } from '@mui/material';
+import {
+  Box,
+  Typography,
+  Button,
+  Card,
+  CardContent,
+  Container,
+  Grid,
+  Chip,
+  Stack,
+} from '@mui/material';
 import {
   TrendingUp,
   BarChart3,
@@ -21,6 +31,10 @@ import {
   Sparkles,
   LineChart,
   Activity,
+  ShieldCheck,
+  TrendingDown,
+  Scale,
+  ScrollText,
 } from 'lucide-react';
 
 // 功能特性配置
@@ -55,12 +69,58 @@ const features = [
   },
 ];
 
-// 数据亮点
+// 数据亮点 —— 全部为可复现的实测值，不写无法验证的指标
 const highlights = [
-  { icon: Database, value: '10+ 年', label: '历史数据' },
-  { icon: Activity, value: '5000+', label: '覆盖标的' },
-  { icon: Zap, value: '< 1s', label: '信号延迟' },
-  { icon: Shield, value: '99.9%', label: '系统可用性' },
+  { icon: Database, value: '5,543', label: '全市场标的（含北交所）' },
+  { icon: LineChart, value: '0.82', label: '42 因子 10 年真实夏普' },
+  { icon: TrendingDown, value: '-80%', label: '周频换手 vs 日频' },
+  { icon: Activity, value: '4 条', label: '独立信号线，各 100 万记账' },
+];
+
+// 故事板块：把行业不说的那部分摊开写（含对我们自己不利的）
+const honesties = [
+  {
+    icon: Scale,
+    color: '#c2410c',
+    title: '股票池用的是含退市的全市场',
+    body: '很多回测只用「现在还活着的股票」，等于是用未来视角挑股票 —— 那些退市的、暴雷的、被 ST 的，天然不会出现在样本里，收益凭空好看一大截。我们用 PIT 全市场口径，退市股票留在样本内。',
+    evidence: 'PIT 宇宙 4,329 只 / 10 年，含已退市标的',
+  },
+  {
+    icon: TrendingDown,
+    color: '#be123c',
+    title: '涨停那天，你买不进',
+    body: '回测里最常见的作弊是「信号当天按收盘价成交」。但 A 股里信号最强的那些票，往往当天就涨停了 —— 你的成交价应该是涨停价，而且根本买不到。我们把涨停日的买入信号直接抹掉。',
+    evidence: '涨停日买入信号置空，不做任何美化',
+  },
+  {
+    icon: ScrollText,
+    color: '#1d4ed8',
+    title: '我们把对自己不利的数字撤掉了',
+    body: '我们曾经有一个 0.976 的 10 年夏普，后来发现它来自一份已经丢失的因子映射文件，无法复现。于是我们把对外宣传改成了能复现的 0.8193 —— 数字更小，但它是真的。',
+    evidence: '0.976（不可复现）→ 0.8193（PIT 可复现）',
+  },
+  {
+    icon: Activity,
+    color: '#0f766e',
+    title: '周频比日频更赚钱，因为交易成本',
+    body: '同样一组因子，日频调仓比周频多换 4~5 倍手。佣金、印花税、滑点加起来，把超额收益吃掉了大半。我们实测 4 条策略线周频全面优于日频 —— 这不是玄学，是算术。',
+    evidence: '4/4 条策略线周频胜出，换手砍 4~5 倍',
+  },
+  {
+    icon: ShieldCheck,
+    color: '#7c2d12',
+    title: 'ST 股票的 5% 涨停，掩码是失效的',
+    body: '我们的涨停掩码按 9.5% 设定，但 ST 股票涨跌停只有 5%，掩码对它们不生效。这会高估实盘可执行性，所以我们在出信号时把 ST 直接剔除。',
+    evidence: 'ST 标的在信号层剔除，不进入买入清单',
+  },
+  {
+    icon: Shield,
+    color: '#4338ca',
+    title: '纸面账本公开，因为它也亏钱',
+    body: '我们不做「只给你看赚钱那段」的回测报告。4 条信号线各自 100 万独立记账，每周更新净值，买卖价格按真实可成交价记，费用一分不少。亏钱的月份我们一样放出来。',
+    evidence: '佣金 0.03% + 印花税 0.05% + 滑点 0.1%（单边）',
+  },
 ];
 
 export default function Home() {
@@ -326,6 +386,137 @@ export default function Home() {
               );
             })}
           </Grid>
+        </Container>
+      </Box>
+
+      {/* 故事板块：我们把行业不说的那部分说出来了 */}
+      <Box sx={{ py: { xs: 6, md: 10 }, bgcolor: '#f8fafc' }}>
+        <Container maxWidth="lg">
+          <Box sx={{ textAlign: 'center', mb: { xs: 4, md: 6 }, maxWidth: 760, mx: 'auto' }}>
+            <Chip
+              icon={<ShieldCheck size={14} />}
+              label="我们先讲难听的那部分"
+              size="small"
+              sx={{ mb: 2, bgcolor: '#0f172a', color: 'white' }}
+            />
+            <Typography
+              variant="h3"
+              sx={{ fontWeight: 700, mb: 1.5, color: 'text.primary', lineHeight: 1.25 }}
+            >
+              量化平台最容易骗你的，不是策略，是口径
+            </Typography>
+            <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.8 }}>
+              同一个策略，回测夏普可以是 0.98，也可以是 0.82。差别不在策略，
+              在于股票池、交易成本、以及「涨停那天你到底买不买得进」。 我们把每一条口径都摊开写出来
+              —— 包括对我们自己不利的那些。
+            </Typography>
+          </Box>
+
+          <Grid container spacing={3}>
+            {honesties.map(item => (
+              <Grid size={{ xs: 12, md: 4 }} key={item.title}>
+                <Card
+                  elevation={0}
+                  sx={{
+                    height: '100%',
+                    border: 1,
+                    borderColor: 'divider',
+                    borderTop: `3px solid ${item.color}`,
+                    borderRadius: 2,
+                  }}
+                >
+                  <CardContent sx={{ p: 3 }}>
+                    <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
+                      <Box
+                        sx={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: 1.5,
+                          bgcolor: `${item.color}15`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                        }}
+                      >
+                        <item.icon size={18} style={{ color: item.color }} />
+                      </Box>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.3 }}>
+                        {item.title}
+                      </Typography>
+                    </Stack>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ lineHeight: 1.75, mb: 2 }}
+                    >
+                      {item.body}
+                    </Typography>
+                    <Box
+                      sx={{
+                        bgcolor: `${item.color}0d`,
+                        borderLeft: `3px solid ${item.color}`,
+                        borderRadius: 1,
+                        px: 1.5,
+                        py: 1.2,
+                      }}
+                    >
+                      <Typography variant="caption" sx={{ color: item.color, fontWeight: 700 }}>
+                        {item.evidence}
+                      </Typography>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+
+          <Box
+            sx={{
+              mt: { xs: 4, md: 6 },
+              p: { xs: 3, md: 4 },
+              bgcolor: '#0f172a',
+              borderRadius: 2,
+              color: 'white',
+            }}
+          >
+            <Grid container spacing={3} alignItems="center">
+              <Grid size={{ xs: 12, md: 8 }}>
+                <Typography variant="h5" sx={{ fontWeight: 700, mb: 1.5 }}>
+                  所以我们给你什么
+                </Typography>
+                <Typography
+                  variant="body2"
+                  sx={{ color: 'rgba(255,255,255,0.78)', lineHeight: 1.85 }}
+                >
+                  不是一份漂亮的收益曲线，而是 4 条互相独立、每天更新、可直接照着下单的信号线 （42
+                  因子等权 / LightGBM 元模型 / RSI 超跌 / 量价动量）。 每条线 100
+                  万独立记账，每周调仓一次，成本按真实佣金 + 印花税 + 滑点扣。
+                  组合亏钱了，我们跟你一起亏 —— 这也是我们敢把纸面账本公开的原因。
+                </Typography>
+              </Grid>
+              <Grid size={{ xs: 12, md: 4 }}>
+                <Stack spacing={1.5}>
+                  <Button
+                    variant="contained"
+                    size="large"
+                    onClick={() => router.push('/register')}
+                    sx={{ bgcolor: '#1976d2', '&:hover': { bgcolor: '#1565c0' } }}
+                  >
+                    免费注册看今日信号
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    size="large"
+                    onClick={() => router.push('/pricing')}
+                    sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.4)' }}
+                  >
+                    看定价
+                  </Button>
+                </Stack>
+              </Grid>
+            </Grid>
+          </Box>
         </Container>
       </Box>
 

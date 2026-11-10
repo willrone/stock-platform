@@ -11,10 +11,13 @@ from app.core.error_handler import ErrorSeverity, TaskError
 from ..core.base_strategy import BaseStrategy
 from ..core.strategy_portfolio import StrategyPortfolio
 from .factor_ranking_strategy import FactorRankingStrategy
+from .gbm_voltgt_strategy import GbmVoltgtStrategy
+from .honest_composite_strategy import HonestCompositeStrategy
 from .lightgbm_strategy import LightGBMPredictionStrategy
 from .ml_ensemble_strategy import MLEnsembleLgbXgbRiskCtlStrategy
 from .model_prediction_strategy import ModelPredictionStrategy
 from .model_topk_dropout_strategy import ModelTopkDropoutStrategy
+from .rsi_71421_strategy import Rsi71421Strategy
 from .strategies import (  # 技术分析策略; 统计套利策略; 因子投资策略
     BollingerBandStrategy,
     CCIStrategy,
@@ -60,6 +63,9 @@ class StrategyFactory:
         "multi_factor": MultiFactorStrategy,
         # 横截面因子排名 + TopK/Dropout 组合管理
         "factor_ranking": FactorRankingStrategy,
+        "honest_composite": HonestCompositeStrategy,
+        "rsi_71421": Rsi71421Strategy,
+        "gbm_voltgt": GbmVoltgtStrategy,
         # ML 集成策略
         "ml_ensemble_lgb_xgb_riskctl": MLEnsembleLgbXgbRiskCtlStrategy,
         # LightGBM 模型策略

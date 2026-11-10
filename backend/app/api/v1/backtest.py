@@ -649,6 +649,84 @@ async def get_available_strategies() -> Any:
                     },
                 },
             },
+            # ── 横截面复合因子排名 (免费快速版 vs 付费进阶版) ──
+            "honest_composite": {
+                "name": "复合因子排名 · 标准",
+                "description": (
+                    "42 因子等权复合横截面排名 + TopK/Dropout 组合管理。"
+                    "10 年夏普 0.976，10 秒出结果。免费快速版。"
+                ),
+                "category": "factor_composite",
+                "tier": "standard",
+                "price": "免费",
+                "est_seconds": 10,
+                "sharpe_10y": 0.976,
+                "parameters": {
+                    "topk": {
+                        "type": "int",
+                        "default": 60,
+                        "description": "TopK 持仓数（默认 60）",
+                        "min": 20,
+                        "max": 100,
+                    },
+                    "n_drop": {
+                        "type": "int",
+                        "default": 5,
+                        "description": "每日换仓只数（默认 5）",
+                        "min": 1,
+                        "max": 30,
+                    },
+                },
+            },
+            "gbm_voltgt": {
+                "name": "GBM 元模型 + 波动率目标 · 高级",
+                "description": (
+                    "LightGBM 元模型月度滚动重训 + 波动率目标仓位。"
+                    "10 年夏普 1.155 / 627% 收益 / -40.9% 回撤，约 14 分钟重训。付费进阶版。"
+                ),
+                "category": "factor_composite",
+                "tier": "advanced",
+                "price": "¥1.00/次",
+                "est_seconds": 840,
+                "sharpe_10y": 1.155,
+                "parameters": {
+                    "topk": {
+                        "type": "int",
+                        "default": 60,
+                        "description": "TopK 持仓数（默认 60）",
+                        "min": 20,
+                        "max": 100,
+                    },
+                    "n_drop": {
+                        "type": "int",
+                        "default": 5,
+                        "description": "每日换仓只数（默认 5）",
+                        "min": 1,
+                        "max": 30,
+                    },
+                    "n_estimators": {
+                        "type": "int",
+                        "default": 100,
+                        "description": "GBM 树数（默认 100，重训耗时随此增长）",
+                        "min": 50,
+                        "max": 300,
+                    },
+                    "max_depth": {
+                        "type": "int",
+                        "default": 3,
+                        "description": "GBM 最大深度（默认 3）",
+                        "min": 2,
+                        "max": 8,
+                    },
+                    "target_vol": {
+                        "type": "float",
+                        "default": 0.20,
+                        "description": "目标年化波动率（默认 20%）",
+                        "min": 0.10,
+                        "max": 0.40,
+                    },
+                },
+            },
         }
 
         result: List[Dict[str, Any]] = []
@@ -673,7 +751,8 @@ async def get_available_strategies() -> Any:
             "technical": 0,
             "statistical_arbitrage": 1,
             "factor_investment": 2,
-            "other": 3,
+            "factor_composite": 3,
+            "other": 4,
         }
         result.sort(
             key=lambda x: (
@@ -684,7 +763,7 @@ async def get_available_strategies() -> Any:
 
         return StandardResponse(success=True, message="获取策略列表成功", data=result)
     except Exception as e:
-        logger.error(f"获取策略列表失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取策略列表失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取策略列表失败: {str(e)}")
 
 
@@ -989,6 +1068,8 @@ async def run_backtest(
             event_type = "backtest_advanced"
         elif request.strategy_name and "realtime" in request.strategy_name.lower():
             event_type = "backtest_realtime"
+        elif request.strategy_name and request.strategy_name.lower() in ("gbm_voltgt",):
+            event_type = "backtest_advanced"
 
         try:
             commerce_service = CommerceService()
@@ -1007,7 +1088,7 @@ async def run_backtest(
             logger.debug(f"回测计费已记录：{event_type}")
         except Exception as commerce_err:
             # 计费失败不影响回测结果返回，仅记录日志
-            logger.warning(f"回测计费失败：{commerce_err}")
+            logger.opt(exception=True).warning(f"回测计费失败：{commerce_err}")
 
         # ── 可选：Laya 信号增强 ─────────────────────
         # 根据配置决定是否启用 Laya 决策模型
@@ -1059,7 +1140,9 @@ async def run_backtest(
                             f"Laya 信号增强: {decision.action} (conf={decision.confidence:.2f})"
                         )
             except Exception as laya_err:
-                logger.warning(f"Laya 信号增强失败（非关键）: {laya_err}")
+                logger.opt(exception=True).warning(
+                    f"Laya 信号增强失败（非关键）: {laya_err}"
+                )
         # ────────────────────────────────────────────────
 
         return StandardResponse(success=True, message="回测执行成功", data=result)
@@ -1067,7 +1150,7 @@ async def run_backtest(
     except Exception as e:
         if "cannot load module more than once per process" in str(e):
             try:
-                logger.warning(f"使用CI兜底回测响应，原错误: {e}")
+                logger.opt(exception=True).warning(f"使用CI兜底回测响应，原错误: {e}")
                 return StandardResponse(
                     success=True,
                     message="回测执行成功",
@@ -1075,7 +1158,7 @@ async def run_backtest(
                 )
             except Exception:
                 pass
-        logger.error(f"回测执行失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"回测执行失败: {e}")
         raise HTTPException(status_code=500, detail=f"回测执行失败: {str(e)}")
 
 
@@ -1155,7 +1238,7 @@ async def find_same_config(request: FindSameConfigRequest) -> Any:
         finally:
             db.close()
     except Exception as e:
-        logger.error(f"查找相同配置失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"查找相同配置失败: {e}")
         raise HTTPException(status_code=500, detail=f"查找相同配置失败: {str(e)}")
 
 
@@ -1247,5 +1330,5 @@ async def get_portfolio_templates() -> Any:
             success=True, message="获取策略组合模板成功", data=templates
         )
     except Exception as e:
-        logger.error(f"获取策略组合模板失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取策略组合模板失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取策略组合模板失败: {str(e)}")

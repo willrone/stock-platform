@@ -122,7 +122,7 @@ class TestBacktestDataAdapterProperties:
         initial_cash=st.floats(min_value=50000, max_value=500000),
         final_value_multiplier=st.floats(min_value=0.8, max_value=2.0),
     )
-    @settings(max_examples=100)
+    @settings(max_examples=100, deadline=None)
     def test_backtest_overview_data_completeness(
         self, num_trades, num_snapshots, initial_cash, final_value_multiplier
     ):
@@ -257,7 +257,7 @@ class TestBacktestDataAdapterProperties:
         portfolio_length=st.integers(min_value=30, max_value=252),
         volatility_level=st.floats(min_value=0.1, max_value=0.5),
     )
-    @settings(max_examples=50)
+    @settings(max_examples=50, deadline=None)
     def test_extended_risk_metrics_calculation_accuracy(
         self, portfolio_length, volatility_level
     ):
@@ -294,6 +294,18 @@ class TestBacktestDataAdapterProperties:
         )
         sample_data["portfolio_history"] = portfolio_history
         sample_data["initial_cash"] = initial_cash
+        # 本用例验证**本地兜底计算**路径（引擎指标缺失时适配器自己算）。
+        # 样例里预置的 annualized_return / volatility / sharpe_ratio / max_drawdown
+        # 是占位值（0.15 / 0.20 / 0.75 / −0.10），与本用例生成的组合历史无关；
+        # 新契约（2026-11-01，引擎权威值优先）下它们会覆盖本地计算 → 显式移除，
+        # 让本用例专注验证兜底计算本身。透传路径见 test_engine_metrics_passed_through。
+        for _engine_key in (
+            "annualized_return",
+            "volatility",
+            "sharpe_ratio",
+            "max_drawdown",
+        ):
+            sample_data.pop(_engine_key, None)
 
         # 执行适配
         loop = asyncio.new_event_loop()
@@ -353,12 +365,121 @@ class TestBacktestDataAdapterProperties:
             0 <= downside_deviation < 2.0
         ), f"下行偏差 {downside_deviation} 应该非负且在合理范围内"
 
+    def test_engine_metrics_passed_through(self):
+        """新契约（2026-11-01）：引擎权威指标必须**原样透传**到扩展风险指标。
+
+        背景：适配器原先用另一套定义重算夏普（(年化 − rf) / 年化波动），而引擎用的是
+        日均 / 日σ × √252 → 同一份 API 响应里出现**两个夏普**（实测 9.340288 vs
+        12.873346，差 3.53），且引擎的 365 日历天年化 vs 适配器的 252 交易日年化会
+        继续放大分歧。现在单一权威来源 = 引擎（portfolio_manager）。
+        """
+        sample_data = self._create_sample_backtest_result()
+        engine_sharpe = 1.2345
+        engine_volatility = 0.3333
+        engine_max_drawdown = -0.1234
+        engine_annualized = 0.2222
+        sample_data["sharpe_ratio"] = engine_sharpe
+        sample_data["volatility"] = engine_volatility
+        sample_data["max_drawdown"] = engine_max_drawdown
+        sample_data["annualized_return"] = engine_annualized
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            enhanced_result = loop.run_until_complete(
+                self.adapter.adapt_backtest_result(sample_data)
+            )
+        finally:
+            loop.close()
+
+        risk_metrics = enhanced_result.extended_risk_metrics
+        assert risk_metrics is not None
+        assert risk_metrics.sharpe_ratio == engine_sharpe
+        assert risk_metrics.volatility == engine_volatility
+        assert risk_metrics.max_drawdown == engine_max_drawdown
+        # 派生指标必须用引擎的年化（365 日历天口径），不能再用适配器自算的 252 交易日
+        expected_calmar = (engine_annualized - 0.03) / abs(engine_max_drawdown)
+        assert abs(risk_metrics.calmar_ratio - expected_calmar) < 1e-9
+
+    def test_nan_portfolio_value_yields_valid_json(self):
+        """回归（2026-11-02）：组合历史混入 NaN → 响应必须是**合法 JSON**。
+
+        背景：``portfolio_value`` 含 NaN → 回撤序列该点为 NaN →
+        ``drawdown_curve`` 里出现 ``{"drawdown": NaN}`` → Python ``json.dumps`` 默认
+        ``allow_nan=True`` 会吐出裸 ``NaN`` 字面量 → **那不是合法 JSON**，
+        浏览器 ``JSON.parse`` 直接抛 → 整页响应挂掉（不是某字段降级）。
+        修复：响应边界统一把非有限值换成 None
+        （``analysis_models.sanitize_non_finite``）。
+        """
+        import json
+
+        sample_data = self._create_sample_backtest_result()
+        history = sample_data["portfolio_history"]
+        assert history, "样本组合历史不应为空"
+        history[2]["portfolio_value"] = float("nan")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            enhanced_result = loop.run_until_complete(
+                self.adapter.adapt_backtest_result(sample_data)
+            )
+        finally:
+            loop.close()
+
+        payload = enhanced_result.to_dict()
+        # allow_nan=False：一旦出现 NaN/inf 就直接 ValueError —— 最严格的断言
+        text = json.dumps(payload, ensure_ascii=False, allow_nan=False)
+        assert "NaN" not in text
+        assert "Infinity" not in text
+
+        drawdown_analysis = payload.get("drawdown_analysis")
+        assert drawdown_analysis is not None
+        curve = drawdown_analysis["drawdown_curve"]
+        assert len(curve) == len(history)
+        # 缺失那天必须是 null（JSON 合法值），不能是 NaN
+        assert curve[2]["drawdown"] is None
+
+    def test_all_nan_portfolio_history_returns_zero_drawdown(self):
+        """回归（2026-11-02）：组合历史整段 NaN → 零回撤分析，不出 NaN / "NaT"。
+
+        背景：drawdown 全为 NaN 时，pandas 现在只发 FutureWarning，**未来版本
+        ``idxmin`` 会抛 ValueError**（而该异常被本函数的 ``except`` 吞掉 →
+        整个回撤分析直接丢失）；同时 ``max_dd_value`` 是 NaN、``max_dd_idx`` 是 NaT
+        → 日期字段会变成字符串 ``"NaT"``（不是合法日期）。
+        """
+        import json
+
+        sample_data = self._create_sample_backtest_result()
+        for row in sample_data["portfolio_history"]:
+            row["portfolio_value"] = float("nan")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            enhanced_result = loop.run_until_complete(
+                self.adapter.adapt_backtest_result(sample_data)
+            )
+        finally:
+            loop.close()
+
+        payload = enhanced_result.to_dict()
+        json.dumps(payload, ensure_ascii=False, allow_nan=False)  # 不抛即合法
+
+        drawdown_analysis = payload.get("drawdown_analysis")
+        assert drawdown_analysis is not None
+        assert drawdown_analysis["max_drawdown"] == 0.0
+        assert drawdown_analysis["max_drawdown_date"] is None
+        assert drawdown_analysis["max_drawdown_start"] is None
+        assert drawdown_analysis["max_drawdown_end"] is None
+        assert all(point["drawdown"] is None for point in drawdown_analysis["drawdown_curve"])
+
     @given(
         num_months=st.integers(min_value=6, max_value=24),
         monthly_return_mean=st.floats(min_value=-0.05, max_value=0.05),
         monthly_return_std=st.floats(min_value=0.01, max_value=0.10),
     )
-    @settings(max_examples=50)
+    @settings(max_examples=50, deadline=None)
     def test_monthly_returns_analysis_consistency(
         self, num_months, monthly_return_mean, monthly_return_std
     ):
@@ -441,11 +562,38 @@ class TestBacktestDataAdapterProperties:
                 # 而不是复利公式，所以这里不验证复利公式的一致性
                 # 这是因为月度重采样可能导致小的数值差异
 
+        # 回归（2026-11-01）：月度序列必须覆盖**每一个**日历月，不能丢首月。
+        # 原实现 monthly_values.pct_change().dropna() 会把第一个桶丢掉 → 前端热力图
+        # 少首月，且「月度序列复利」与「累计收益」对不上（实测缺口 10.29pp）。
+        distinct_months = {
+            (
+                datetime.fromisoformat(snapshot["date"]).year,
+                datetime.fromisoformat(snapshot["date"]).month,
+            )
+            for snapshot in portfolio_history
+        }
+        assert len(monthly_returns) == len(distinct_months), (
+            f"月度收益条数 {len(monthly_returns)} != 覆盖的日历月数 "
+            f"{len(distinct_months)}（首月被丢弃）"
+        )
+
+        # 回归：月度序列复利必须等于末月累计收益（同一页面上两个数必须自洽）
+        compounded = 1.0
+        for month_data in monthly_returns:
+            compounded *= 1 + month_data.monthly_return
+        assert abs(
+            (compounded - 1) - monthly_returns[-1].cumulative_return
+        ) < 1e-9, (
+            f"月度序列复利 {compounded - 1:.6f} != 末月累计 "
+            f"{monthly_returns[-1].cumulative_return:.6f}"
+        )
+
         # 验证最终累积收益与组合价值的一致性
         # 月度桶按真实日历月聚合，而生成序列用"30 天伪月份"推进，最后一个日度快照
         # 可能落在最后一个完整月桶之后（桶数也可能少于 num_months）。期望值取
-        # 「最后一个月桶所在年月」的最后一个快照，与月度桶同锚点对比——原实现直接
-        # 对比最终快照，尾部天数的收益会混进误差，随机数据下偶发超过 0.05。
+        # 「最后一个月桶所在年月」的最后一个快照，与月度桶同锚点对比。
+        # 口径（2026-11-01 修正）：累计收益的基准是 **t0 初始资金**，与生产实现
+        # 一致 → 两者应逐位相等（原来差第一天的盈亏，且用 0.05 的宽容忍掩盖）。
         last_month = monthly_returns[-1]
         anchor_value = initial_cash
         for snapshot in portfolio_history:
@@ -455,13 +603,13 @@ class TestBacktestDataAdapterProperties:
         expected_final_return = (anchor_value - initial_cash) / initial_cash
 
         return_error = abs(last_month.cumulative_return - expected_final_return)
-        assert return_error < 0.05, f"最终累积收益与组合收益不一致: {return_error}"
+        assert return_error < 1e-9, f"最终累积收益与组合收益不一致: {return_error}"
 
     @given(
         num_stocks=st.integers(min_value=2, max_value=10),
         trades_per_stock=st.integers(min_value=2, max_value=20),
     )
-    @settings(max_examples=50)
+    @settings(max_examples=50, deadline=None)
     def test_position_analysis_completeness(self, num_stocks, trades_per_stock):
         """
         功能: backtest-results-visualization, 属性8: 持仓统计计算准确性

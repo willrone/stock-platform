@@ -4,6 +4,7 @@
 定义所有策略必须实现的接口
 """
 
+import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple, cast
@@ -11,6 +12,8 @@ from typing import Dict, List, Optional, Tuple, cast
 import pandas as pd
 
 from ..models import Position, SignalType, TradingSignal
+
+logger = logging.getLogger(__name__)
 
 
 class BaseStrategy(ABC):
@@ -109,6 +112,18 @@ class BaseStrategy(ABC):
         """返回策略自带的交易执行模式默认配置。"""
         return {}
 
+    def get_position_size_hint(self) -> Optional[float]:
+        """返回策略建议的单仓上限（占组合市值比例）。
+
+        引擎的 ``BacktestConfig.max_position_size`` 默认 0.2，对 TopK 等权类策略
+        是错的：``topk × 0.2`` 远超可投现金，组合建仓到现金耗尽后被迫冻结
+        （实测 topk=60 时只买到 9 只、559 笔交易塌成 9 笔）。
+
+        策略在这里给出与自身持仓数匹配的等权上限，executor 在调用方**未显式**
+        指定 max_position_size 时采用它。调用方显式传值时以调用方为准。
+        """
+        return None
+
     def _extract_indicators_from_precomputed(
         self, data: pd.DataFrame, indicator_mapping: Dict[str, str]
     ) -> Optional[Dict[str, pd.Series]]:
@@ -141,6 +156,23 @@ class BaseStrategy(ABC):
         indicators = {}
         for strategy_name, precomputed_name in indicator_mapping.items():
             indicators[strategy_name] = data[precomputed_name]
+
+        # 回归防护：映射到的预计算列整列为 NaN 时视为"不可用"，返回 None 让策略
+        # fallback 到现场计算。否则（如 qlib 特征文件存在点/下划线双 stock_code
+        # 条目、列覆盖互补的情况）策略会拿到全 NaN 指标，percent_b/zscore 等衍生
+        # 量全 NaN → 静默 0 信号，回测结果看似"无交易"而非报错。
+        for strategy_name, precomputed_name in indicator_mapping.items():
+            series = indicators.get(strategy_name)
+            if (
+                isinstance(series, pd.Series)
+                and series.notna().sum() == 0
+                and len(series) > 0
+            ):
+                logger.warning(
+                    f"预计算指标列 {precomputed_name} 全为 NaN，"
+                    f"回退到现场计算（策略: {self.name}）"
+                )
+                return None
 
         # 确保基础数据也在indicators中
         if "close" in data.columns:

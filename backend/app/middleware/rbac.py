@@ -9,10 +9,11 @@ from loguru import logger
 from sqlalchemy import func, select
 
 from app.api.v1.dependencies import require_current_user
-from app.core.database import AsyncSessionLocal
+from app.core.database import AsyncSessionLocal, SessionLocal
 from app.models.strategy_config_models import StrategyConfig
 from app.models.task_models import Task, TaskStatus, TaskType
 from app.models.user_models import User
+from app.services.funnel import funnel_service
 
 
 class Role(str, Enum):
@@ -101,6 +102,28 @@ async def _quota_usage(user: User, quota_type: str) -> int:
         return int((await session.execute(stmt)).scalar_one() or 0)
 
 
+def _track_quota_exhausted(
+    user_id: str, quota_type: str, usage: int, limit: int
+) -> None:
+    """配额打满是**真实付费墙**（用户想用但用不了），单独记一条漏斗事件。
+
+    埋点失败绝不影响 429 的正常抛出。
+    """
+    session = SessionLocal()
+    try:
+        funnel_service.record_event(
+            session,
+            funnel_service.EVENT_QUOTA_EXHAUSTED,
+            user_id=user_id,
+            props={"quota_type": quota_type, "usage": usage, "limit": limit},
+            source="backend",
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"配额埋点失败（忽略）: {exc}")
+    finally:
+        session.close()
+
+
 async def enforce_quota(user: User, quota_type: str) -> User:
     """检查用户配额，耗尽时返回 429。"""
     limit = _quota_limit(user, quota_type)
@@ -115,6 +138,7 @@ async def enforce_quota(user: User, quota_type: str) -> User:
             usage,
             limit,
         )
+        _track_quota_exhausted(str(user.id), quota_type, usage, limit)
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"配额已用尽: {quota_type}",

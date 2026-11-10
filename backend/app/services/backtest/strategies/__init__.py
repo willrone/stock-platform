@@ -4,6 +4,7 @@
 包含所有交易策略实现
 """
 
+from .honest_composite_strategy import HonestCompositeStrategy
 from .model_prediction_strategy import ModelPredictionStrategy
 from .model_topk_dropout_strategy import ModelTopkDropoutStrategy
 

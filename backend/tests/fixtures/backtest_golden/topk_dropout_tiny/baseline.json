@@ -1,5 +1,5 @@
 {
-  "annualized_return": -0.34475553675662896,
+  "annualized_return": -0.4934805028869039,
   "backtest_config": {
     "close_cost": 0.0,
     "commission_rate": 0.001,
@@ -19,24 +19,24 @@
     },
     "strategy_name": "model_topk_dropout"
   },
-  "best_month": 0.043260978406374884,
+  "best_month": 0.061500714023396075,
   "best_performing_stock": {
-    "avg_pnl_per_trade": 1195.0210896190183,
-    "stock_code": "000001.SZ",
-    "total_pnl": 4780.084358476073,
-    "trade_count": 4
+    "avg_pnl_per_trade": 1525.590674860335,
+    "stock_code": "601318.SH",
+    "total_pnl": 4576.772024581005,
+    "trade_count": 3
   },
   "cost_statistics": {
-    "cost_ratio": 0.009255947309891344,
-    "total_commission": 925.6565938524097,
-    "total_cost": 1851.1894619782688,
-    "total_slippage": 925.5328681258592
+    "cost_ratio": 0.01267033577646217,
+    "total_commission": 1267.1176509593395,
+    "total_cost": 2534.067155292434,
+    "total_slippage": 1266.9495043330949
   },
   "end_date": "2024-04-30T00:00:00",
   "excess_return_with_cost": {
-    "annualized_return": -0.34475553675662896,
+    "annualized_return": -0.4934805028869039,
     "information_ratio": null,
-    "max_drawdown": -0.1833159662294976,
+    "max_drawdown": -0.2534067380186202,
     "mean": null,
     "std": null
   },
@@ -47,7 +47,7 @@
     "mean": 0.0,
     "std": 0.0
   },
-  "final_value": 174048.16804409405,
+  "final_value": 159922.9996903321,
   "golden_case": {
     "backtest_config": {
       "board_lot_size": 100,
@@ -88,40 +88,40 @@
   },
   "initial_cash": 200000.0,
   "losing_trades": 5,
-  "max_drawdown": -0.1833159662294976,
+  "max_drawdown": -0.2534067380186202,
   "metrics": {
-    "annualized_return": -0.34475553675662896,
-    "max_drawdown": -0.1833159662294976,
-    "profit_factor": 1.1608813459486984,
-    "sharpe_ratio": -4.303043997396279,
-    "total_return": -0.12975915977952973,
+    "annualized_return": -0.4934805028869039,
+    "max_drawdown": -0.2534067380186202,
+    "profit_factor": 0.9688244871745185,
+    "sharpe_ratio": -5.614133651131359,
+    "total_return": -0.2003850015483395,
     "total_trades": 16,
-    "volatility": 0.08011898947936308,
+    "volatility": 0.11539083307803417,
     "win_rate": 0.2857142857142857
   },
-  "monthly_return_mean": -0.04036076174753026,
-  "monthly_return_std": 0.10179686257122203,
+  "monthly_return_mean": -0.06027857967536765,
+  "monthly_return_std": 0.14234619986464334,
   "monthly_returns_detail": [
     {
       "month": "2024-02",
-      "return": -0.010630352414838229
+      "return": -0.02556596015214896
     },
     {
       "month": "2024-03",
-      "return": -0.15371291123412745
+      "return": -0.21677049289735006
     },
     {
       "month": "2024-04",
-      "return": 0.043260978406374884
+      "return": 0.061500714023396075
     }
   ],
   "negative_months": 2,
   "official_portfolio_analysis": {
     "benchmark": null,
     "excess_return_with_cost": {
-      "annualized_return": -0.34475553675662896,
+      "annualized_return": -0.4934805028869039,
       "information_ratio": null,
-      "max_drawdown": -0.1833159662294976,
+      "max_drawdown": -0.2534067380186202,
       "mean": null,
       "std": null
     },
@@ -335,17 +335,17 @@
       "total_return_without_cost": 0.0
     },
     {
-      "cash": 62195.85534148105,
+      "cash": 22320.158570799045,
       "date": "2024-01-29T00:00:00",
-      "portfolio_value": 199724.8045725886,
+      "portfolio_value": 199645.17264683387,
       "portfolio_value_without_cost": 200000.0,
       "positions": {
         "000001.SZ": {
           "avg_cost": 8.659969762993965,
           "current_price": 8.651318444549418,
-          "market_value": 49312.51513393168,
-          "quantity": 5700,
-          "unrealized_pnl": -49.31251513391908
+          "market_value": 89108.579978859,
+          "quantity": 10300,
+          "unrealized_pnl": -89.10857997884159
         },
         "601318.SH": {
           "avg_cost": 25.97195603860971,
@@ -356,21 +356,21 @@
         }
       },
       "positions_count": 2,
-      "total_return": -0.0013759771370570524,
+      "total_return": -0.0017741367658306263,
       "total_return_without_cost": 0.0
     },
     {
-      "cash": 62195.85534148105,
+      "cash": 22320.158570799045,
       "date": "2024-01-30T00:00:00",
-      "portfolio_value": 199434.17838857573,
-      "portfolio_value_without_cost": 199709.37381598714,
+      "portfolio_value": 198442.558201047,
+      "portfolio_value_without_cost": 198797.38555421314,
       "positions": {
         "000001.SZ": {
           "avg_cost": 8.659969762993965,
           "current_price": 8.453060126772456,
-          "market_value": 48182.442722603,
-          "quantity": 5700,
-          "unrealized_pnl": -1179.384926462597
+          "market_value": 87066.5193057563,
+          "quantity": 10300,
+          "unrealized_pnl": -2131.1692530815344
         },
         "601318.SH": {
           "avg_cost": 25.97195603860971,
@@ -381,21 +381,21 @@
         }
       },
       "positions_count": 2,
-      "total_return": -0.002829108057121339,
-      "total_return_without_cost": -0.0014531309200642864
+      "total_return": -0.007787208994764951,
+      "total_return_without_cost": -0.006013072228934325
     },
     {
-      "cash": 62195.85534148105,
+      "cash": 22320.158570799045,
       "date": "2024-01-31T00:00:00",
-      "portfolio_value": 199250.85560926938,
-      "portfolio_value_without_cost": 199526.0510366808,
+      "portfolio_value": 197400.9095303797,
+      "portfolio_value_without_cost": 197755.73688354582,
       "positions": {
         "000001.SZ": {
           "avg_cost": 8.659969762993965,
           "current_price": 8.266467541693986,
-          "market_value": 47118.86498765572,
-          "quantity": 5700,
-          "unrealized_pnl": -2242.9626614098815
+          "market_value": 85144.61567944806,
+          "quantity": 10300,
+          "unrealized_pnl": -4053.0728793897724
         },
         "601318.SH": {
           "avg_cost": 25.97195603860971,
@@ -406,21 +406,21 @@
         }
       },
       "positions_count": 2,
-      "total_return": -0.003745721953653119,
-      "total_return_without_cost": -0.002369744816596067
+      "total_return": -0.012995452348101535,
+      "total_return_without_cost": -0.01122131558227091
     },
     {
-      "cash": 62195.85534148105,
+      "cash": 22320.158570799045,
       "date": "2024-02-01T00:00:00",
-      "portfolio_value": 199179.53431046483,
-      "portfolio_value_without_cost": 199454.72973787625,
+      "portfolio_value": 196547.94706324983,
+      "portfolio_value_without_cost": 196902.77441641592,
       "positions": {
         "000001.SZ": {
           "avg_cost": 8.659969762993965,
           "current_price": 8.096545548579778,
-          "market_value": 46150.30962690473,
-          "quantity": 5700,
-          "unrealized_pnl": -3211.518022160868
+          "market_value": 83394.41915037172,
+          "quantity": 10300,
+          "unrealized_pnl": -5803.26940846612
         },
         "601318.SH": {
           "avg_cost": 25.97195603860971,
@@ -431,21 +431,21 @@
         }
       },
       "positions_count": 2,
-      "total_return": -0.0041023284476758275,
-      "total_return_without_cost": -0.0027263513106187747
+      "total_return": -0.017260264683750866,
+      "total_return_without_cost": -0.015486127917920384
     },
     {
-      "cash": 62195.85534148105,
+      "cash": 22320.158570799045,
       "date": "2024-02-02T00:00:00",
-      "portfolio_value": 199221.8086107976,
-      "portfolio_value_without_cost": 199497.004038209,
+      "portfolio_value": 195906.16206601582,
+      "portfolio_value_without_cost": 196260.98941918195,
       "positions": {
         "000001.SZ": {
           "avg_cost": 8.659969762993965,
           "current_price": 7.947837005630486,
-          "market_value": 45302.67093209377,
-          "quantity": 5700,
-          "unrealized_pnl": -4059.1567169718255
+          "market_value": 81862.721157994,
+          "quantity": 10300,
+          "unrealized_pnl": -7334.967400843831
         },
         "601318.SH": {
           "avg_cost": 25.97195603860971,
@@ -456,21 +456,21 @@
         }
       },
       "positions_count": 2,
-      "total_return": -0.003890956946012011,
-      "total_return_without_cost": -0.0025149798089549587
+      "total_return": -0.02046918966992089,
+      "total_return_without_cost": -0.01869505290409026
     },
     {
-      "cash": 62195.85534148105,
+      "cash": 22320.158570799045,
       "date": "2024-02-05T00:00:00",
-      "portfolio_value": 199376.12449307772,
-      "portfolio_value_without_cost": 199651.31992048913,
+      "portfolio_value": 195492.1933304373,
+      "portfolio_value_without_cost": 195847.02068360342,
       "positions": {
         "000001.SZ": {
           "avg_cost": 8.659969762993965,
           "current_price": 7.824296871313392,
-          "market_value": 44598.49216648633,
-          "quantity": 5700,
-          "unrealized_pnl": -4763.33548257927
+          "market_value": 80590.25777452793,
+          "quantity": 10300,
+          "unrealized_pnl": -8607.430784309909
         },
         "601318.SH": {
           "avg_cost": 25.97195603860971,
@@ -481,21 +481,21 @@
         }
       },
       "positions_count": 2,
-      "total_return": -0.0031193775346114124,
-      "total_return_without_cost": -0.00174340039755436
+      "total_return": -0.022539033347813528,
+      "total_return_without_cost": -0.020764896581982904
     },
     {
-      "cash": 59951.53597383777,
+      "cash": 13967.6738321726,
       "date": "2024-02-06T00:00:00",
-      "portfolio_value": 199457.4675163684,
-      "portfolio_value_without_cost": 199913.01829901387,
+      "portfolio_value": 194981.87971604872,
+      "portfolio_value_without_cost": 195671.19340707193,
       "positions": {
         "600519.SH": {
           "avg_cost": 23.08321256427046,
           "current_price": 23.060152411858606,
-          "market_value": 46120.30482371721,
-          "quantity": 2000,
-          "unrealized_pnl": -46.120304823707556
+          "market_value": 87628.5791650627,
+          "quantity": 3800,
+          "unrealized_pnl": -87.62857916504436
         },
         "601318.SH": {
           "avg_cost": 25.97195603860971,
@@ -506,21 +506,21 @@
         }
       },
       "positions_count": 2,
-      "total_return": -0.002712662418157997,
-      "total_return_without_cost": -0.000434908504930645
+      "total_return": -0.02509060141975642,
+      "total_return_without_cost": -0.021644032964640354
     },
     {
-      "cash": 59951.53597383777,
+      "cash": 13967.6738321726,
       "date": "2024-02-07T00:00:00",
-      "portfolio_value": 200580.94332049653,
-      "portfolio_value_without_cost": 201036.49410314203,
+      "portfolio_value": 196461.74035310105,
+      "portfolio_value_without_cost": 197151.05404412426,
       "positions": {
         "600519.SH": {
           "avg_cost": 23.08321256427046,
           "current_price": 23.258143985705377,
-          "market_value": 46516.287971410755,
-          "quantity": 2000,
-          "unrealized_pnl": 349.86284286983573
+          "market_value": 88380.94714568043,
+          "quantity": 3800,
+          "unrealized_pnl": 664.7394014526799
         },
         "601318.SH": {
           "avg_cost": 25.97195603860971,
@@ -531,21 +531,21 @@
         }
       },
       "positions_count": 2,
-      "total_return": 0.0029047166024826583,
-      "total_return_without_cost": 0.005182470515710156
+      "total_return": -0.01769129823449475,
+      "total_return_without_cost": -0.014244729779378686
     },
     {
-      "cash": 59951.53597383777,
+      "cash": 13967.6738321726,
       "date": "2024-02-08T00:00:00",
-      "portfolio_value": 201594.1578432153,
-      "portfolio_value_without_cost": 202049.7086258608,
+      "portfolio_value": 197818.46235958397,
+      "portfolio_value_without_cost": 198507.7760506072,
       "positions": {
         "600519.SH": {
           "avg_cost": 23.08321256427046,
           "current_price": 23.448981476685464,
-          "market_value": 46897.96295337093,
-          "quantity": 2000,
-          "unrealized_pnl": 731.5378248300112
+          "market_value": 89106.12961140476,
+          "quantity": 3800,
+          "unrealized_pnl": 1389.9218671770068
         },
         "601318.SH": {
           "avg_cost": 25.97195603860971,
@@ -556,21 +556,21 @@
         }
       },
       "positions_count": 2,
-      "total_return": 0.007970789216076518,
-      "total_return_without_cost": 0.010248543129304016
+      "total_return": -0.01090768820208017,
+      "total_return_without_cost": -0.007461119746963959
     },
     {
-      "cash": 59951.53597383777,
+      "cash": 13967.6738321726,
       "date": "2024-02-09T00:00:00",
-      "portfolio_value": 202469.5966826401,
-      "portfolio_value_without_cost": 202925.1474652856,
+      "portfolio_value": 199015.01152629504,
+      "portfolio_value_without_cost": 199704.32521731828,
       "positions": {
         "600519.SH": {
           "avg_cost": 23.08321256427046,
           "current_price": 23.627376102955616,
-          "market_value": 47254.75220591123,
-          "quantity": 2000,
-          "unrealized_pnl": 1088.3270773703116
+          "market_value": 89784.02919123134,
+          "quantity": 3800,
+          "unrealized_pnl": 2067.821447003589
         },
         "601318.SH": {
           "avg_cost": 25.97195603860971,
@@ -581,21 +581,21 @@
         }
       },
       "positions_count": 2,
-      "total_return": 0.012347983413200564,
-      "total_return_without_cost": 0.014625737326428061
+      "total_return": -0.0049249423685247895,
+      "total_return_without_cost": -0.0014783739134085771
     },
     {
-      "cash": 59951.53597383777,
+      "cash": 13967.6738321726,
       "date": "2024-02-12T00:00:00",
-      "portfolio_value": 203183.56368836574,
-      "portfolio_value_without_cost": 203639.1144710112,
+      "portfolio_value": 200018.79259993316,
+      "portfolio_value_without_cost": 200708.10629095638,
       "positions": {
         "600519.SH": {
           "avg_cost": 23.08321256427046,
           "current_price": 23.788383918462547,
-          "market_value": 47576.76783692509,
-          "quantity": 2000,
-          "unrealized_pnl": 1410.3427083841743
+          "market_value": 90395.85889015767,
+          "quantity": 3800,
+          "unrealized_pnl": 2679.6511459299218
         },
         "601318.SH": {
           "avg_cost": 25.97195603860971,
@@ -606,21 +606,21 @@
         }
       },
       "positions_count": 2,
-      "total_return": 0.015917818441828713,
-      "total_return_without_cost": 0.018195572355056065
+      "total_return": 9.396299966581865e-05,
+      "total_return_without_cost": 0.0035405314547818853
     },
     {
-      "cash": 59951.53597383777,
+      "cash": 13967.6738321726,
       "date": "2024-02-13T00:00:00",
-      "portfolio_value": 203716.8376656043,
-      "portfolio_value_without_cost": 204172.3884482498,
+      "portfolio_value": 200802.55261285265,
+      "portfolio_value_without_cost": 201491.8663038759,
       "positions": {
         "600519.SH": {
           "avg_cost": 23.08321256427046,
           "current_price": 23.92754282717418,
-          "market_value": 47855.08565434836,
-          "quantity": 2000,
-          "unrealized_pnl": 1688.6605258074414
+          "market_value": 90924.66274326188,
+          "quantity": 3800,
+          "unrealized_pnl": 3208.454999034133
         },
         "601318.SH": {
           "avg_cost": 25.97195603860971,
@@ -631,21 +631,21 @@
         }
       },
       "positions_count": 2,
-      "total_return": 0.018584188328021556,
-      "total_return_without_cost": 0.020861942241249053
+      "total_return": 0.004012763064263272,
+      "total_return_without_cost": 0.007459331519379484
     },
     {
-      "cash": 59951.53597383777,
+      "cash": 13967.6738321726,
       "date": "2024-02-14T00:00:00",
-      "portfolio_value": 204055.20506247587,
-      "portfolio_value_without_cost": 204510.75584512134,
+      "portfolio_value": 201345.1361591873,
+      "portfolio_value_without_cost": 202034.44985021054,
       "positions": {
         "600519.SH": {
           "avg_cost": 23.08321256427046,
           "current_price": 24.040996243542565,
-          "market_value": 48081.99248708513,
-          "quantity": 2000,
-          "unrealized_pnl": 1915.5673585442128
+          "market_value": 91355.78572546176,
+          "quantity": 3800,
+          "unrealized_pnl": 3639.5779812340043
         },
         "601318.SH": {
           "avg_cost": 25.97195603860971,
@@ -656,21 +656,21 @@
         }
       },
       "positions_count": 2,
-      "total_return": 0.02027602531237935,
-      "total_return_without_cost": 0.022553779225606703
+      "total_return": 0.006725680795936496,
+      "total_return_without_cost": 0.010172249251052708
     },
     {
-      "cash": 59951.53597383777,
+      "cash": 13967.6738321726,
       "date": "2024-02-15T00:00:00",
-      "portfolio_value": 204189.85387780235,
-      "portfolio_value_without_cost": 204645.40466044785,
+      "portfolio_value": 201632.07168597064,
+      "portfolio_value_without_cost": 202321.38537699386,
       "positions": {
         "600519.SH": {
           "avg_cost": 23.08321256427046,
           "current_price": 24.125599972129688,
-          "market_value": 48251.19994425937,
-          "quantity": 2000,
-          "unrealized_pnl": 2084.774815718454
+          "market_value": 91677.27989409282,
+          "quantity": 3800,
+          "unrealized_pnl": 3961.0721498650673
         },
         "601318.SH": {
           "avg_cost": 25.97195603860971,
@@ -681,21 +681,21 @@
         }
       },
       "positions_count": 2,
-      "total_return": 0.020949269389011753,
-      "total_return_without_cost": 0.02322702330223925
+      "total_return": 0.008160358429853222,
+      "total_return_without_cost": 0.011606926884969289
     },
     {
-      "cash": 59951.53597383777,
+      "cash": 13967.6738321726,
       "date": "2024-02-16T00:00:00",
-      "portfolio_value": 204117.61787282748,
-      "portfolio_value_without_cost": 204573.16865547298,
+      "portfolio_value": 201655.97255105287,
+      "portfolio_value_without_cost": 202345.2862420761,
       "positions": {
         "600519.SH": {
           "avg_cost": 23.08321256427046,
           "current_price": 24.179009344383648,
-          "market_value": 48358.0186887673,
-          "quantity": 2000,
-          "unrealized_pnl": 2191.593560226378
+          "market_value": 91880.23550865786,
+          "quantity": 3800,
+          "unrealized_pnl": 4164.0277644301095
         },
         "601318.SH": {
           "avg_cost": 25.97195603860971,
@@ -706,21 +706,21 @@
         }
       },
       "positions_count": 2,
-      "total_return": 0.02058808936413741,
-      "total_return_without_cost": 0.022865843277364913
+      "total_return": 0.008279862755264331,
+      "total_return_without_cost": 0.011726431210380542
     },
     {
-      "cash": 59951.53597383777,
+      "cash": 13967.6738321726,
       "date": "2024-02-19T00:00:00",
-      "portfolio_value": 203841.06431889092,
-      "portfolio_value_without_cost": 204296.61510153644,
+      "portfolio_value": 201416.74173308047,
+      "portfolio_value_without_cost": 202106.05542410372,
       "positions": {
         "600519.SH": {
           "avg_cost": 23.08321256427046,
           "current_price": 24.199744197697065,
-          "market_value": 48399.48839539413,
-          "quantity": 2000,
-          "unrealized_pnl": 2233.0632668532126
+          "market_value": 91959.02795124885,
+          "quantity": 3800,
+          "unrealized_pnl": 4242.820207021097
         },
         "601318.SH": {
           "avg_cost": 25.97195603860971,
@@ -731,21 +731,21 @@
         }
       },
       "positions_count": 2,
-      "total_return": 0.01920532159445458,
-      "total_return_without_cost": 0.021483075507682223
+      "total_return": 0.007083708665402373,
+      "total_return_without_cost": 0.010530277120518586
     },
     {
-      "cash": 59951.53597383777,
+      "cash": 13967.6738321726,
       "date": "2024-02-20T00:00:00",
-      "portfolio_value": 203368.4228492597,
-      "portfolio_value_without_cost": 203823.97363190516,
+      "portfolio_value": 200921.57452030102,
+      "portfolio_value_without_cost": 201610.88821132426,
       "positions": {
         "600519.SH": {
           "avg_cost": 23.08321256427046,
           "current_price": 24.187229895948057,
-          "market_value": 48374.459791896115,
-          "quantity": 2000,
-          "unrealized_pnl": 2208.0346633551962
+          "market_value": 91911.47360460262,
+          "quantity": 3800,
+          "unrealized_pnl": 4195.265860374871
         },
         "601318.SH": {
           "avg_cost": 25.97195603860971,
@@ -756,21 +756,21 @@
         }
       },
       "positions_count": 2,
-      "total_return": 0.016842114246298442,
-      "total_return_without_cost": 0.019119868159525794
+      "total_return": 0.004607872601505078,
+      "total_return_without_cost": 0.00805444105662129
     },
     {
-      "cash": 59951.53597383777,
+      "cash": 13967.6738321726,
       "date": "2024-02-21T00:00:00",
-      "portfolio_value": 202713.35738688282,
-      "portfolio_value_without_cost": 203168.9081695283,
+      "portfolio_value": 200184.75910367694,
+      "portfolio_value_without_cost": 200874.07279470016,
       "positions": {
         "600519.SH": {
           "avg_cost": 23.08321256427046,
           "current_price": 24.141813254699603,
-          "market_value": 48283.626509399204,
-          "quantity": 2000,
-          "unrealized_pnl": 2117.201380858285
+          "market_value": 91738.89036785849,
+          "quantity": 3800,
+          "unrealized_pnl": 4022.682623630739
         },
         "601318.SH": {
           "avg_cost": 25.97195603860971,
@@ -781,21 +781,21 @@
         }
       },
       "positions_count": 2,
-      "total_return": 0.013566786934414122,
-      "total_return_without_cost": 0.015844540847641475
+      "total_return": 0.0009237955183847226,
+      "total_return_without_cost": 0.004370363973500789
     },
     {
-      "cash": 59951.53597383777,
+      "cash": 13967.6738321726,
       "date": "2024-02-22T00:00:00",
-      "portfolio_value": 201894.58746875913,
-      "portfolio_value_without_cost": 202350.1382514046,
+      "portfolio_value": 199227.2806005785,
+      "portfolio_value_without_cost": 199916.59429160174,
       "positions": {
         "600519.SH": {
           "avg_cost": 23.08321256427046,
           "current_price": 24.064752929713634,
-          "market_value": 48129.50585942727,
-          "quantity": 2000,
-          "unrealized_pnl": 1963.0807308863514
+          "market_value": 91446.06113291181,
+          "quantity": 3800,
+          "unrealized_pnl": 3729.8533886840596
         },
         "601318.SH": {
           "avg_cost": 25.97195603860971,
@@ -806,1213 +806,1213 @@
         }
       },
       "positions_count": 2,
-      "total_return": 0.009472937343795639,
-      "total_return_without_cost": 0.01175069125702299
+      "total_return": -0.0038635969971075245,
+      "total_return_without_cost": -0.0004170285419913125
     },
     {
-      "cash": 86074.26738657955,
+      "cash": 18555.343585845912,
       "date": "2024-02-23T00:00:00",
-      "portfolio_value": 200616.010227074,
-      "portfolio_value_without_cost": 201390.9202440037,
+      "portfolio_value": 197713.87464450972,
+      "portfolio_value_without_cost": 198765.553173983,
       "positions": {
         "600000.SH": {
           "avg_cost": 21.513548110957508,
           "current_price": 21.49205605490261,
-          "market_value": 66625.37377019809,
-          "quantity": 3100,
-          "unrealized_pnl": -66.6253737701918
+          "market_value": 88117.4298251007,
+          "quantity": 4100,
+          "unrealized_pnl": -88.1174298250844
         },
         "600519.SH": {
           "avg_cost": 23.08321256427046,
           "current_price": 23.958184535148188,
-          "market_value": 47916.36907029638,
-          "quantity": 2000,
-          "unrealized_pnl": 1749.9439417554604
+          "market_value": 91041.10123356311,
+          "quantity": 3800,
+          "unrealized_pnl": 3324.893489335358
         }
       },
       "positions_count": 2,
-      "total_return": 0.0030800511353700133,
-      "total_return_without_cost": 0.006954601220018521
+      "total_return": -0.011430626777451398,
+      "total_return_without_cost": -0.0061722341300849805
     },
     {
-      "cash": 86074.26738657955,
+      "cash": 18555.343585845912,
       "date": "2024-02-26T00:00:00",
-      "portfolio_value": 200067.17984579233,
-      "portfolio_value_without_cost": 200842.08986272203,
+      "portfolio_value": 196834.26652226466,
+      "portfolio_value_without_cost": 197885.94505173794,
       "positions": {
         "600000.SH": {
           "avg_cost": 21.513548110957508,
           "current_price": 21.400899852561754,
-          "market_value": 66342.78954294143,
-          "quantity": 3100,
-          "unrealized_pnl": -349.2096010268433
+          "market_value": 87743.68939550318,
+          "quantity": 4100,
+          "unrealized_pnl": -461.85785942259827
         },
         "600519.SH": {
           "avg_cost": 23.08321256427046,
           "current_price": 23.825061458135675,
-          "market_value": 47650.12291627135,
-          "quantity": 2000,
-          "unrealized_pnl": 1483.6977877304307
+          "market_value": 90535.23354091556,
+          "quantity": 3800,
+          "unrealized_pnl": 2819.0257966878125
         }
       },
       "positions_count": 2,
-      "total_return": 0.00033589922896164355,
-      "total_return_without_cost": 0.0042104493136101515
+      "total_return": -0.015828667388676696,
+      "total_return_without_cost": -0.010570274741310276
     },
     {
-      "cash": 86074.26738657955,
+      "cash": 18555.343585845912,
       "date": "2024-02-27T00:00:00",
-      "portfolio_value": 199288.6898104994,
-      "portfolio_value_without_cost": 200063.5998274291,
+      "portfolio_value": 195624.50917094224,
+      "portfolio_value_without_cost": 196676.18770041555,
       "positions": {
         "600000.SH": {
           "avg_cost": 21.513548110957508,
           "current_price": 21.250411743213064,
-          "market_value": 65876.2764039605,
-          "quantity": 3100,
-          "unrealized_pnl": -815.7227400077827
+          "market_value": 87126.68814717357,
+          "quantity": 4100,
+          "unrealized_pnl": -1078.8591077522142
         },
         "600519.SH": {
           "avg_cost": 23.08321256427046,
           "current_price": 23.669073009979677,
-          "market_value": 47338.14601995936,
-          "quantity": 2000,
-          "unrealized_pnl": 1171.7208914184375
+          "market_value": 89942.47743792277,
+          "quantity": 3800,
+          "unrealized_pnl": 2226.2696936950233
         }
       },
       "positions_count": 2,
-      "total_return": -0.003556550947502983,
-      "total_return_without_cost": 0.0003179991371455253
+      "total_return": -0.021877454145288792,
+      "total_return_without_cost": -0.01661906149792223
     },
     {
-      "cash": 86074.26738657955,
+      "cash": 18555.343585845912,
       "date": "2024-02-28T00:00:00",
-      "portfolio_value": 198301.59936170862,
-      "portfolio_value_without_cost": 199076.50937863832,
+      "portfolio_value": 194117.4474925,
+      "portfolio_value_without_cost": 195169.12602197332,
       "positions": {
         "600000.SH": {
           "avg_cost": 21.513548110957508,
           "current_price": 21.044596003402855,
-          "market_value": 65238.24761054885,
-          "quantity": 3100,
-          "unrealized_pnl": -1453.751533419425
+          "market_value": 86282.8436139517,
+          "quantity": 4100,
+          "unrealized_pnl": -1922.703640974083
         },
         "600519.SH": {
           "avg_cost": 23.08321256427046,
           "current_price": 23.494542182290107,
-          "market_value": 46989.084364580216,
-          "quantity": 2000,
-          "unrealized_pnl": 822.659236039297
+          "market_value": 89279.26029270241,
+          "quantity": 3800,
+          "unrealized_pnl": 1563.0525484746613
         }
       },
       "positions_count": 2,
-      "total_return": -0.008492003191456897,
-      "total_return_without_cost": -0.004617453106808389
+      "total_return": -0.02941276253749995,
+      "total_return_without_cost": -0.024154369890133386
     },
     {
-      "cash": 86074.26738657955,
+      "cash": 18555.343585845912,
       "date": "2024-02-29T00:00:00",
-      "portfolio_value": 197132.7487951848,
-      "portfolio_value_without_cost": 197907.6588121145,
+      "portfolio_value": 192354.16574332805,
+      "portfolio_value_without_cost": 193405.8442728013,
       "positions": {
         "600000.SH": {
           "avg_cost": 21.513548110957508,
           "current_price": 20.78899023400439,
-          "market_value": 64445.86972541361,
-          "quantity": 3100,
-          "unrealized_pnl": -2246.129418554665
+          "market_value": 85234.859959418,
+          "quantity": 4100,
+          "unrealized_pnl": -2970.687295507785
         },
         "600519.SH": {
           "avg_cost": 23.08321256427046,
           "current_price": 23.306305841595822,
-          "market_value": 46612.611683191644,
-          "quantity": 2000,
-          "unrealized_pnl": 446.18655465072516
+          "market_value": 88563.96219806412,
+          "quantity": 3800,
+          "unrealized_pnl": 847.7544538363727
         }
       },
       "positions_count": 2,
-      "total_return": -0.014336256024075992,
-      "total_return_without_cost": -0.010461705939427484
+      "total_return": -0.03822917128335976,
+      "total_return_without_cost": -0.032970778635993486
     },
     {
-      "cash": 86074.26738657955,
+      "cash": 18555.343585845912,
       "date": "2024-03-01T00:00:00",
-      "portfolio_value": 195814.0156224178,
-      "portfolio_value_without_cost": 196588.92563934746,
+      "portfolio_value": 190382.84894419432,
+      "portfolio_value_without_cost": 191434.5274736676,
       "positions": {
         "600000.SH": {
           "avg_cost": 21.513548110957508,
           "current_price": 20.49051189371189,
-          "market_value": 63520.58687050686,
-          "quantity": 3100,
-          "unrealized_pnl": -3171.412273461421
+          "market_value": 84011.09876421875,
+          "quantity": 4100,
+          "unrealized_pnl": -4194.448490707029
         },
         "600519.SH": {
           "avg_cost": 23.08321256427046,
           "current_price": 23.109580682665698,
-          "market_value": 46219.1613653314,
-          "quantity": 2000,
-          "unrealized_pnl": 52.73623679047887
+          "market_value": 87816.40659412966,
+          "quantity": 3800,
+          "unrealized_pnl": 100.19884990190621
         }
       },
       "positions_count": 2,
-      "total_return": -0.02092992188791104,
-      "total_return_without_cost": -0.01705537180326268
+      "total_return": -0.04808575527902838,
+      "total_return_without_cost": -0.04282736263166196
     },
     {
-      "cash": 86074.26738657955,
+      "cash": 18555.343585845912,
       "date": "2024-03-04T00:00:00",
-      "portfolio_value": 194381.43113203248,
-      "portfolio_value_without_cost": 195156.34114896215,
+      "portfolio_value": 188257.44750289526,
+      "portfolio_value_without_cost": 189309.12603236857,
       "positions": {
         "600000.SH": {
           "avg_cost": 21.513548110957508,
           "current_price": 20.157266591793952,
-          "market_value": 62487.52643456125,
-          "quantity": 3100,
-          "unrealized_pnl": -4204.472709407026
+          "market_value": 82644.79302635521,
+          "quantity": 4100,
+          "unrealized_pnl": -5560.754228570571
         },
         "600519.SH": {
           "avg_cost": 23.08321256427046,
           "current_price": 22.90981865544583,
-          "market_value": 45819.63731089166,
-          "quantity": 2000,
-          "unrealized_pnl": -346.7878176492595
+          "market_value": 87057.31089069415,
+          "quantity": 3800,
+          "unrealized_pnl": -658.8968535336026
         }
       },
       "positions_count": 2,
-      "total_return": -0.02809284433983761,
-      "total_return_without_cost": -0.02421829425518925
+      "total_return": -0.058712762485523706,
+      "total_return_without_cost": -0.05345436983815714
     },
     {
-      "cash": 86074.26738657955,
+      "cash": 18555.343585845912,
       "date": "2024-03-05T00:00:00",
-      "portfolio_value": 192874.1818353425,
-      "portfolio_value_without_cost": 193649.09185227216,
+      "portfolio_value": 186036.18205763953,
+      "portfolio_value_without_cost": 187087.86058711284,
       "positions": {
         "600000.SH": {
           "avg_cost": 21.513548110957508,
           "current_price": 19.798323452992165,
-          "market_value": 61374.80270427571,
-          "quantity": 3100,
-          "unrealized_pnl": -5317.196439692569
+          "market_value": 81173.12615726788,
+          "quantity": 4100,
+          "unrealized_pnl": -7032.421097657905
         },
         "600519.SH": {
           "avg_cost": 23.08321256427046,
           "current_price": 22.71255587224362,
-          "market_value": 45425.111744487236,
-          "quantity": 2000,
-          "unrealized_pnl": -741.313384053683
+          "market_value": 86307.71231452575,
+          "quantity": 3800,
+          "unrealized_pnl": -1408.4954297020013
         }
       },
       "positions_count": 2,
-      "total_return": -0.03562909082328755,
-      "total_return_without_cost": -0.03175454073863919
+      "total_return": -0.06981908971180237,
+      "total_return_without_cost": -0.0645606970644358
     },
     {
-      "cash": 73689.72104471395,
+      "cash": 22305.128640867682,
       "date": "2024-03-06T00:00:00",
-      "portfolio_value": 191128.9652398521,
-      "portfolio_value_without_cost": 192108.4334864541,
+      "portfolio_value": 183445.7484547923,
+      "portfolio_value_without_cost": 184831.6085067177,
       "positions": {
         "000333.SZ": {
           "avg_cost": 17.358706964733617,
           "current_price": 17.341365599134484,
-          "market_value": 57226.5064771438,
-          "quantity": 3300,
-          "unrealized_pnl": -57.22650647714181
+          "market_value": 81504.41831593207,
+          "quantity": 4700,
+          "unrealized_pnl": -81.50441831593344
         },
         "600000.SH": {
           "avg_cost": 21.513548110957508,
           "current_price": 19.423463779998187,
-          "market_value": 60212.73771799438,
-          "quantity": 3100,
-          "unrealized_pnl": -6479.261425973898
+          "market_value": 79636.20149799256,
+          "quantity": 4100,
+          "unrealized_pnl": -8569.345756933224
         }
       },
       "positions_count": 2,
-      "total_return": -0.04435517380073943,
-      "total_return_without_cost": -0.039457832567729494
+      "total_return": -0.08277125772603845,
+      "total_return_without_cost": -0.07584195746641155
     },
     {
-      "cash": 73689.72104471395,
+      "cash": 22305.128640867682,
       "date": "2024-03-07T00:00:00",
-      "portfolio_value": 189057.12488195865,
-      "portfolio_value_without_cost": 190036.59312856063,
+      "portfolio_value": 180614.87762781637,
+      "portfolio_value_without_cost": 182000.73767974175,
       "positions": {
         "000333.SZ": {
           "avg_cost": 17.358706964733617,
           "current_price": 17.071025121959337,
-          "market_value": 56334.38290246581,
-          "quantity": 3300,
-          "unrealized_pnl": -949.3500811551276
+          "market_value": 80233.81807320888,
+          "quantity": 4700,
+          "unrealized_pnl": -1352.1046610391204
         },
         "600000.SH": {
           "avg_cost": 21.513548110957508,
           "current_price": 19.042909978960928,
-          "market_value": 59033.02093477888,
-          "quantity": 3100,
-          "unrealized_pnl": -7658.978209189401
+          "market_value": 78075.93091373981,
+          "quantity": 4100,
+          "unrealized_pnl": -10129.616341185974
         }
       },
       "positions_count": 2,
-      "total_return": -0.05471437559020676,
-      "total_return_without_cost": -0.049817034357196824
+      "total_return": -0.09692561186091814,
+      "total_return_without_cost": -0.08999631160129123
     },
     {
-      "cash": 73689.72104471395,
+      "cash": 22305.128640867682,
       "date": "2024-03-08T00:00:00",
-      "portfolio_value": 186928.20007446816,
-      "portfolio_value_without_cost": 187907.66832107014,
+      "portfolio_value": 177701.22787994944,
+      "portfolio_value_without_cost": 179087.08793187482,
       "positions": {
         "000333.SZ": {
           "avg_cost": 17.358706964733617,
           "current_price": 16.778984249193385,
-          "market_value": 55370.64802233817,
-          "quantity": 3300,
-          "unrealized_pnl": -1913.084961282766
+          "market_value": 78861.22597120891,
+          "quantity": 4700,
+          "unrealized_pnl": -2724.6967630390864
         },
         "600000.SH": {
           "avg_cost": 21.513548110957508,
           "current_price": 18.66704226045679,
-          "market_value": 57867.83100741605,
-          "quantity": 3100,
-          "unrealized_pnl": -8824.16813655223
+          "market_value": 76534.87326787284,
+          "quantity": 4100,
+          "unrealized_pnl": -11670.673987052942
         }
       },
       "positions_count": 2,
-      "total_return": -0.06535899962765922,
-      "total_return_without_cost": -0.06046165839464927
+      "total_return": -0.1114938606002528,
+      "total_return_without_cost": -0.1045645603406259
     },
     {
-      "cash": 73689.72104471395,
+      "cash": 22305.128640867682,
       "date": "2024-03-11T00:00:00",
-      "portfolio_value": 184801.22410977958,
-      "portfolio_value_without_cost": 185780.69235638157,
+      "portfolio_value": 174785.64651965004,
+      "portfolio_value_without_cost": 176171.50657157542,
       "positions": {
         "000333.SZ": {
           "avg_cost": 17.358706964733617,
           "current_price": 16.473502747554026,
-          "market_value": 54362.55906692828,
-          "quantity": 3300,
-          "unrealized_pnl": -2921.1739166926563
+          "market_value": 77425.46291350391,
+          "quantity": 4700,
+          "unrealized_pnl": -4160.459820744087
         },
         "600000.SH": {
           "avg_cost": 21.513548110957508,
           "current_price": 18.306110967141084,
-          "market_value": 56748.94399813736,
-          "quantity": 3100,
-          "unrealized_pnl": -9943.05514583092
+          "market_value": 75055.05496527844,
+          "quantity": 4100,
+          "unrealized_pnl": -13150.492289647344
         }
       },
       "positions_count": 2,
-      "total_return": -0.07599387945110211,
-      "total_return_without_cost": -0.07109653821809217
+      "total_return": -0.12607176740174983,
+      "total_return_without_cost": -0.11914246714212291
     },
     {
-      "cash": 73689.72104471395,
+      "cash": 22305.128640867682,
       "date": "2024-03-12T00:00:00",
-      "portfolio_value": 182735.17627096505,
-      "portfolio_value_without_cost": 183714.64451756704,
+      "portfolio_value": 171949.03438718928,
+      "portfolio_value_without_cost": 173334.89443911467,
       "positions": {
         "000333.SZ": {
           "avg_cost": 17.358706964733617,
           "current_price": 16.163212871122564,
-          "market_value": 53338.60247470446,
-          "quantity": 3300,
-          "unrealized_pnl": -3945.1305089164816
+          "market_value": 75967.10049427605,
+          "quantity": 4700,
+          "unrealized_pnl": -5618.8222399719525
         },
         "600000.SH": {
           "avg_cost": 21.513548110957508,
           "current_price": 17.969952500498916,
-          "market_value": 55706.85275154664,
-          "quantity": 3100,
-          "unrealized_pnl": -10985.146392421637
+          "market_value": 73676.80525204555,
+          "quantity": 4100,
+          "unrealized_pnl": -14528.74200288023
         }
       },
       "positions_count": 2,
-      "total_return": -0.08632411864517475,
-      "total_return_without_cost": -0.08142677741216481
+      "total_return": -0.1402548280640536,
+      "total_return_without_cost": -0.13332552780442666
     },
     {
-      "cash": 73689.72104471395,
+      "cash": 22305.128640867682,
       "date": "2024-03-13T00:00:00",
-      "portfolio_value": 180787.34730723352,
-      "portfolio_value_without_cost": 181766.8155538355,
+      "portfolio_value": 169270.1038062305,
+      "portfolio_value_without_cost": 170655.96385815588,
       "positions": {
         "000333.SZ": {
           "avg_cost": 17.358706964733617,
           "current_price": 15.856880131052401,
-          "market_value": 52327.70443247292,
-          "quantity": 3300,
-          "unrealized_pnl": -4956.028551148018
+          "market_value": 74527.33661594629,
+          "quantity": 4700,
+          "unrealized_pnl": -7058.586118301711
         },
         "600000.SH": {
           "avg_cost": 21.513548110957508,
           "current_price": 17.667716719369885,
-          "market_value": 54769.921830046645,
-          "quantity": 3100,
-          "unrealized_pnl": -11922.077313921633
+          "market_value": 72437.63854941653,
+          "quantity": 4100,
+          "unrealized_pnl": -15767.908705509253
         }
       },
       "positions_count": 2,
-      "total_return": -0.09606326346383241,
-      "total_return_without_cost": -0.09116592223082247
+      "total_return": -0.15364948096884748,
+      "total_return_without_cost": -0.14672018070922058
     },
     {
-      "cash": 73689.72104471395,
+      "cash": 22305.128640867682,
       "date": "2024-03-14T00:00:00",
-      "portfolio_value": 179011.7517046401,
-      "portfolio_value_without_cost": 179991.2199512421,
+      "portfolio_value": 166823.19718694506,
+      "portfolio_value_without_cost": 168209.05723887042,
       "positions": {
         "000333.SZ": {
           "avg_cost": 17.358706964733617,
           "current_price": 15.563160372252472,
-          "market_value": 51358.42922843316,
-          "quantity": 3300,
-          "unrealized_pnl": -5925.303755187779
+          "market_value": 73146.85374958662,
+          "quantity": 4700,
+          "unrealized_pnl": -8439.068984661382
         },
         "600000.SH": {
           "avg_cost": 21.513548110957508,
           "current_price": 17.407613364997744,
-          "market_value": 53963.60143149301,
-          "quantity": 3100,
-          "unrealized_pnl": -12728.397712475271
+          "market_value": 71371.21479649075,
+          "quantity": 4100,
+          "unrealized_pnl": -16834.332458435034
         }
       },
       "positions_count": 2,
-      "total_return": -0.10494124147679948,
-      "total_return_without_cost": -0.10004390024378954
+      "total_return": -0.16588401406527467,
+      "total_return_without_cost": -0.1589547138056479
     },
     {
-      "cash": 69814.7191641832,
+      "cash": 19461.65139618059,
       "date": "2024-03-15T00:00:00",
-      "portfolio_value": 177237.07931001417,
-      "portfolio_value_without_cost": 178437.09900023718,
+      "portfolio_value": 164389.08587931527,
+      "portfolio_value_without_cost": 166062.08678681235,
       "positions": {
         "000002.SZ": {
           "avg_cost": 12.395899279047478,
           "current_price": 12.383515763284196,
-          "market_value": 56964.1725111073,
-          "quantity": 4600,
-          "unrealized_pnl": -56.964172511099605
+          "market_value": 73062.74300337676,
+          "quantity": 5900,
+          "unrealized_pnl": -73.06274300336372
         },
         "000333.SZ": {
           "avg_cost": 17.358706964733617,
           "current_price": 15.2903598893102,
-          "market_value": 50458.18763472366,
-          "quantity": 3300,
-          "unrealized_pnl": -6825.545348897278
+          "market_value": 71864.69147975794,
+          "quantity": 4700,
+          "unrealized_pnl": -9721.231254490063
         }
       },
       "positions_count": 2,
-      "total_return": -0.11381460344992912,
-      "total_return_without_cost": -0.10781450499881408
+      "total_return": -0.17805457060342364,
+      "total_return_without_cost": -0.16968956606593827
     },
     {
-      "cash": 69814.7191641832,
+      "cash": 19461.65139618059,
       "date": "2024-03-18T00:00:00",
-      "portfolio_value": 175259.29922974147,
-      "portfolio_value_without_cost": 176459.31891996448,
+      "portfolio_value": 161738.25218544743,
+      "portfolio_value_without_cost": 163411.25309294448,
       "positions": {
         "000002.SZ": {
           "avg_cost": 12.395899279047478,
           "current_price": 12.12871800164801,
-          "market_value": 55792.10280758085,
-          "quantity": 4600,
-          "unrealized_pnl": -1229.0338760375525
+          "market_value": 71559.43620972327,
+          "quantity": 5900,
+          "unrealized_pnl": -1576.3695366568572
         },
         "000333.SZ": {
           "avg_cost": 17.358706964733617,
           "current_price": 15.046205229690123,
-          "market_value": 49652.47725797741,
-          "quantity": 3300,
-          "unrealized_pnl": -7631.255725643532
+          "market_value": 70717.16457954358,
+          "quantity": 4700,
+          "unrealized_pnl": -10868.758154704425
         }
       },
       "positions_count": 2,
-      "total_return": -0.12370350385129263,
-      "total_return_without_cost": -0.11770340540017758
+      "total_return": -0.19130873907276283,
+      "total_return_without_cost": -0.18294373453527762
     },
     {
-      "cash": 69814.7191641832,
+      "cash": 19461.65139618059,
       "date": "2024-03-19T00:00:00",
-      "portfolio_value": 173446.26005051733,
-      "portfolio_value_without_cost": 174646.27974074037,
+      "portfolio_value": 159315.34568237397,
+      "portfolio_value_without_cost": 160988.346589871,
       "positions": {
         "000002.SZ": {
           "avg_cost": 12.395899279047478,
           "current_price": 11.884209777363859,
-          "market_value": 54667.36497587375,
-          "quantity": 4600,
-          "unrealized_pnl": -2353.7717077446505
+          "market_value": 70116.83768644677,
+          "quantity": 5900,
+          "unrealized_pnl": -3018.9680599333515
         },
         "000333.SZ": {
           "avg_cost": 17.358706964733617,
           "current_price": 14.837629063775873,
-          "market_value": 48964.175910460384,
-          "quantity": 3300,
-          "unrealized_pnl": -8319.557073160555
+          "market_value": 69736.8565997466,
+          "quantity": 4700,
+          "unrealized_pnl": -11849.066134501394
         }
       },
       "positions_count": 2,
-      "total_return": -0.13276869974741334,
-      "total_return_without_cost": -0.12676860129629816
+      "total_return": -0.20342327158813014,
+      "total_return_without_cost": -0.19505826705064494
     },
     {
-      "cash": 69814.7191641832,
+      "cash": 19461.65139618059,
       "date": "2024-03-20T00:00:00",
-      "portfolio_value": 171848.75622851963,
-      "portfolio_value_without_cost": 173048.77591874264,
+      "portfolio_value": 157188.2952005503,
+      "portfolio_value_without_cost": 158861.29610804733,
       "positions": {
         "000002.SZ": {
           "avg_cost": 12.395899279047478,
           "current_price": 11.656767278121476,
-          "market_value": 53621.129479358795,
-          "quantity": 4600,
-          "unrealized_pnl": -3400.0072042596075
+          "market_value": 68774.92694091672,
+          "quantity": 5900,
+          "unrealized_pnl": -4360.878805463406
         },
         "000333.SZ": {
           "avg_cost": 17.358706964733617,
           "current_price": 14.670578056053825,
-          "market_value": 48412.90758497763,
-          "quantity": 3300,
-          "unrealized_pnl": -8870.825398643312
+          "market_value": 68951.71686345298,
+          "quantity": 4700,
+          "unrealized_pnl": -12634.20587079502
         }
       },
       "positions_count": 2,
-      "total_return": -0.14075621885740183,
-      "total_return_without_cost": -0.1347561204062868
+      "total_return": -0.21405852399724856,
+      "total_return_without_cost": -0.20569351945976333
     },
     {
-      "cash": 69814.7191641832,
+      "cash": 19461.65139618059,
       "date": "2024-03-21T00:00:00",
-      "portfolio_value": 170511.60897285596,
-      "portfolio_value_without_cost": 171711.62866307897,
+      "portfolio_value": 155416.83035367745,
+      "portfolio_value_without_cost": 157089.8312611745,
       "positions": {
         "000002.SZ": {
           "avg_cost": 12.395899279047478,
           "current_price": 11.452693740010366,
-          "market_value": 52682.391204047686,
-          "quantity": 4600,
-          "unrealized_pnl": -4338.745479570716
+          "market_value": 67570.89306606117,
+          "quantity": 5900,
+          "unrealized_pnl": -5564.912680318957
         },
         "000333.SZ": {
           "avg_cost": 17.358706964733617,
           "current_price": 14.549848062007595,
-          "market_value": 48014.49860462506,
-          "quantity": 3300,
-          "unrealized_pnl": -9269.234378995876
+          "market_value": 68384.28589143569,
+          "quantity": 4700,
+          "unrealized_pnl": -13201.63684281231
         }
       },
       "positions_count": 2,
-      "total_return": -0.1474419551357202,
-      "total_return_without_cost": -0.14144185668460516
+      "total_return": -0.22291584823161276,
+      "total_return_without_cost": -0.21455084369412755
     },
     {
-      "cash": 69814.7191641832,
+      "cash": 19461.65139618059,
       "date": "2024-03-22T00:00:00",
-      "portfolio_value": 169472.4240913324,
-      "portfolio_value_without_cost": 170672.44378155543,
+      "portfolio_value": 154050.82621985034,
+      "portfolio_value_without_cost": 155723.82712734735,
       "positions": {
         "000002.SZ": {
           "avg_cost": 12.395899279047478,
           "current_price": 11.277644762554003,
-          "market_value": 51877.165907748415,
-          "quantity": 4600,
-          "unrealized_pnl": -5143.970775869988
+          "market_value": 66538.10409906862,
+          "quantity": 5900,
+          "unrealized_pnl": -6597.701647311507
         },
         "000333.SZ": {
           "avg_cost": 17.358706964733617,
           "current_price": 14.478951218000239,
-          "market_value": 47780.539019400785,
-          "quantity": 3300,
-          "unrealized_pnl": -9503.193964220154
+          "market_value": 68051.07072460112,
+          "quantity": 4700,
+          "unrealized_pnl": -13534.852009646886
         }
       },
       "positions_count": 2,
-      "total_return": -0.15263787954333805,
-      "total_return_without_cost": -0.14663778109222286
+      "total_return": -0.22974586890074833,
+      "total_return_without_cost": -0.22138086436326324
     },
     {
-      "cash": 69814.7191641832,
+      "cash": 19461.65139618059,
       "date": "2024-03-25T00:00:00",
-      "portfolio_value": 168760.54980051226,
-      "portfolio_value_without_cost": 169960.5694907353,
+      "portfolio_value": 153128.9211267419,
+      "portfolio_value_without_cost": 154801.92203423893,
       "positions": {
         "000002.SZ": {
           "avg_cost": 12.395899279047478,
           "current_price": 11.136471572043911,
-          "market_value": 51227.76923140199,
-          "quantity": 4600,
-          "unrealized_pnl": -5793.367452216415
+          "market_value": 65705.18227505908,
+          "quantity": 5900,
+          "unrealized_pnl": -7430.623471321043
         },
         "000333.SZ": {
           "avg_cost": 17.358706964733617,
           "current_price": 14.460018607553662,
-          "market_value": 47718.06140492709,
-          "quantity": 3300,
-          "unrealized_pnl": -9565.671578693851
+          "market_value": 67962.08745550222,
+          "quantity": 4700,
+          "unrealized_pnl": -13623.835278745784
         }
       },
       "positions_count": 2,
-      "total_return": -0.15619725099743867,
-      "total_return_without_cost": -0.1501971525463235
+      "total_return": -0.23435539436629058,
+      "total_return_without_cost": -0.22599038982880534
     },
     {
-      "cash": 69814.7191641832,
+      "cash": 19461.65139618059,
       "date": "2024-03-26T00:00:00",
-      "portfolio_value": 168396.2633828341,
-      "portfolio_value_without_cost": 169596.2830730571,
+      "portfolio_value": 152677.44584688428,
+      "portfolio_value_without_cost": 154350.44675438135,
       "positions": {
         "000002.SZ": {
           "avg_cost": 12.395899279047478,
           "current_price": 11.033086576900933,
-          "market_value": 50752.19825374429,
-          "quantity": 4600,
-          "unrealized_pnl": -6268.938429874113
+          "market_value": 65095.210803715505,
+          "quantity": 5900,
+          "unrealized_pnl": -8040.594942664618
         },
         "000333.SZ": {
           "avg_cost": 17.358706964733617,
           "current_price": 14.493741201486849,
-          "market_value": 47829.3459649066,
-          "quantity": 3300,
-          "unrealized_pnl": -9454.38701871434
+          "market_value": 68120.58364698819,
+          "quantity": 4700,
+          "unrealized_pnl": -13465.33908725981
         }
       },
       "positions_count": 2,
-      "total_return": -0.15801868308582953,
-      "total_return_without_cost": -0.1520185846347145
+      "total_return": -0.2366127707655786,
+      "total_return_without_cost": -0.22824776622809323
     },
     {
-      "cash": 65490.58694535249,
+      "cash": 19344.042324373353,
       "date": "2024-03-27T00:00:00",
-      "portfolio_value": 168189.5108110119,
-      "portfolio_value_without_cost": 169590.22892162003,
+      "portfolio_value": 152435.91458213047,
+      "portfolio_value_without_cost": 154382.6947863305,
       "positions": {
         "000001.SZ": {
           "avg_cost": 7.689342121793462,
           "current_price": 7.681660461332131,
-          "market_value": 52235.29113705849,
-          "quantity": 6800,
-          "unrealized_pnl": -52.235291137054446
+          "market_value": 68366.77810585596,
+          "quantity": 8900,
+          "unrealized_pnl": -68.3667781058466
         },
         "000002.SZ": {
           "avg_cost": 12.395899279047478,
           "current_price": 10.970354941000195,
-          "market_value": 50463.6327286009,
-          "quantity": 4600,
-          "unrealized_pnl": -6557.503955017506
+          "market_value": 64725.094151901154,
+          "quantity": 5900,
+          "unrealized_pnl": -8410.71159447897
         }
       },
       "positions_count": 2,
-      "total_return": -0.15905244594494056,
-      "total_return_without_cost": -0.15204885539189986
+      "total_return": -0.23782042708934764,
+      "total_return_without_cost": -0.22808652606834745
     },
     {
-      "cash": 65490.58694535249,
+      "cash": 19344.042324373353,
       "date": "2024-03-28T00:00:00",
-      "portfolio_value": 167311.93937127714,
-      "portfolio_value_without_cost": 168712.65748188528,
+      "portfolio_value": 151289.78116896973,
+      "portfolio_value_without_cost": 153236.56137316977,
       "positions": {
         "000001.SZ": {
           "avg_cost": 7.689342121793462,
           "current_price": 7.566365088033995,
-          "market_value": 51451.282598631165,
-          "quantity": 6800,
-          "unrealized_pnl": -836.2438295643806
+          "market_value": 67340.64928350256,
+          "quantity": 8900,
+          "unrealized_pnl": -1094.4956004592532
         },
         "000002.SZ": {
           "avg_cost": 12.395899279047478,
           "current_price": 10.95001517984641,
-          "market_value": 50370.06982729349,
-          "quantity": 4600,
-          "unrealized_pnl": -6651.066856324913
+          "market_value": 64605.089561093824,
+          "quantity": 5900,
+          "unrealized_pnl": -8530.7161852863
         }
       },
       "positions_count": 2,
-      "total_return": -0.1634403031436143,
-      "total_return_without_cost": -0.1564367125905736
+      "total_return": -0.24355109415515136,
+      "total_return_without_cost": -0.23381719313415117
     },
     {
-      "cash": 65490.58694535249,
+      "cash": 19344.042324373353,
       "date": "2024-03-29T00:00:00",
-      "portfolio_value": 166830.90007829102,
-      "portfolio_value_without_cost": 168231.61818889916,
+      "portfolio_value": 150657.45842428826,
+      "portfolio_value_without_cost": 152604.23862848833,
       "positions": {
         "000001.SZ": {
           "avg_cost": 7.689342121793462,
           "current_price": 7.4803250917942705,
-          "market_value": 50866.21062420104,
-          "quantity": 6800,
-          "unrealized_pnl": -1421.3158039945047
+          "market_value": 66574.89331696901,
+          "quantity": 8900,
+          "unrealized_pnl": -1860.2515669927961
         },
         "000002.SZ": {
           "avg_cost": 12.395899279047478,
           "current_price": 10.972630980160323,
-          "market_value": 50474.10250873749,
-          "quantity": 4600,
-          "unrealized_pnl": -6547.034174880915
+          "market_value": 64738.5227829459,
+          "quantity": 5900,
+          "unrealized_pnl": -8397.28296343422
         }
       },
       "positions_count": 2,
-      "total_return": -0.16584549960854492,
-      "total_return_without_cost": -0.15884190905550422
+      "total_return": -0.24671270787855873,
+      "total_return_without_cost": -0.23697880685755837
     },
     {
-      "cash": 65490.58694535249,
+      "cash": 19344.042324373353,
       "date": "2024-04-01T00:00:00",
-      "portfolio_value": 166758.5935199331,
-      "portfolio_value_without_cost": 168159.31163054125,
+      "portfolio_value": 150554.9903449181,
+      "portfolio_value_without_cost": 152501.7705491181,
       "positions": {
         "000001.SZ": {
           "avg_cost": 7.689342121793462,
           "current_price": 7.42575866400015,
-          "market_value": 50495.15891520102,
-          "quantity": 6800,
-          "unrealized_pnl": -1792.367512994526
+          "market_value": 66089.25210960134,
+          "quantity": 8900,
+          "unrealized_pnl": -2345.8927743604727
         },
         "000002.SZ": {
           "avg_cost": 12.395899279047478,
           "current_price": 11.037575578125999,
-          "market_value": 50772.84765937959,
-          "quantity": 4600,
-          "unrealized_pnl": -6248.289024238809
+          "market_value": 65121.695910943396,
+          "quantity": 5900,
+          "unrealized_pnl": -8014.109835436728
         }
       },
       "positions_count": 2,
-      "total_return": -0.16620703240033444,
-      "total_return_without_cost": -0.15920344184729374
+      "total_return": -0.2472250482754095,
+      "total_return_without_cost": -0.23749114725440945
     },
     {
-      "cash": 65490.58694535249,
+      "cash": 19344.042324373353,
       "date": "2024-04-02T00:00:00",
-      "portfolio_value": 167095.89285437023,
-      "portfolio_value_without_cost": 168496.6109649784,
+      "portfolio_value": 150983.73678088616,
+      "portfolio_value_without_cost": 152930.5169850862,
       "positions": {
         "000001.SZ": {
           "avg_cost": 7.689342121793462,
           "current_price": 7.404011752139155,
-          "market_value": 50347.279914546256,
-          "quantity": 6800,
-          "unrealized_pnl": -1940.2465136492901
+          "market_value": 65895.70459403849,
+          "quantity": 8900,
+          "unrealized_pnl": -2539.4402899233246
         },
         "000002.SZ": {
           "avg_cost": 12.395899279047478,
           "current_price": 11.143049129232935,
-          "market_value": 51258.0259944715,
-          "quantity": 4600,
-          "unrealized_pnl": -5763.110689146903
+          "market_value": 65743.98986247432,
+          "quantity": 5900,
+          "unrealized_pnl": -7391.8158839058015
         }
       },
       "positions_count": 2,
-      "total_return": -0.16452053572814881,
-      "total_return_without_cost": -0.15751694517510798
+      "total_return": -0.2450813160955692,
+      "total_return_without_cost": -0.235347415074569
     },
     {
-      "cash": 65490.58694535249,
+      "cash": 19344.042324373353,
       "date": "2024-04-03T00:00:00",
-      "portfolio_value": 167832.31961175543,
-      "portfolio_value_without_cost": 169233.0377223636,
+      "portfolio_value": 151930.33574916056,
+      "portfolio_value_without_cost": 153877.1159533606,
       "positions": {
         "000001.SZ": {
           "avg_cost": 7.689342121793462,
           "current_price": 7.415520758833799,
-          "market_value": 50425.541160069835,
-          "quantity": 6800,
-          "unrealized_pnl": -1861.9852681257107
+          "market_value": 65998.13475362082,
+          "quantity": 8900,
+          "unrealized_pnl": -2437.01013034099
         },
         "000002.SZ": {
           "avg_cost": 12.395899279047478,
           "current_price": 11.286128588333286,
-          "market_value": 51916.19150633312,
-          "quantity": 4600,
-          "unrealized_pnl": -5104.945177285284
+          "market_value": 66588.15867116638,
+          "quantity": 5900,
+          "unrealized_pnl": -6547.647075213739
         }
       },
       "positions_count": 2,
-      "total_return": -0.16083840194122284,
-      "total_return_without_cost": -0.15383481138818197
+      "total_return": -0.24034832125419722,
+      "total_return_without_cost": -0.230614420233197
     },
     {
-      "cash": 65490.58694535249,
+      "cash": 19344.042324373353,
       "date": "2024-04-04T00:00:00",
-      "portfolio_value": 168946.33408968832,
-      "portfolio_value_without_cost": 170347.05220029643,
+      "portfolio_value": 153367.07374145987,
+      "portfolio_value_without_cost": 155313.85394565994,
       "positions": {
         "000001.SZ": {
           "avg_cost": 7.689342121793462,
           "current_price": 7.459800447581419,
-          "market_value": 50726.643043553646,
-          "quantity": 6800,
-          "unrealized_pnl": -1560.8833846419002
+          "market_value": 66392.22398347463,
+          "quantity": 8900,
+          "unrealized_pnl": -2042.920900487181
         },
         "000002.SZ": {
           "avg_cost": 12.395899279047478,
           "current_price": 11.46284871756134,
-          "market_value": 52729.10410078216,
-          "quantity": 4600,
-          "unrealized_pnl": -4292.03258283624
+          "market_value": 67630.8074336119,
+          "quantity": 5900,
+          "unrealized_pnl": -5504.998312768221
         }
       },
       "positions_count": 2,
-      "total_return": -0.15526832955155842,
-      "total_return_without_cost": -0.14826473899851786
+      "total_return": -0.23316463129270065,
+      "total_return_without_cost": -0.2234307302717003
     },
     {
-      "cash": 65490.58694535249,
+      "cash": 19344.042324373353,
       "date": "2024-04-05T00:00:00",
-      "portfolio_value": 170405.9322945518,
-      "portfolio_value_without_cost": 171806.65040515998,
+      "portfolio_value": 155252.65376358695,
+      "portfolio_value_without_cost": 157199.43396778702,
       "positions": {
         "000001.SZ": {
           "avg_cost": 7.689342121793462,
           "current_price": 7.535457390373886,
-          "market_value": 51241.11025454243,
-          "quantity": 6800,
-          "unrealized_pnl": -1046.4161736531169
+          "market_value": 67065.57077432759,
+          "quantity": 8900,
+          "unrealized_pnl": -1369.5741096342244
         },
         "000002.SZ": {
           "avg_cost": 12.395899279047478,
           "current_price": 11.668311977099325,
-          "market_value": 53674.2350946569,
-          "quantity": 4600,
-          "unrealized_pnl": -3346.901588961504
+          "market_value": 68843.04066488602,
+          "quantity": 5900,
+          "unrealized_pnl": -4292.765081494101
         }
       },
       "positions_count": 2,
-      "total_return": -0.14797033852724095,
-      "total_return_without_cost": -0.1409667479742001
+      "total_return": -0.22373673118206527,
+      "total_return_without_cost": -0.21400283016106492
     },
     {
-      "cash": 68759.25552403531,
+      "cash": 20931.890512233207,
       "date": "2024-04-08T00:00:00",
-      "portfolio_value": 171957.5960106207,
-      "portfolio_value_without_cost": 173570.25099597775,
+      "portfolio_value": 157256.3063969277,
+      "portfolio_value_without_cost": 159480.1200254004,
       "positions": {
         "000001.SZ": {
           "avg_cost": 7.689342121793462,
           "current_price": 7.640228584516092,
-          "market_value": 51953.55437470943,
-          "quantity": 6800,
-          "unrealized_pnl": -333.97205348611897
+          "market_value": 67998.03440219323,
+          "quantity": 8900,
+          "unrealized_pnl": -437.1104817685846
         },
         "601318.SH": {
           "avg_cost": 28.49779494332657,
           "current_price": 28.469325617708865,
-          "market_value": 51244.786111875954,
-          "quantity": 1800,
-          "unrealized_pnl": -51.24478611187806
+          "market_value": 68326.38148250128,
+          "quantity": 2400,
+          "unrealized_pnl": -68.32638148248952
         }
       },
       "positions_count": 2,
-      "total_return": -0.14021201994689647,
-      "total_return_without_cost": -0.13214874502011123
+      "total_return": -0.21371846801536143,
+      "total_return_without_cost": -0.20259939987299805
     },
     {
-      "cash": 68759.25552403531,
+      "cash": 20931.890512233207,
       "date": "2024-04-09T00:00:00",
-      "portfolio_value": 172805.6464440081,
-      "portfolio_value_without_cost": 174418.30142936515,
+      "portfolio_value": 158365.23771079117,
+      "portfolio_value_without_cost": 160589.05133926385,
       "positions": {
         "000001.SZ": {
           "avg_cost": 7.689342121793462,
           "current_price": 7.771044168434584,
-          "market_value": 52843.100345355175,
-          "quantity": 6800,
-          "unrealized_pnl": 555.5739171596288
+          "market_value": 69162.2930990678,
+          "quantity": 8900,
+          "unrealized_pnl": 727.14821510599
         },
         "601318.SH": {
           "avg_cost": 28.49779494332657,
           "current_price": 28.446272541454235,
-          "market_value": 51203.290574617626,
-          "quantity": 1800,
-          "unrealized_pnl": -92.74032337020617
+          "market_value": 68271.05409949017,
+          "quantity": 2400,
+          "unrealized_pnl": -123.65376449360338
         }
       },
       "positions_count": 2,
-      "total_return": -0.13597176777995948,
-      "total_return_without_cost": -0.12790849285317424
+      "total_return": -0.20817381144604413,
+      "total_return_without_cost": -0.19705474330368072
     },
     {
-      "cash": 68759.25552403531,
+      "cash": 20931.890512233207,
       "date": "2024-04-10T00:00:00",
-      "portfolio_value": 173729.17771806562,
-      "portfolio_value_without_cost": 175341.83270342267,
+      "portfolio_value": 159571.10135454038,
+      "portfolio_value_without_cost": 161794.91498301306,
       "positions": {
         "000001.SZ": {
           "avg_cost": 7.689342121793462,
           "current_price": 7.924112498399477,
-          "market_value": 53883.964989116444,
-          "quantity": 6800,
-          "unrealized_pnl": 1596.4385609208985
+          "market_value": 70524.60123575534,
+          "quantity": 8900,
+          "unrealized_pnl": 2089.456351793531
         },
         "601318.SH": {
           "avg_cost": 28.49779494332657,
           "current_price": 28.381087336063256,
-          "market_value": 51085.95720491386,
-          "quantity": 1800,
-          "unrealized_pnl": -210.07369307397312
+          "market_value": 68114.60960655182,
+          "quantity": 2400,
+          "unrealized_pnl": -280.0982574319496
         }
       },
       "positions_count": 2,
-      "total_return": -0.1313541114096719,
-      "total_return_without_cost": -0.12329083648288666
+      "total_return": -0.20214449322729808,
+      "total_return_without_cost": -0.1910254250849347
     },
     {
-      "cash": 68759.25552403531,
+      "cash": 20931.890512233207,
       "date": "2024-04-11T00:00:00",
-      "portfolio_value": 174701.76410866898,
-      "portfolio_value_without_cost": 176314.41909402603,
+      "portfolio_value": 160839.397753681,
+      "portfolio_value_without_cost": 163063.21138215368,
       "positions": {
         "000001.SZ": {
           "avg_cost": 7.689342121793462,
           "current_price": 8.09502522838278,
-          "market_value": 55046.17155300291,
-          "quantity": 6800,
-          "unrealized_pnl": 2758.6451248073645
+          "market_value": 72045.72453260675,
+          "quantity": 8900,
+          "unrealized_pnl": 3610.57964864494
         },
         "601318.SH": {
           "avg_cost": 28.49779494332657,
           "current_price": 28.27574279535043,
-          "market_value": 50896.33703163077,
-          "quantity": 1800,
-          "unrealized_pnl": -399.6938663570618
+          "market_value": 67861.78270884103,
+          "quantity": 2400,
+          "unrealized_pnl": -532.9251551427442
         }
       },
       "positions_count": 2,
-      "total_return": -0.12649117945665508,
-      "total_return_without_cost": -0.11842790452986984
+      "total_return": -0.19580301123159502,
+      "total_return_without_cost": -0.1846839430892316
     },
     {
-      "cash": 68759.25552403531,
+      "cash": 20931.890512233207,
       "date": "2024-04-12T00:00:00",
-      "portfolio_value": 175695.6204009127,
-      "portfolio_value_without_cost": 177308.27538626976,
+      "portfolio_value": 162133.89710124998,
+      "portfolio_value_without_cost": 164357.71072972266,
       "positions": {
         "000001.SZ": {
           "avg_cost": 7.689342121793462,
           "current_price": 8.278879480918597,
-          "market_value": 56296.38047024646,
-          "quantity": 6800,
-          "unrealized_pnl": 4008.854042050916
+          "market_value": 73682.02738017551,
+          "quantity": 8900,
+          "unrealized_pnl": 5246.8824962137005
         },
         "601318.SH": {
           "avg_cost": 28.49779494332657,
           "current_price": 28.133324670350525,
-          "market_value": 50639.984406630945,
-          "quantity": 1800,
-          "unrealized_pnl": -656.0464913568867
+          "market_value": 67519.97920884127,
+          "quantity": 2400,
+          "unrealized_pnl": -874.7286551425059
         }
       },
       "positions_count": 2,
-      "total_return": -0.12152189799543645,
-      "total_return_without_cost": -0.11345862306865122
+      "total_return": -0.1893305144937501,
+      "total_return_without_cost": -0.1782114463513867
     },
     {
-      "cash": 68759.25552403531,
+      "cash": 20931.890512233207,
       "date": "2024-04-15T00:00:00",
-      "portfolio_value": 176682.37191568787,
-      "portfolio_value_without_cost": 178295.0269010449,
+      "portfolio_value": 163417.64341390686,
+      "portfolio_value_without_cost": 165641.45704237954,
       "positions": {
         "000001.SZ": {
           "avg_cost": 7.689342121793462,
           "current_price": 8.47041372317856,
-          "market_value": 57598.81331761421,
-          "quantity": 6800,
-          "unrealized_pnl": 5311.286889418661
+          "market_value": 75386.68213628918,
+          "quantity": 8900,
+          "unrealized_pnl": 6951.537252327369
         },
         "601318.SH": {
           "avg_cost": 28.49779494332657,
           "current_price": 27.95794615224353,
-          "market_value": 50324.303074038355,
-          "quantity": 1800,
-          "unrealized_pnl": -971.7278239494772
+          "market_value": 67099.07076538447,
+          "quantity": 2400,
+          "unrealized_pnl": -1295.637098599298
         }
       },
       "positions_count": 2,
-      "total_return": -0.11658814042156067,
-      "total_return_without_cost": -0.10852486549477544
+      "total_return": -0.1829117829304657,
+      "total_return_without_cost": -0.17179271478810232
     },
     {
-      "cash": 68759.25552403531,
+      "cash": 20931.890512233207,
       "date": "2024-04-16T00:00:00",
-      "portfolio_value": 177633.84087239788,
-      "portfolio_value_without_cost": 179246.49585775493,
+      "portfolio_value": 164653.97871294065,
+      "portfolio_value_without_cost": 166877.79234141333,
       "positions": {
         "000001.SZ": {
           "avg_cost": 7.689342121793462,
           "current_price": 8.664153582655889,
-          "market_value": 58916.244362060046,
-          "quantity": 6800,
-          "unrealized_pnl": 6628.7179338645
+          "market_value": 77110.9668856374,
+          "quantity": 8900,
+          "unrealized_pnl": 8675.822001675595
         },
         "601318.SH": {
           "avg_cost": 28.49779494332657,
           "current_price": 27.754633881279176,
-          "market_value": 49958.340986302515,
-          "quantity": 1800,
-          "unrealized_pnl": -1337.6899116853165
+          "market_value": 66611.12131507002,
+          "quantity": 2400,
+          "unrealized_pnl": -1783.5865489137504
         }
       },
       "positions_count": 2,
-      "total_return": -0.1118307956380106,
-      "total_return_without_cost": -0.10376752071122537
+      "total_return": -0.17673010643529677,
+      "total_return_without_cost": -0.16561103829293336
     },
     {
-      "cash": 68759.25552403531,
+      "cash": 20931.890512233207,
       "date": "2024-04-17T00:00:00",
-      "portfolio_value": 178522.8272949201,
-      "portfolio_value_without_cost": 180135.48228027715,
+      "portfolio_value": 165807.55894651465,
+      "portfolio_value_without_cost": 168031.37257498733,
       "positions": {
         "000001.SZ": {
           "avg_cost": 7.689342121793462,
           "current_price": 8.854563561389723,
-          "market_value": 60211.03221745011,
-          "quantity": 6800,
-          "unrealized_pnl": 7923.5057892545665
+          "market_value": 78805.61569636854,
+          "quantity": 8900,
+          "unrealized_pnl": 10370.470812406726
         },
         "601318.SH": {
           "avg_cost": 28.49779494332657,
           "current_price": 27.52918864079704,
-          "market_value": 49552.539553434675,
-          "quantity": 1800,
-          "unrealized_pnl": -1743.4913445531565
+          "market_value": 66070.0527379129,
+          "quantity": 2400,
+          "unrealized_pnl": -2324.6551260708657
         }
       },
       "positions_count": 2,
-      "total_return": -0.10738586352539947,
-      "total_return_without_cost": -0.09932258859861424
+      "total_return": -0.17096220526742675,
+      "total_return_without_cost": -0.15984313712506337
     },
     {
-      "cash": 68759.25552403531,
+      "cash": 20931.890512233207,
       "date": "2024-04-18T00:00:00",
-      "portfolio_value": 179323.86281914715,
-      "portfolio_value_without_cost": 180936.5178045042,
+      "portfolio_value": 166845.33349835034,
+      "portfolio_value_without_cost": 169069.14712682302,
       "positions": {
         "000001.SZ": {
           "avg_cost": 7.689342121793462,
           "current_price": 9.03620044419197,
-          "market_value": 61446.163020505395,
-          "quantity": 6800,
-          "unrealized_pnl": 9158.63659230985
+          "market_value": 80422.18395330853,
+          "quantity": 8900,
+          "unrealized_pnl": 11987.03906934672
         },
         "601318.SH": {
           "avg_cost": 28.49779494332657,
           "current_price": 27.288024597003584,
-          "market_value": 49118.44427460645,
-          "quantity": 1800,
-          "unrealized_pnl": -2177.5866233813795
+          "market_value": 65491.2590328086,
+          "quantity": 2400,
+          "unrealized_pnl": -2903.44883117517
         }
       },
       "positions_count": 2,
-      "total_return": -0.10338068590426425,
-      "total_return_without_cost": -0.095317410977479
+      "total_return": -0.16577333250824827,
+      "total_return_without_cost": -0.1546542643658849
     },
     {
-      "cash": 74423.08398709746,
+      "cash": 29319.306599933538,
       "date": "2024-04-19T00:00:00",
-      "portfolio_value": 179775.3820348135,
-      "portfolio_value_without_cost": 181626.57149679167,
+      "portfolio_value": 167427.2076103806,
+      "portfolio_value_without_cost": 169961.27476567298,
       "positions": {
         "600519.SH": {
           "avg_cost": 23.641915495608092,
           "current_price": 23.618297198409685,
-          "market_value": 56683.913276183244,
-          "quantity": 2400,
-          "unrealized_pnl": -56.68391327617428
+          "market_value": 73216.72131507003,
+          "quantity": 3100,
+          "unrealized_pnl": -73.21672131505329
         },
         "601318.SH": {
           "avg_cost": 28.49779494332657,
           "current_price": 27.037991539740432,
-          "market_value": 48668.38477153278,
-          "quantity": 1800,
-          "unrealized_pnl": -2627.6461264550526
+          "market_value": 64891.17969537704,
+          "quantity": 2400,
+          "unrealized_pnl": -3503.528168606732
         }
       },
       "positions_count": 2,
-      "total_return": -0.10112308982593254,
-      "total_return_without_cost": -0.09186714251604164
+      "total_return": -0.162863961948097,
+      "total_return_without_cost": -0.15019362617163512
     },
     {
-      "cash": 74423.08398709746,
+      "cash": 29319.306599933538,
       "date": "2024-04-22T00:00:00",
-      "portfolio_value": 178892.09016555978,
-      "portfolio_value_without_cost": 180743.279627538,
+      "portfolio_value": 166267.40345924094,
+      "portfolio_value_without_cost": 168801.47061453332,
       "positions": {
         "600519.SH": {
           "avg_cost": 23.641915495608092,
           "current_price": 23.43911378642352,
-          "market_value": 56253.87308741645,
-          "quantity": 2400,
-          "unrealized_pnl": -486.72410204297194
+          "market_value": 72661.2527379129,
+          "quantity": 3100,
+          "unrealized_pnl": -628.6852984721772
         },
         "601318.SH": {
           "avg_cost": 28.49779494332657,
           "current_price": 26.786185050581047,
-          "market_value": 48215.133091045886,
-          "quantity": 1800,
-          "unrealized_pnl": -3080.8978069419463
+          "market_value": 64286.84412139451,
+          "quantity": 2400,
+          "unrealized_pnl": -4107.863742589259
         }
       },
       "positions_count": 2,
-      "total_return": -0.10553954917220108,
-      "total_return_without_cost": -0.09628360186231003
+      "total_return": -0.1686629827037953,
+      "total_return_without_cost": -0.15599264692733342
     },
     {
-      "cash": 74423.08398709746,
+      "cash": 29319.306599933538,
       "date": "2024-04-23T00:00:00",
-      "portfolio_value": 177989.26008158276,
-      "portfolio_value_without_cost": 179840.44954356097,
+      "portfolio_value": 165082.7652947481,
+      "portfolio_value_without_cost": 167616.83245004047,
       "positions": {
         "600519.SH": {
           "avg_cost": 23.641915495608092,
           "current_price": 23.247760978325356,
-          "market_value": 55794.626347980855,
-          "quantity": 2400,
-          "unrealized_pnl": -945.9708414785637
+          "market_value": 72068.05903280861,
+          "quantity": 3100,
+          "unrealized_pnl": -1221.8790035764687
         },
         "601318.SH": {
           "avg_cost": 28.49779494332657,
           "current_price": 26.53974985916915,
-          "market_value": 47771.54974650447,
-          "quantity": 1800,
-          "unrealized_pnl": -3524.4811514833636
+          "market_value": 63695.399662005955,
+          "quantity": 2400,
+          "unrealized_pnl": -4699.308201977816
         }
       },
       "positions_count": 2,
-      "total_return": -0.11005369959208619,
-      "total_return_without_cost": -0.10079775228219515
+      "total_return": -0.17458617352625952,
+      "total_return_without_cost": -0.16191583774979765
     },
     {
-      "cash": 74423.08398709746,
+      "cash": 29319.306599933538,
       "date": "2024-04-24T00:00:00",
-      "portfolio_value": 177092.2117039041,
-      "portfolio_value_without_cost": 178943.40116588227,
+      "portfolio_value": 163906.5227052872,
+      "portfolio_value_without_cost": 166440.58986057955,
       "positions": {
         "600519.SH": {
           "avg_cost": 23.641915495608092,
           "current_price": 23.0495418372184,
-          "market_value": 55318.90040932416,
-          "quantity": 2400,
-          "unrealized_pnl": -1421.6967801352585
+          "market_value": 71453.57969537703,
+          "quantity": 3100,
+          "unrealized_pnl": -1836.3583410080464
         },
         "601318.SH": {
           "avg_cost": 28.49779494332657,
           "current_price": 26.30568183749026,
-          "market_value": 47350.22730748246,
-          "quantity": 1800,
-          "unrealized_pnl": -3945.8035905053694
+          "market_value": 63133.63640997662,
+          "quantity": 2400,
+          "unrealized_pnl": -5261.071454007149
         }
       },
       "positions_count": 2,
-      "total_return": -0.11453894148047955,
-      "total_return_without_cost": -0.10528299417058865
+      "total_return": -0.18046738647356397,
+      "total_return_without_cost": -0.16779705069710224
     },
     {
-      "cash": 74423.08398709746,
+      "cash": 29319.306599933538,
       "date": "2024-04-25T00:00:00",
-      "portfolio_value": 176226.10472201463,
-      "portfolio_value_without_cost": 178077.2941839928,
+      "portfolio_value": 162771.67260816522,
+      "portfolio_value_without_cost": 165305.7397634576,
       "positions": {
         "600519.SH": {
           "avg_cost": 23.641915495608092,
           "current_price": 22.849949716578877,
-          "market_value": 54839.8793197893,
-          "quantity": 2400,
-          "unrealized_pnl": -1900.7178696701158
+          "market_value": 70834.84412139452,
+          "quantity": 3100,
+          "unrealized_pnl": -2455.0939149905607
         },
         "601318.SH": {
           "avg_cost": 28.49779494332657,
           "current_price": 26.090634119515485,
-          "market_value": 46963.14141512787,
-          "quantity": 1800,
-          "unrealized_pnl": -4332.889482859959
+          "market_value": 62617.52188683717,
+          "quantity": 2400,
+          "unrealized_pnl": -5777.185977146604
         }
       },
       "positions_count": 2,
-      "total_return": -0.11886947638992686,
-      "total_return_without_cost": -0.10961352908003595
+      "total_return": -0.18614163695917393,
+      "total_return_without_cost": -0.17347130118271206
     },
     {
-      "cash": 74423.08398709746,
+      "cash": 29319.306599933538,
       "date": "2024-04-26T00:00:00",
-      "portfolio_value": 175415.2413298922,
-      "portfolio_value_without_cost": 177266.4307918704,
+      "portfolio_value": 161710.06478832636,
+      "portfolio_value_without_cost": 164244.1319436187,
       "positions": {
         "600519.SH": {
           "avg_cost": 23.641915495608092,
           "current_price": 22.65451602000192,
-          "market_value": 54370.83844800461,
-          "quantity": 2400,
-          "unrealized_pnl": -2369.7587414548107
+          "market_value": 70228.99966200595,
+          "quantity": 3100,
+          "unrealized_pnl": -3060.938374379126
         },
         "601318.SH": {
           "avg_cost": 28.49779494332657,
           "current_price": 25.90073271932786,
-          "market_value": 46621.31889479014,
-          "quantity": 1800,
-          "unrealized_pnl": -4674.712003197688
+          "market_value": 62161.75852638686,
+          "quantity": 2400,
+          "unrealized_pnl": -6232.9493375969105
         }
       },
       "positions_count": 2,
-      "total_return": -0.12292379335053906,
-      "total_return_without_cost": -0.113667846040648
+      "total_return": -0.1914496760583682,
+      "total_return_without_cost": -0.17877934028190648
     },
     {
-      "cash": 74423.08398709746,
+      "cash": 29319.306599933538,
       "date": "2024-04-29T00:00:00",
-      "portfolio_value": 174682.39272625255,
-      "portfolio_value_without_cost": 176533.58218823076,
+      "portfolio_value": 160751.5192281626,
+      "portfolio_value_without_cost": 163285.58638345497,
       "positions": {
         "600519.SH": {
           "avg_cost": 23.641915495608092,
           "current_price": 22.46865690644407,
-          "market_value": 53924.776575465774,
-          "quantity": 2400,
-          "unrealized_pnl": -2815.8206139936447
+          "market_value": 69652.83640997662,
+          "quantity": 3100,
+          "unrealized_pnl": -3637.101626408461
         },
         "601318.SH": {
           "avg_cost": 28.49779494332657,
           "current_price": 25.741406757605187,
-          "market_value": 46334.532163689335,
-          "quantity": 1800,
-          "unrealized_pnl": -4961.498734298497
+          "market_value": 61779.37621825245,
+          "quantity": 2400,
+          "unrealized_pnl": -6615.331645731319
         }
       },
       "positions_count": 2,
-      "total_return": -0.12658803636873722,
-      "total_return_without_cost": -0.11733208905884618
+      "total_return": -0.19624240385918704,
+      "total_return_without_cost": -0.18357206808272516
     },
     {
-      "cash": 74423.08398709746,
+      "cash": 29319.306599933538,
       "date": "2024-04-30T00:00:00",
-      "portfolio_value": 174048.16804409405,
-      "portfolio_value_without_cost": 175899.35750607224,
+      "portfolio_value": 159922.9996903321,
+      "portfolio_value_without_cost": 162457.06684562447,
       "positions": {
         "600519.SH": {
           "avg_cost": 23.641915495608092,
           "current_price": 22.29752318930231,
-          "market_value": 53514.055654325544,
-          "quantity": 2400,
-          "unrealized_pnl": -3226.5415351338743
+          "market_value": 69122.32188683716,
+          "quantity": 3100,
+          "unrealized_pnl": -4167.616149547917
         },
         "601318.SH": {
           "avg_cost": 28.49779494332657,
           "current_price": 25.61723800148392,
-          "market_value": 46111.02840267106,
-          "quantity": 1800,
-          "unrealized_pnl": -5185.002495316774
+          "market_value": 61481.37120356141,
+          "quantity": 2400,
+          "unrealized_pnl": -6913.336660422363
         }
       },
       "positions_count": 2,
-      "total_return": -0.12975915977952973,
-      "total_return_without_cost": -0.12050321246963883
+      "total_return": -0.2003850015483395,
+      "total_return_without_cost": -0.18771466577187762
     }
   ],
   "positive_months": 1,
-  "profit_factor": 1.1608813459486984,
-  "sharpe_ratio": -4.303043997396279,
+  "profit_factor": 0.9688244871745185,
+  "sharpe_ratio": -5.614133651131359,
   "start_date": "2024-01-01T00:00:00",
   "stock_codes": [
     "000001.SZ",
@@ -2030,39 +2030,39 @@
       "trade_count": 3
     },
     {
-      "avg_pnl_per_trade": 1195.0210896190183,
+      "avg_pnl_per_trade": 892.3124581669217,
       "stock_code": "000001.SZ",
-      "total_pnl": 4780.084358476073,
+      "total_pnl": 3569.249832667687,
       "trade_count": 4
     },
     {
-      "avg_pnl_per_trade": -403.3182512673181,
+      "avg_pnl_per_trade": -766.3046774079121,
       "stock_code": "600519.SH",
-      "total_pnl": -1209.9547538019542,
+      "total_pnl": -2298.9140322237363,
       "trade_count": 3
     },
     {
-      "avg_pnl_per_trade": -6744.421602098504,
+      "avg_pnl_per_trade": -8920.041473743186,
       "stock_code": "600000.SH",
-      "total_pnl": -13488.843204197008,
+      "total_pnl": -17840.08294748637,
       "trade_count": 2
     },
     {
-      "avg_pnl_per_trade": -4634.02562391396,
+      "avg_pnl_per_trade": -6599.975888604735,
       "stock_code": "000333.SZ",
-      "total_pnl": -9268.05124782792,
+      "total_pnl": -13199.95177720947,
       "trade_count": 2
     },
     {
-      "avg_pnl_per_trade": -1202.5705880248788,
+      "avg_pnl_per_trade": -1542.427493336254,
       "stock_code": "000002.SZ",
-      "total_pnl": -2405.1411760497576,
+      "total_pnl": -3084.854986672508,
       "trade_count": 2
     }
   ],
   "stocks_traded": 6,
   "strategy_name": "model_topk_dropout",
-  "total_return": -0.12975915977952973,
+  "total_return": -0.2003850015483395,
   "total_signals": 370,
   "total_trades": 16,
   "trade_history": [
@@ -2078,31 +2078,31 @@
     },
     {
       "action": "BUY",
-      "commission": 49.3618276490656,
+      "commission": 89.19768855883784,
       "pnl": 0.0,
       "price": 8.659969762993965,
-      "quantity": 5700,
-      "slippage_cost": 49.31251513393168,
+      "quantity": 10300,
+      "slippage_cost": 89.108579978859,
       "stock_code": "000001.SZ",
       "trade_id": "T000002"
     },
     {
       "action": "SELL",
-      "commission": 44.01228447049668,
-      "pnl": -5393.555463039418,
+      "commission": 79.53097018352908,
+      "pnl": -9746.249345492295,
       "price": 7.72145341587661,
-      "quantity": 5700,
-      "slippage_cost": 44.05634081130799,
+      "quantity": 10300,
+      "slippage_cost": 79.61058076429339,
       "stock_code": "000001.SZ",
       "trade_id": "T000003"
     },
     {
       "action": "BUY",
-      "commission": 46.16642512854092,
+      "commission": 87.71620774422776,
       "pnl": 0.0,
       "price": 23.08321256427046,
-      "quantity": 2000,
-      "slippage_cost": 46.12030482371721,
+      "quantity": 3800,
+      "slippage_cost": 87.6285791650627,
       "stock_code": "600519.SH",
       "trade_id": "T000004"
     },
@@ -2118,127 +2118,127 @@
     },
     {
       "action": "BUY",
-      "commission": 66.69199914396827,
+      "commission": 88.20554725492579,
       "pnl": 0.0,
       "price": 21.513548110957508,
-      "quantity": 3100,
-      "slippage_cost": 66.6253737701981,
+      "quantity": 4100,
+      "slippage_cost": 88.1174298251007,
       "stock_code": "600000.SH",
       "trade_id": "T000006"
     },
     {
       "action": "SELL",
-      "commission": 45.001471846585545,
-      "pnl": -1209.9547538019542,
+      "commission": 85.50279650851253,
+      "pnl": -2298.9140322237363,
       "price": 22.500735923292773,
-      "quantity": 2000,
-      "slippage_cost": 45.046518364950494,
+      "quantity": 3800,
+      "slippage_cost": 85.58838489340594,
       "stock_code": "600519.SH",
       "trade_id": "T000007"
     },
     {
       "action": "BUY",
-      "commission": 57.28373298362094,
+      "commission": 81.585922734248,
       "pnl": 0.0,
       "price": 17.358706964733617,
-      "quantity": 3300,
-      "slippage_cost": 57.2265064771438,
+      "quantity": 4700,
+      "slippage_cost": 81.50441831593209,
       "stock_code": "000333.SZ",
       "trade_id": "T000008"
     },
     {
       "action": "SELL",
-      "commission": 53.25641235212339,
-      "pnl": -13488.843204197008,
+      "commission": 70.43590020764707,
+      "pnl": -17840.08294748637,
       "price": 17.179487855523675,
-      "quantity": 3100,
-      "slippage_cost": 53.309722074197595,
+      "quantity": 4100,
+      "slippage_cost": 70.50640661426134,
       "stock_code": "600000.SH",
       "trade_id": "T000009"
     },
     {
       "action": "BUY",
-      "commission": 57.0211366836184,
+      "commission": 73.13580574638013,
       "pnl": 0.0,
       "price": 12.395899279047478,
-      "quantity": 4600,
-      "slippage_cost": 56.9641725111073,
+      "quantity": 5900,
+      "slippage_cost": 73.06274300337675,
       "stock_code": "000002.SZ",
       "trade_id": "T000010"
     },
     {
       "action": "SELL",
-      "commission": 48.063745481274296,
-      "pnl": -9268.05124782792,
+      "commission": 68.45442538242096,
+      "pnl": -13199.95177720947,
       "price": 14.564771357961908,
-      "quantity": 3300,
-      "slippage_cost": 48.11185733861291,
+      "quantity": 4700,
+      "slippage_cost": 68.52294833075172,
       "stock_code": "000333.SZ",
       "trade_id": "T000011"
     },
     {
       "action": "BUY",
-      "commission": 52.28752642819555,
+      "commission": 68.43514488396181,
       "pnl": 0.0,
       "price": 7.689342121793462,
-      "quantity": 6800,
-      "slippage_cost": 52.23529113705849,
+      "quantity": 8900,
+      "slippage_cost": 68.36677810585597,
       "stock_code": "000001.SZ",
       "trade_id": "T000012"
     },
     {
       "action": "SELL",
-      "commission": 54.67066617374239,
-      "pnl": -2405.1411760497576,
+      "commission": 70.12107183153915,
+      "pnl": -3084.854986672508,
       "price": 11.884927429074432,
-      "quantity": 4600,
-      "slippage_cost": 54.725391565307696,
+      "quantity": 5900,
+      "slippage_cost": 70.19126309463378,
       "stock_code": "000002.SZ",
       "trade_id": "T000013"
     },
     {
       "action": "BUY",
-      "commission": 51.29603089798783,
+      "commission": 68.39470786398377,
       "pnl": 0.0,
       "price": 28.49779494332657,
-      "quantity": 1800,
-      "slippage_cost": 51.24478611187596,
+      "quantity": 2400,
+      "slippage_cost": 68.32638148250128,
       "stock_code": "601318.SH",
       "trade_id": "T000014"
     },
     {
       "action": "SELL",
-      "commission": 62.52368993965069,
-      "pnl": 10173.639821515491,
+      "commission": 81.83247653866046,
+      "pnl": 13315.499178159982,
       "price": 9.194660285242747,
-      "quantity": 6800,
-      "slippage_cost": 62.58627621586654,
+      "quantity": 8900,
+      "slippage_cost": 81.91439092959003,
       "stock_code": "000001.SZ",
       "trade_id": "T000015"
     },
     {
       "action": "BUY",
-      "commission": 56.74059718945942,
+      "commission": 73.28993803638508,
       "pnl": 0.0,
       "price": 23.641915495608092,
-      "quantity": 2400,
-      "slippage_cost": 56.68391327618324,
+      "quantity": 3100,
+      "slippage_cost": 73.21672131507002,
       "stock_code": "600519.SH",
       "trade_id": "T000016"
     }
   ],
-  "trade_pnl_mean": -1063.4458749262226,
+  "trade_pnl_mean": -1767.361367896462,
   "trade_pnl_median": 0.0,
-  "trade_pnl_std": 5231.57028915913,
+  "trade_pnl_std": 7073.755721291449,
   "trading_days": 87,
-  "volatility": 0.08011898947936308,
+  "volatility": 0.11539083307803417,
   "win_rate": 0.2857142857142857,
   "winning_trades": 2,
-  "worst_month": -0.15371291123412745,
+  "worst_month": -0.21677049289735006,
   "worst_performing_stock": {
-    "avg_pnl_per_trade": -6744.421602098504,
+    "avg_pnl_per_trade": -8920.041473743186,
     "stock_code": "600000.SH",
-    "total_pnl": -13488.843204197008,
+    "total_pnl": -17840.08294748637,
     "trade_count": 2
   }
 }

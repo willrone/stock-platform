@@ -1,0 +1,18 @@
+# tdx_pipeline 独立依赖
+#
+# 注意: **不要**把这些加进 backend/requirements*.txt
+# - mootdx 曾把 backend 的 httpx 从 0.28.1 降到 0.25.2，
+#   而 backend/app/services/data/simple_data_service.py 依赖 httpx，
+#   违反 backend/requirements-minimal.txt 的 httpx>=0.27.0。
+#   实测 mootdx 与 httpx 0.28.1 兼容（xdxr 正常），
+#   所以装完 mootdx 后要确认 httpx 版本没被降。
+#
+# 装:
+#   env -u PYTHONPATH uv pip install --python backend/.venv/bin/python3 -r back_test_data_service/tdx_pipeline/requirements.txt
+#   env -u PYTHONPATH uv pip install --python backend/.venv/bin/python3 "httpx==0.28.1"   # 防降级
+
+# 盘后包解析 — 标准库 + pandas/pyarrow（backend venv 已有）
+# tdx_parser.py / pipeline.py / ashare.py / merge_to_stock_data.py 零额外依赖
+
+# 复权事件 — mootdx xdxr（adjust.py / factor_store.py 需要）
+mootdx>=0.11.7

@@ -3,7 +3,6 @@
 """
 
 import json
-import pickle
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -20,6 +19,10 @@ from app.core.error_handler import (
     ErrorSeverity,
     PredictionError,
     RecoveryAction,
+)
+from app.core.model_loader import (
+    safe_joblib_load,
+    safe_pickle_load,
 )
 from app.models.task_models import RiskMetrics
 from app.repositories.task_repository import ModelInfoRepository
@@ -67,23 +70,26 @@ class ModelLoader:
         self.model_metadata: Dict[str, Dict[str, Any]] = {}
 
     def _load_model_file(self, model_path: Path) -> Tuple[Any, Dict[str, Any]]:
-        if model_path.suffix == ".pkl":
-            with open(model_path, "rb") as f:
-                model_data = pickle.load(f)
-            if isinstance(model_data, dict) and "model" in model_data:
-                return model_data["model"], {
-                    "model_format": "qlib_pickle",
-                    "model_path": str(model_path),
-                    "qlib_config": model_data.get("config", {}),
-                    "timestamp": model_data.get("timestamp"),
-                }
-            return model_data, {
-                "model_format": "pickle",
+        # numpy 2.x 兼容加载：裸 pickle.load / joblib.load 在本机会**段错误
+        # rc=139**（老 pickle 用 numpy.core.multiarray.scalar 旧签名 +
+        # LightGBM Booster 原生句柄恢复），段错误无法被 try/except 捕获，
+        # 必须在 unpickle 阶段规避。详见 app/core/model_loader.py
+        model_data = safe_pickle_load(model_path)
+        if model_data is None:
+            model_data = safe_joblib_load(model_path)
+        if model_data is None:
+            raise ValueError(f"模型文件加载失败（numpy 兼容加载器）: {model_path}")
+        # 官方 qlib 模型是 {"model":..., "config":..., "timestamp":...} 结构，
+        # 不管后缀是 .pkl 还是 .joblib 都要解包（.joblib 常常是 .pkl 的副本）
+        if isinstance(model_data, dict) and "model" in model_data:
+            return model_data["model"], {
+                "model_format": "qlib_pickle",
                 "model_path": str(model_path),
+                "qlib_config": model_data.get("config", {}),
+                "timestamp": model_data.get("timestamp"),
             }
-        model = joblib.load(model_path)
-        return model, {
-            "model_format": "joblib",
+        return model_data, {
+            "model_format": "pickle" if model_path.suffix == ".pkl" else "joblib",
             "model_path": str(model_path),
         }
 

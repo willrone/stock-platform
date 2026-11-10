@@ -52,6 +52,14 @@ class TestPredictionEngineAccuracy:
         )
         self.sample_data.to_parquet(data_path)
 
+        # 造一个**真实可加载**的模型。
+        # 背景：引擎的兜底模型只在 `GITHUB_ACTIONS=true` 时启用（prediction_engine.py:118-123），
+        # 本地 model_id="test_model" 会抛「模型信息不存在」→ 4 个性质测试被
+        # `except Exception` 吞成 skip → **性质从未被执行过**（空覆盖）。
+        # 这里直接复用引擎自己的兜底模型（_create_fallback_model 会把模型与带
+        # feature_columns 的 metadata 写进 loader 缓存），保证本地与 CI 走**同一条**路径。
+        self.prediction_engine.model_loader._create_fallback_model("test_model")
+
     def _create_sample_stock_data(self, days: int = 252) -> pd.DataFrame:
         """创建样本股票数据"""
         dates = pd.date_range(start="2024-01-01", periods=days, freq="D")
@@ -84,7 +92,7 @@ class TestPredictionEngineAccuracy:
         confidence_level=st.floats(min_value=0.5, max_value=0.99),
         horizon=st.sampled_from(["short_term", "medium_term", "long_term"]),
     )
-    @settings(max_examples=100)
+    @settings(max_examples=100, deadline=None)
     def test_prediction_engine_accuracy_property(
         self, stock_code, model_id, confidence_level, horizon
     ):
@@ -149,7 +157,7 @@ class TestPredictionEngineAccuracy:
         stock_codes=st.lists(st.just("000001.SZ"), min_size=1, max_size=5),
         model_id=st.text(min_size=1, max_size=50),
     )
-    @settings(max_examples=50)
+    @settings(max_examples=50, deadline=None)
     def test_batch_prediction_consistency(self, stock_codes, model_id):
         """
         功能: production-ready-implementation, 属性 1: 预测引擎准确性
@@ -159,36 +167,43 @@ class TestPredictionEngineAccuracy:
             model_id=model_id, horizon="short_term", confidence_level=0.95
         )
 
+        batch_results = None
         try:
             # 执行批量预测
+            # 注意：try **只包这一步**。断言一律在 try 之外 ——
+            # 否则 `except Exception` 会把 **AssertionError 一起吞成 skip**，
+            # 性质被违反时套件仍然报绿（假绿）。环境性失败（模型/数据缺失）才允许跳过。
             batch_results = self.prediction_engine.predict_multiple_stocks(
                 stock_codes, config
             )
-
-            # 验证批量预测结果
-            assert len(batch_results) <= len(stock_codes)  # 可能有失败的预测
-
-            for result in batch_results:
-                assert result.stock_code in stock_codes
-                assert result.predicted_price > 0
-                assert result.predicted_direction in [-1, 0, 1]
-                assert 0 <= result.confidence_score <= 1
-
-                # 验证单个预测的一致性
-                single_result = self.prediction_engine.predict_single_stock(
-                    result.stock_code, config
-                )
-
-                # 由于缓存，结果应该相同或非常接近
-                price_diff = abs(result.predicted_price - single_result.predicted_price)
-                assert price_diff < result.predicted_price * 0.01  # 差异应小于1%
-
+        except AssertionError:
+            # 断言失败属于**被测行为违规**，不是环境问题 —— 必须让它红，不能当 skip 吞掉。
+            raise
         except Exception as e:
-            # 记录错误但不失败测试，因为这可能是数据问题
             pytest.skip(f"批量预测测试跳过: {e}")
 
+        assert batch_results is not None  # skip 路径不返回（pytest.skip 抛异常）
+
+        # 验证批量预测结果
+        assert len(batch_results) <= len(stock_codes)  # 可能有失败的预测
+
+        for result in batch_results:
+            assert result.stock_code in stock_codes
+            assert result.predicted_price > 0
+            assert result.predicted_direction in [-1, 0, 1]
+            assert 0 <= result.confidence_score <= 1
+
+            # 验证单个预测的一致性
+            single_result = self.prediction_engine.predict_single_stock(
+                result.stock_code, config
+            )
+
+            # 由于缓存，结果应该相同或非常接近
+            price_diff = abs(result.predicted_price - single_result.predicted_price)
+            assert price_diff < result.predicted_price * 0.01  # 差异应小于1%
+
     @given(confidence_level=st.floats(min_value=0.5, max_value=0.99))
-    @settings(max_examples=50)
+    @settings(max_examples=50, deadline=None)
     def test_confidence_interval_validity(self, confidence_level):
         """
         功能: production-ready-implementation, 属性 1: 预测引擎准确性
@@ -198,34 +213,40 @@ class TestPredictionEngineAccuracy:
             model_id="test_model", confidence_level=confidence_level
         )
 
+        result = None
         try:
             result = self.prediction_engine.predict_single_stock("000001.SZ", config)
-
-            lower, upper = result.confidence_interval
-            predicted_price = result.predicted_price
-
-            # 验证置信区间的基本属性
-            assert lower <= predicted_price <= upper
-            assert lower > 0  # 价格不能为负
-            assert upper > lower  # 上界应大于下界
-
-            # 验证置信区间宽度合理性
-            interval_width = (upper - lower) / predicted_price
-            assert 0.001 <= interval_width <= 1.0  # 相对宽度应在合理范围内
-
-            # 高置信水平应该有更宽的区间
-            if confidence_level > 0.9:
-                assert interval_width > 0.01  # 高置信水平区间应该较宽
-
+        except AssertionError:
+            # 断言失败属于**被测行为违规**，不是环境问题 —— 必须让它红，不能当 skip 吞掉。
+            raise
         except Exception as e:
+            # 只有环境性失败才跳过；断言在 try 之外（见上）
             pytest.skip(f"置信区间测试跳过: {e}")
+
+        assert result is not None  # skip 路径不返回（pytest.skip 抛异常）
+
+        lower, upper = result.confidence_interval
+        predicted_price = result.predicted_price
+
+        # 验证置信区间的基本属性
+        assert lower <= predicted_price <= upper
+        assert lower > 0  # 价格不能为负
+        assert upper > lower  # 上界应大于下界
+
+        # 验证置信区间宽度合理性
+        interval_width = (upper - lower) / predicted_price
+        assert 0.001 <= interval_width <= 1.0  # 相对宽度应在合理范围内
+
+        # 高置信水平应该有更宽的区间
+        if confidence_level > 0.9:
+            assert interval_width > 0.01  # 高置信水平区间应该较宽
 
     @given(
         error_type=st.sampled_from(
             ["model_load_error", "data_insufficient", "prediction_timeout"]
         )
     )
-    @settings(max_examples=30)
+    @settings(max_examples=30, deadline=None)
     def test_error_handling_and_fallback(self, error_type):
         """
         功能: production-ready-implementation, 属性 1: 预测引擎准确性
@@ -241,32 +262,38 @@ class TestPredictionEngineAccuracy:
         else:
             error = Exception("Prediction timeout")
 
+        result = None
         try:
             # 执行错误处理
             result = error_handler.handle_prediction_error(
                 error, "000001.SZ", self.sample_data
             )
-
-            # 验证降级预测结果
-            assert result["error_handled"] is True
-            assert result["is_fallback"] is True
-            assert "fallback_strategy" in result
-            assert result["predicted_price"] > 0
-            assert result["predicted_direction"] in [-1, 0, 1]
-            assert 0 <= result["confidence_score"] <= 1
-
-            # 验证恢复建议
-            suggestions = error_handler.get_recovery_suggestions(error_type)
-            assert len(suggestions) > 0
-
-            for suggestion in suggestions:
-                assert hasattr(suggestion, "action_type")
-                assert hasattr(suggestion, "parameters")
-                assert hasattr(suggestion, "description")
-                assert isinstance(suggestion.parameters, dict)
-
+        except AssertionError:
+            # 断言失败属于**被测行为违规**，不是环境问题 —— 必须让它红，不能当 skip 吞掉。
+            raise
         except Exception as e:
+            # 只有环境性失败才跳过；断言在 try 之外（见上）
             pytest.skip(f"错误处理测试跳过: {e}")
+
+        assert result is not None  # skip 路径不返回（pytest.skip 抛异常）
+
+        # 验证降级预测结果
+        assert result["error_handled"] is True
+        assert result["is_fallback"] is True
+        assert "fallback_strategy" in result
+        assert result["predicted_price"] > 0
+        assert result["predicted_direction"] in [-1, 0, 1]
+        assert 0 <= result["confidence_score"] <= 1
+
+        # 验证恢复建议
+        suggestions = error_handler.get_recovery_suggestions(error_type)
+        assert len(suggestions) > 0
+
+        for suggestion in suggestions:
+            assert hasattr(suggestion, "action_type")
+            assert hasattr(suggestion, "parameters")
+            assert hasattr(suggestion, "description")
+            assert isinstance(suggestion.parameters, dict)
 
 
 class TestFeatureExtractionReliability:
@@ -285,7 +312,7 @@ class TestFeatureExtractionReliability:
             unique=True,
         ),
     )
-    @settings(max_examples=50)
+    @settings(max_examples=50, deadline=None)
     def test_feature_extraction_reliability(self, data_length, technical_indicators):
         """
         功能: production-ready-implementation, 属性 1: 预测引擎准确性
@@ -356,12 +383,15 @@ class TestFeatureExtractionReliability:
                 )
                 pd.testing.assert_frame_equal(features, features_cached)
 
+        except AssertionError:
+            # 断言失败属于**被测行为违规**，不是环境问题 —— 必须让它红，不能当 skip 吞掉。
+            raise
         except Exception as e:
             # 特征提取失败时应该有明确的错误信息
             assert "特征提取失败" in str(e) or "数据" in str(e)
 
     @given(missing_ratio=st.floats(min_value=0.0, max_value=0.3))
-    @settings(max_examples=30)
+    @settings(max_examples=30, deadline=None)
     def test_feature_extraction_with_missing_data(self, missing_ratio):
         """
         功能: production-ready-implementation, 属性 1: 预测引擎准确性
@@ -409,6 +439,9 @@ class TestFeatureExtractionReliability:
             numeric_features = features.select_dtypes(include=[np.number])
             assert np.isfinite(numeric_features).all().all()
 
+        except AssertionError:
+            # 断言失败属于**被测行为违规**，不是环境问题 —— 必须让它红，不能当 skip 吞掉。
+            raise
         except Exception as e:
             # 如果缺失数据太多，应该有合理的错误信息
             if missing_ratio > 0.1:
@@ -429,7 +462,7 @@ class TestRiskAssessmentAccuracy:
         predicted_price=st.floats(min_value=1.0, max_value=1000.0),
         data_length=st.integers(min_value=100, max_value=300),
     )
-    @settings(max_examples=50)
+    @settings(max_examples=50, deadline=None)
     def test_risk_assessment_accuracy(
         self, current_price, predicted_price, data_length
     ):
@@ -462,46 +495,54 @@ class TestRiskAssessmentAccuracy:
             risk_metrics=["var", "es", "volatility", "sharpe_ratio"],
         )
 
+        result = None
         try:
             # 执行风险评估
             result = self.risk_service.assess_prediction_risk(
                 "TEST.SZ", current_price, predicted_price, historical_data, config
             )
-
-            # 验证风险评估结果
-            assert result.stock_code == "TEST.SZ"
-            assert result.current_price == current_price
-            assert result.predicted_price == predicted_price
-            assert result.risk_rating in ["low", "medium", "high", "extreme"]
-
-            # 验证置信区间
-            assert len(result.confidence_intervals) == len(config.confidence_levels)
-            for level, interval in result.confidence_intervals.items():
-                assert level in config.confidence_levels
-                assert interval.lower_bound <= predicted_price <= interval.upper_bound
-                assert interval.lower_bound >= 0
-                assert interval.confidence_level == level
-
-            # 验证风险指标
-            assert len(result.risk_metrics) > 0
-            for _metric_name, value in result.risk_metrics.items():
-                assert isinstance(value, (int, float))
-                assert np.isfinite(value)
-
-            # 验证情景分析
-            assert len(result.scenario_analysis) > 0
-            for _scenario, price in result.scenario_analysis.items():
-                assert isinstance(price, (int, float))
-                assert price > 0
-
+        except AssertionError:
+            # 断言失败属于**被测行为违规**，不是环境问题 —— 必须让它红，不能当 skip 吞掉。
+            raise
         except Exception as e:
+            # 只有环境性失败才跳过；断言在 try 之外（见上）
             pytest.skip(f"风险评估测试跳过: {e}")
+
+        assert result is not None  # skip 路径不返回（pytest.skip 抛异常）
+
+        # 验证风险评估结果
+        assert result.stock_code == "TEST.SZ"
+        assert result.current_price == current_price
+        assert result.predicted_price == predicted_price
+        assert result.risk_rating in ["low", "medium", "high", "extreme"]
+
+        # 验证置信区间
+        levels = config.confidence_levels
+        assert levels is not None  # 显式收窄（类型 + 运行期都成立）
+        assert len(result.confidence_intervals) == len(levels)
+        for level, interval in result.confidence_intervals.items():
+            assert level in levels
+            assert interval.lower_bound <= predicted_price <= interval.upper_bound
+            assert interval.lower_bound >= 0
+            assert interval.confidence_level == level
+
+        # 验证风险指标
+        assert len(result.risk_metrics) > 0
+        for _metric_name, value in result.risk_metrics.items():
+            assert isinstance(value, (int, float))
+            assert np.isfinite(value)
+
+        # 验证情景分析
+        assert len(result.scenario_analysis) > 0
+        for _scenario, price in result.scenario_analysis.items():
+            assert isinstance(price, (int, float))
+            assert price > 0
 
     @given(
         volatility=st.floats(min_value=0.01, max_value=0.5),
         confidence_level=st.floats(min_value=0.5, max_value=0.99),
     )
-    @settings(max_examples=30)
+    @settings(max_examples=30, deadline=None)
     def test_confidence_interval_properties(self, volatility, confidence_level):
         """
         功能: production-ready-implementation, 属性 1: 预测引擎准确性

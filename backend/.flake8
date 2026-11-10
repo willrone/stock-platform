@@ -30,7 +30,11 @@ ignore =
     # E501: 行太长（由max-line-length控制）
     E501,
     # E704: black keeps Protocol stub ellipsis on one line
-    E704
+    E704,
+    # E226: 算术运算符周围空格。pycodestyle 自己默认就忽略它；本仓库 select=E 把它打开了，
+    # 于是与 black 的运算符空格规则直接打架（例：`r*100`、`amt/1e4`、`lagged[self.lag :]`）。
+    # CI 先跑 black --check，再跑 flake8 —— 两者必须能同时为真，否则只能二选一。
+    E226
 
 # 选择的错误和警告
 select =
@@ -69,3 +73,19 @@ per-file-ignores =
     app/services/qlib/unified_qlib_training_engine.py:C901
     app/services/qlib/test_alpha158_expression_engine.py:E402
     tests/*.py:E402
+    # ── 复杂度债（2026-11-10 登记，不是修好，是「已知的重」）────────────────────────
+    # 登记规则：只允许把「已经存在」的函数写在这里；新写的复杂函数必须拆，不许往这里加。
+    # 每一笔都是真钱链路上的函数，盲拆会改行为，所以先亮出来再排期重构（台账 §12.85）。
+    app/services/backtest/execution/tradability.py:C901
+    app/services/backtest/execution/trade_modes.py:C901
+    app/services/backtest/strategies/gbm_lab_strategy.py:C901
+    app/services/backtest/strategies/gbm_voltgt_strategy.py:C901
+    app/services/backtest/strategies/honest_composite_strategy.py:C901
+    app/services/backtest/strategies/methods_composite_strategy.py:C901
+    app/services/backtest/strategies/regime_switched_strategy.py:C901
+    app/services/trading/execution_plan.py:C901
+    app/services/trading/multi_asset_service.py:C901
+    app/services/trading/signal_service.py:C901
+    # E402 例外：official_lgbm_model.py 必须在 import qlib/lightgbm 之前先设 OMP_NUM_THREADS=1，
+    # 否则本机 macOS+3.13+libomp 会在 predict 阶段 SIGSEGV（§12.44）——顺序是硬要求，不是风格问题
+    app/services/qlib/official_lgbm_model.py:E402

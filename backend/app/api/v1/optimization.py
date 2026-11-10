@@ -77,7 +77,9 @@ async def create_optimization_task(
 
             logger.info(f"超参优化任务已提交到进程池: {task.task_id}")
         except Exception as submit_error:
-            logger.error(f"将任务提交到进程池时出错: {submit_error}", exc_info=True)
+            logger.opt(exception=True).error(
+                f"将任务提交到进程池时出错: {submit_error}"
+            )
             await task_repository.update_task_status(
                 task_id=cast(str, task.task_id),
                 status=TaskStatus.FAILED,
@@ -105,7 +107,7 @@ async def create_optimization_task(
         )
 
     except Exception as e:
-        logger.error(f"创建超参优化任务失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"创建超参优化任务失败: {e}")
         raise HTTPException(status_code=500, detail=f"创建超参优化任务失败: {str(e)}")
 
 
@@ -166,7 +168,7 @@ async def list_optimization_tasks(
         )
 
     except Exception as e:
-        logger.error(f"获取超参优化任务列表失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取超参优化任务列表失败: {e}")
         raise HTTPException(
             status_code=500, detail=f"获取超参优化任务列表失败: {str(e)}"
         )
@@ -220,7 +222,7 @@ async def get_optimization_task(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取超参优化任务详情失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取超参优化任务详情失败: {e}")
         raise HTTPException(
             status_code=500, detail=f"获取超参优化任务详情失败: {str(e)}"
         )
@@ -272,7 +274,7 @@ async def get_optimization_status(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取优化状态失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取优化状态失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取优化状态失败: {str(e)}")
 
 
@@ -301,7 +303,7 @@ async def get_param_importance(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取参数重要性失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取参数重要性失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取参数重要性失败: {str(e)}")
 
 
@@ -333,7 +335,7 @@ async def get_pareto_front(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取帕累托前沿失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取帕累托前沿失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取帕累托前沿失败: {str(e)}")
 
 
@@ -370,7 +372,7 @@ def execute_optimization_task_simple(task_id: str) -> Any:
 
         task = task_repository.get_task_by_id(task_id)
         if not task:
-            task_logger.error(f"任务不存在: {task_id}")
+            task_logger.opt(exception=True).error(f"任务不存在: {task_id}")
             return
 
         # 更新任务状态为运行中
@@ -414,11 +416,10 @@ def execute_optimization_task_simple(task_id: str) -> Any:
         import traceback
 
         error_details = traceback.format_exc()
-        task_logger.error(
+        task_logger.opt(exception=True).error(
             f"超参优化任务执行失败: {task_id}, 错误类型: {type(e).__name__}, 错误: {e}",
-            exc_info=True,
         )
-        task_logger.error(f"详细错误信息: {error_details}")
+        task_logger.opt(exception=True).error(f"详细错误信息: {error_details}")
 
         try:
             if "task_repository" in locals():
@@ -428,7 +429,7 @@ def execute_optimization_task_simple(task_id: str) -> Any:
                     error_message=f"{type(e).__name__}: {str(e)}",
                 )
         except Exception as update_error:
-            task_logger.error(f"更新任务状态失败: {update_error}", exc_info=True)
+            task_logger.opt(exception=True).error(f"更新任务状态失败: {update_error}")
     finally:
         if "session" in locals():
             session.close()

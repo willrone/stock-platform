@@ -3,17 +3,27 @@
  *
  * 负责协调计费、余额、账单、用量记录等核心业务逻辑
  * 遵循单一职责原则，便于单元测试和维护
+ *
+ * ⚠️ 响应形态：/commerce/* 后端端点多数返回**裸 payload**（未统一为
+ * {success, data, message, timestamp} 信封）。前端 @/services/api 的归一化层
+ * （normalizeResponse / unwrap）已兼容两种形态，因此这里直接按「业务数据本身」
+ * 声明类型即可，不需要在这里做信封拆包。
  */
 
 import { apiRequest } from '@/services/api';
 import type {
   BalanceResponse,
-  UsageSummaryResponse,
   BillingRecord,
+  CanExecuteResponse,
+  CommerceAPI,
+  DepositResponse,
+  PricingRuleResponse,
+  RefundResponse,
   UsageRecordResponse,
+  UsageSummaryResponse,
 } from '@/services/api/commerce';
 
-export class CommerceService {
+export class CommerceService implements CommerceAPI {
   private baseURL = '/commerce';
 
   /**
@@ -26,7 +36,7 @@ export class CommerceService {
   async recordUsage(
     event_type: string,
     quantity = 1,
-    metadata?: Record<string, any>
+    metadata?: Record<string, unknown>
   ): Promise<UsageRecordResponse> {
     return apiRequest.post<UsageRecordResponse>(`${this.baseURL}/usage`, {
       event_type,
@@ -44,13 +54,16 @@ export class CommerceService {
   }
 
   /**
-   * 用户充值
+   * 用户充值（下单）
+   *
+   * ⚠️ 2026-10-25 起为订单制：下单不立即加余额，需管理员确认到账后才生效。
    * @param amount - 充值金额（元）
    * @param remark - 充值备注
+   * @returns 充值订单信息（订单号、收款指引等）
    */
-  async deposit(amount: number, remark?: string): Promise<void> {
+  async deposit(amount: number, remark?: string): Promise<DepositResponse> {
     const amount_cents = Math.round(amount * 100);
-    return apiRequest.post(`${this.baseURL}/deposit`, {
+    return apiRequest.post<DepositResponse>(`${this.baseURL}/deposit`, {
       amount_cents,
       remark,
     });
@@ -61,9 +74,9 @@ export class CommerceService {
    * @param billing_record_id - 原始账单 ID
    * @param amount - 退款金额（元）
    */
-  async refund(billing_record_id: string, amount: number): Promise<void> {
+  async refund(billing_record_id: string, amount: number): Promise<RefundResponse> {
     const amount_cents = Math.round(amount * 100);
-    return apiRequest.post(`${this.baseURL}/refund`, {
+    return apiRequest.post<RefundResponse>(`${this.baseURL}/refund`, {
       billing_record_id,
       amount_cents,
     });
@@ -76,9 +89,16 @@ export class CommerceService {
    */
   async getUsageSummary(month?: number, year?: number): Promise<UsageSummaryResponse> {
     const params = new URLSearchParams();
-    if (month) params.append('month', month.toString());
-    if (year) params.append('year', year.toString());
-    return apiRequest.get<UsageSummaryResponse>(`${this.baseURL}/usage/summary?${params}`);
+    if (month) {
+      params.append('month', month.toString());
+    }
+    if (year) {
+      params.append('year', year.toString());
+    }
+    const query = params.toString();
+    return apiRequest.get<UsageSummaryResponse>(
+      query ? `${this.baseURL}/usage/summary?${query}` : `${this.baseURL}/usage/summary`
+    );
   }
 
   /**
@@ -97,20 +117,25 @@ export class CommerceService {
    * 获取计费规则
    * @param event_type - 事件类型筛选
    */
-  async getPricingRules(event_type?: string): Promise<any[]> {
+  async getPricingRules(event_type?: string): Promise<PricingRuleResponse[]> {
     const params = new URLSearchParams();
-    if (event_type) params.append('event_type', event_type);
-    return apiRequest.get(`${this.baseURL}/pricing/rules?${params}`);
+    if (event_type) {
+      params.append('event_type', event_type);
+    }
+    const query = params.toString();
+    return apiRequest.get<PricingRuleResponse[]>(
+      query ? `${this.baseURL}/pricing/rules?${query}` : `${this.baseURL}/pricing/rules`
+    );
   }
 
   /**
    * 检查是否可以执行操作
    * @param event_type - 事件类型
    */
-  async checkCanExecute(
-    event_type: string
-  ): Promise<{ can_proceed: boolean; message: string; estimated_cost_yuan: number }> {
-    return apiRequest.get(`${this.baseURL}/check/${encodeURIComponent(event_type)}`);
+  async checkCanExecute(event_type: string): Promise<CanExecuteResponse> {
+    return apiRequest.get<CanExecuteResponse>(
+      `${this.baseURL}/check/${encodeURIComponent(event_type)}`
+    );
   }
 }
 

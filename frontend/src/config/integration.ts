@@ -7,6 +7,7 @@
  * - 错误处理配置
  * - 重试策略配置
  */
+import { DEFAULT_BACKEND_PORT, DEFAULT_BACKEND_WS_URL } from '@/config/backend';
 
 // API配置
 export const API_CONFIG = {
@@ -18,7 +19,7 @@ export const API_CONFIG = {
   WS_URL: (() => {
     if (typeof window === 'undefined') {
       // 服务端渲染时使用环境变量
-      return process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000/ws';
+      return process.env.NEXT_PUBLIC_WS_URL || DEFAULT_BACKEND_WS_URL;
     }
     // 客户端：使用环境变量或从当前页面推断
     const envUrl = process.env.NEXT_PUBLIC_WS_URL;
@@ -30,7 +31,7 @@ export const API_CONFIG = {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const hostname = window.location.hostname;
     // 从环境变量获取后端端口，或使用默认8000
-    const port = process.env.NEXT_PUBLIC_BACKEND_PORT || '8000';
+    const port = process.env.NEXT_PUBLIC_BACKEND_PORT || DEFAULT_BACKEND_PORT;
     return `${protocol}//${hostname}:${port}/ws`;
   })(),
 

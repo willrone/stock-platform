@@ -10,7 +10,7 @@
  * - 快速操作
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Card,
   CardContent,
@@ -19,6 +19,7 @@ import {
   Chip,
   Avatar,
   Box,
+  Stack,
   Typography,
   LinearProgress,
   Alert,
@@ -35,6 +36,7 @@ import {
   Plus,
   Eye,
   Activity,
+  Signal,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -42,6 +44,42 @@ import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { TaskService } from '../../services/taskService';
 import { apiRequest } from '../../services/api';
 import { useSnackbarStore } from '../../stores/useSnackbarStore';
+import { MobileBottomNav } from '../../components/mobile/MobileBottomNav';
+import { SafeAreaTop } from '../../components/mobile/SafeAreaTop';
+import { DeltaValue } from '../../components/mobile/DeltaValue';
+import { BOTTOM_NAV_CONTENT_PADDING, MIN_TOUCH_TARGET } from '../../components/mobile/safeArea';
+import { tradingGet, daysSince } from '../../components/mobile/tradingClient';
+import { trackEventOnce } from '@/services/funnel';
+
+/** 后端 /monitoring/health 里单个服务的原始结构 */
+type ServiceHealthRaw = {
+  healthy?: boolean;
+  status_label?: string;
+  response_time_ms?: number;
+  core?: boolean;
+  optional?: boolean;
+  error_message?: string | null;
+  service_url?: string;
+};
+
+/** 解析后的服务健康状态（前端展示用） */
+type ServiceHealth = {
+  key: string;
+  healthy: boolean;
+  label: string;
+  responseTimeMs?: number;
+  core: boolean;
+  errorMessage?: string;
+};
+
+/** 服务 key → 展示名（后端 key 是技术命名，UI 用中文） */
+const SERVICE_LABEL: Record<string, string> = {
+  remote_data_service: '数据服务',
+  indicators_service: '指标服务',
+  parquet_manager: '数据仓库',
+  api_service: 'API服务',
+  model_service: '模型服务',
+};
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -60,50 +98,141 @@ export default function DashboardPage() {
     systemHealth: 'good' as 'good' | 'warning' | 'error',
   });
 
-  // 加载仪表板数据
-  useEffect(() => {
-    const loadDashboardData = async () => {
-      try {
-        setLoading(true);
+  /**
+   * 【P2-12】真实服务健康状态。
+   * 后端 GET /monitoring/health 的 data.services 是
+   * `{ [serviceKey]: { healthy, status_label, response_time_ms, core, ... } }`
+   * —— 注意不是字符串，旧的 `s === 'unhealthy'` 比较永远为 false，
+   * 导致 systemHealth 恒为 'good'，而 UI 又是写死的字面量，
+   * 后端全挂了页面照样显示「正常」。现在按对象契约解析。
+   */
+  const [services, setServices] = useState<ServiceHealth[]>([]);
 
-        // 并行请求：最近任务 + 统计数据 + 系统健康状态
-        const [tasksResult, statsResult, healthResult] = await Promise.all([
-          TaskService.getTasks(undefined, 5, 0),
-          TaskService.getTaskStats(),
-          apiRequest
-            .get<{ data?: { services?: Record<string, string>; uptime?: number } }>(
-              '/monitoring/health'
-            )
-            .catch(() => null),
-        ]);
+  // ── 今日信号摘要（2026-10-27）──
+  // 之前仪表板与「今天买什么」零关联：用户进平台第一眼看不到今日信号。
+  // 这里在顶部加一条摘要：买入 / 卖出 / 持有 数量 + 跳转 /today-signal。
+  const [todaySummary, setTodaySummary] = useState<{
+    strategy: string;
+    displayName: string;
+    date?: string;
+    buys: number;
+    sells: number;
+    holds: number;
+    value?: number;
+    totalReturnPct?: number;
+  } | null>(null);
+  const [todaySummaryError, setTodaySummaryError] = useState<string | null>(null);
+  const [todaySummaryLoading, setTodaySummaryLoading] = useState(false);
 
-        setRecentTasks(tasksResult.tasks);
-
-        // 从后端获取真实系统健康状态
-        const services = healthResult?.data?.services || {};
-        const hasError = Object.values(services).some(s => s === 'unhealthy' || s === 'error');
-        const hasWarning = Object.values(services).some(s => s === 'degraded' || s === 'warning');
-
-        setSystemStats({
-          totalTasks: statsResult.total,
-          runningTasks: statsResult.running,
-          completedTasks: statsResult.completed,
-          failedTasks: statsResult.failed,
-          dataFiles: 0,
-          systemHealth: hasError ? 'error' : hasWarning ? 'warning' : 'good',
-        });
-      } catch (error) {
-        const errMsg = error instanceof Error ? error.message : '加载仪表板数据失败';
-        console.error('加载仪表板数据失败:', error);
-        setLoadError(errMsg);
-        showSnackbar.showError(errMsg);
-      } finally {
-        setLoading(false);
+  const loadTodaySummary = React.useCallback(async () => {
+    setTodaySummaryLoading(true);
+    setTodaySummaryError(null);
+    try {
+      const list = await tradingGet<{
+        strategies: Array<{ key: string; locked?: boolean; n_positions: number }>;
+      }>('/trading/strategies');
+      const usable = (list.strategies || []).filter(s => !s.locked);
+      const target = usable.find(s => s.n_positions > 0) || usable[0];
+      if (!target) {
+        setTodaySummary(null);
+        return;
       }
-    };
-
-    loadDashboardData();
+      const sig = await tradingGet<{
+        display_name: string;
+        date?: string;
+        buys?: unknown[];
+        sells?: unknown[];
+        holds?: unknown[];
+        value?: number;
+        total_return_pct?: number;
+      }>(`/trading/signal?strategy=${encodeURIComponent(target.key)}`);
+      setTodaySummary({
+        strategy: target.key,
+        displayName: sig.display_name || target.key,
+        date: sig.date,
+        buys: sig.buys?.length ?? 0,
+        sells: sig.sells?.length ?? 0,
+        holds: sig.holds?.length ?? 0,
+        value: sig.value,
+        totalReturnPct: sig.total_return_pct,
+      });
+    } catch (e) {
+      setTodaySummary(null);
+      setTodaySummaryError(e instanceof Error ? e.message : '加载今日信号摘要失败');
+    } finally {
+      setTodaySummaryLoading(false);
+    }
   }, []);
+
+  // 漏斗埋点：首屏（每个标签页会话只记一次；埋点失败不影响页面）
+  useEffect(() => {
+    trackEventOnce('first_screen', { path: 'dashboard' });
+  }, []);
+
+  useEffect(() => {
+    void loadTodaySummary();
+  }, [loadTodaySummary]);
+
+  /**
+   * 加载仪表板数据。
+   * 【P2-12】必须同时拉 /monitoring/health —— 之前的版本在错误重试分支
+   * 里另抄了一份只拉 tasks+stats 的逻辑，并把 systemHealth 写死成 'good'、
+   * dataFiles 写死成 156，于是「重试」后系统状态反而永远是好的。
+   * 现在单一 loader，重试与首屏走同一条路径。
+   */
+  const loadDashboardData = useCallback(async () => {
+    try {
+      setLoading(true);
+
+      // 并行请求：最近任务 + 统计数据 + 系统健康状态
+      const [tasksResult, statsResult, healthResult] = await Promise.all([
+        TaskService.getTasks(undefined, 5, 0),
+        TaskService.getTaskStats(),
+        apiRequest
+          .get<{ overall_healthy?: boolean; services?: Record<string, ServiceHealthRaw> }>(
+            '/monitoring/health'
+          )
+          .catch(() => null),
+      ]);
+
+      setRecentTasks(tasksResult.tasks);
+
+      // 【P2-12】从后端取真实健康状态（apiRequest 已拆信封，services 在顶层）
+      const rawServices = healthResult?.services ?? {};
+      const parsed = Object.entries(rawServices).map(([key, s]) => ({
+        key,
+        healthy: s?.healthy !== false,
+        label: s?.status_label ?? (s?.healthy === false ? '异常' : '正常'),
+        responseTimeMs: s?.response_time_ms,
+        core: s?.core === true,
+        errorMessage: s?.error_message ?? undefined,
+      }));
+      setServices(parsed);
+
+      const hasError = parsed.some(s => !s.healthy);
+      const hasWarning = parsed.some(s => s.healthy && s.label !== '正常');
+
+      setSystemStats({
+        totalTasks: statsResult.total,
+        runningTasks: statsResult.running,
+        completedTasks: statsResult.completed,
+        failedTasks: statsResult.failed,
+        dataFiles: 0,
+        systemHealth: hasError ? 'error' : hasWarning ? 'warning' : 'good',
+      });
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : '加载仪表板数据失败';
+      console.error('加载仪表板数据失败:', error);
+      setLoadError(errMsg);
+      showSnackbar.showError(errMsg);
+    } finally {
+      setLoading(false);
+    }
+  }, [showSnackbar]);
+
+  useEffect(() => {
+    void loadDashboardData();
+  }, [loadDashboardData]);
 
   // 获取任务状态颜色
   const getTaskStatusColor = (status: string): 'primary' | 'success' | 'error' | 'default' => {
@@ -173,30 +302,7 @@ export default function DashboardPage() {
               onClick={() => {
                 setLoadError(null);
                 setLoading(true);
-                const loadDashboard = async () => {
-                  try {
-                    const [tasksResult, statsResult] = await Promise.all([
-                      TaskService.getTasks(undefined, 5, 0),
-                      TaskService.getTaskStats(),
-                    ]);
-                    setRecentTasks(tasksResult.tasks);
-                    setSystemStats({
-                      totalTasks: statsResult.total,
-                      runningTasks: statsResult.running,
-                      completedTasks: statsResult.completed,
-                      failedTasks: statsResult.failed,
-                      dataFiles: 156,
-                      systemHealth: 'good' as const,
-                    });
-                  } catch (e) {
-                    const msg = e instanceof Error ? e.message : '加载失败';
-                    setLoadError(msg);
-                    showSnackbar.showError(msg);
-                  } finally {
-                    setLoading(false);
-                  }
-                };
-                loadDashboard();
+                void loadDashboardData();
               }}
             >
               重试
@@ -230,8 +336,93 @@ export default function DashboardPage() {
     );
   }
 
+  const todayAge = daysSince(todaySummary?.date);
+
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, pb: { xs: 10, md: 3 } }}>
+      <SafeAreaTop />
+      <MobileBottomNav />
+
+      {/* ── 今日信号摘要（进平台第一眼就能看到「今天买什么」）── */}
+      <Card sx={{ borderLeft: 4, borderLeftColor: 'primary.main' }}>
+        <CardContent>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1.5}
+            alignItems={{ sm: 'center' }}
+            justifyContent="space-between"
+          >
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="subtitle1" fontWeight={700}>
+                今日信号
+                {todaySummary?.date ? `（${todaySummary.date}）` : ''}
+              </Typography>
+              {todaySummaryLoading && (
+                <Typography variant="body2" color="text.secondary">
+                  加载中…
+                </Typography>
+              )}
+              {todaySummary && (
+                <Stack direction="row" spacing={1} sx={{ mt: 0.5 }} flexWrap="wrap" useFlexGap>
+                  <Chip
+                    size="small"
+                    color="success"
+                    label={`↑ 买入 ${todaySummary.buys}`}
+                    sx={{ height: 28 }}
+                  />
+                  <Chip
+                    size="small"
+                    color="error"
+                    label={`↓ 卖出 ${todaySummary.sells}`}
+                    sx={{ height: 28 }}
+                  />
+                  <Chip
+                    size="small"
+                    variant="outlined"
+                    label={`持有 ${todaySummary.holds}`}
+                    sx={{ height: 28 }}
+                  />
+                  {todaySummary.totalReturnPct !== undefined && (
+                    <DeltaValue value={todaySummary.totalReturnPct} variant="body2" />
+                  )}
+                  {todayAge !== null && todayAge > 7 && (
+                    <Chip
+                      size="small"
+                      color="warning"
+                      label={`已过期 ${todayAge} 天`}
+                      sx={{ height: 28 }}
+                    />
+                  )}
+                </Stack>
+              )}
+              {todaySummaryError && (
+                <Typography variant="caption" color="error" sx={{ display: 'block', mt: 0.5 }}>
+                  {todaySummaryError}
+                </Typography>
+              )}
+            </Box>
+            <Stack direction="row" spacing={1}>
+              <Button
+                size="small"
+                onClick={() => void loadTodaySummary()}
+                disabled={todaySummaryLoading}
+                sx={{ minHeight: MIN_TOUCH_TARGET }}
+              >
+                刷新
+              </Button>
+              <Button
+                size="small"
+                variant="contained"
+                onClick={() => router.push('/today-signal')}
+                sx={{ minHeight: MIN_TOUCH_TARGET }}
+              >
+                查看完整清单
+              </Button>
+            </Stack>
+          </Stack>
+        </CardContent>
+      </Card>
+
       {/* 页面标题 */}
       <Box>
         <Typography variant="h4" component="h1" sx={{ fontWeight: 600, mb: 1 }}>
@@ -443,36 +634,59 @@ export default function DashboardPage() {
             <Card>
               <CardHeader title="系统状态" />
               <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <Box
-                  sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-                >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Wifi size={16} color="#2e7d32" />
-                    <Typography variant="body2">API服务</Typography>
+                {/* 【P2-12】服务状态来自 /monitoring/health 真实响应。
+                    后端挂了 / 探针失败 → 显示「未知」，不谎报「正常」。 */}
+                {services.length === 0 ? (
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Activity size={16} color="#9e9e9e" />
+                      <Typography variant="body2">服务状态</Typography>
+                    </Box>
+                    <Chip label="未知" size="small" />
                   </Box>
-                  <Chip label="正常" color="success" size="small" />
-                </Box>
+                ) : (
+                  services.map(s => (
+                    <Box
+                      key={s.key}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        {s.key.includes('data') || s.key.includes('parquet') ? (
+                          <Database size={16} color={s.healthy ? '#2e7d32' : '#d32f2f'} />
+                        ) : s.key.includes('indicator') ? (
+                          <Activity size={16} color={s.healthy ? '#2e7d32' : '#d32f2f'} />
+                        ) : (
+                          <Wifi size={16} color={s.healthy ? '#2e7d32' : '#d32f2f'} />
+                        )}
+                        <Typography variant="body2">{SERVICE_LABEL[s.key] ?? s.key}</Typography>
+                      </Box>
+                      <Chip
+                        label={s.label}
+                        color={s.healthy ? 'success' : 'error'}
+                        size="small"
+                        title={
+                          s.errorMessage ??
+                          (s.responseTimeMs != null
+                            ? `响应 ${s.responseTimeMs.toFixed(0)}ms`
+                            : undefined)
+                        }
+                      />
+                    </Box>
+                  ))
+                )}
 
-                <Box
-                  sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-                >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Database size={16} color="#2e7d32" />
-                    <Typography variant="body2">数据服务</Typography>
-                  </Box>
-                  <Chip label="正常" color="success" size="small" />
-                </Box>
-
-                <Box
-                  sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-                >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Activity size={16} color="#ed6c02" />
-                    <Typography variant="body2">模型服务</Typography>
-                  </Box>
-                  <Chip label="负载高" color="warning" size="small" />
-                </Box>
-
+                {/* 【P2-12】系统负载：后端未提供真实指标时显示「—」，
+                    不用 65% 这类假值糊弄。 */}
                 <Box sx={{ pt: 2, borderTop: 1, borderColor: 'divider' }}>
                   <Box
                     sx={{
@@ -483,13 +697,37 @@ export default function DashboardPage() {
                     }}
                   >
                     <Typography variant="body2" color="text.secondary">
-                      系统负载
+                      系统状态
                     </Typography>
                     <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                      65%
+                      {services.length === 0
+                        ? '—'
+                        : systemStats.systemHealth === 'good'
+                          ? '全部正常'
+                          : systemStats.systemHealth === 'warning'
+                            ? '部分降级'
+                            : '存在异常'}
                     </Typography>
                   </Box>
-                  <LinearProgress variant="determinate" value={65} />
+                  <LinearProgress
+                    variant="determinate"
+                    value={
+                      services.length === 0
+                        ? 0
+                        : systemStats.systemHealth === 'good'
+                          ? 100
+                          : systemStats.systemHealth === 'warning'
+                            ? 60
+                            : 20
+                    }
+                    color={
+                      systemStats.systemHealth === 'good'
+                        ? 'success'
+                        : systemStats.systemHealth === 'warning'
+                          ? 'warning'
+                          : 'error'
+                    }
+                  />
                 </Box>
               </CardContent>
             </Card>
@@ -501,9 +739,21 @@ export default function DashboardPage() {
                 <Button
                   variant="contained"
                   color="primary"
+                  startIcon={<Signal size={16} />}
+                  onClick={() => router.push('/today-signal')}
+                  fullWidth
+                  sx={{ minHeight: MIN_TOUCH_TARGET }}
+                >
+                  今日信号
+                </Button>
+
+                <Button
+                  variant="contained"
+                  color="primary"
                   startIcon={<Plus size={16} />}
                   onClick={() => router.push('/tasks/create')}
                   fullWidth
+                  sx={{ minHeight: MIN_TOUCH_TARGET }}
                 >
                   创建预测任务
                 </Button>
@@ -513,6 +763,7 @@ export default function DashboardPage() {
                   startIcon={<Eye size={16} />}
                   onClick={() => router.push('/tasks')}
                   fullWidth
+                  sx={{ minHeight: MIN_TOUCH_TARGET }}
                 >
                   查看所有任务
                 </Button>
@@ -522,6 +773,7 @@ export default function DashboardPage() {
                   startIcon={<Database size={16} />}
                   onClick={() => router.push('/data')}
                   fullWidth
+                  sx={{ minHeight: MIN_TOUCH_TARGET }}
                 >
                   数据管理
                 </Button>
@@ -531,6 +783,7 @@ export default function DashboardPage() {
                   startIcon={<TrendingUp size={16} />}
                   onClick={() => router.push('/predictions')}
                   fullWidth
+                  sx={{ minHeight: MIN_TOUCH_TARGET }}
                 >
                   预测分析
                 </Button>
@@ -539,6 +792,11 @@ export default function DashboardPage() {
           </Box>
         </Box>
       </Box>
+
+      <Box
+        sx={{ height: BOTTOM_NAV_CONTENT_PADDING, display: { xs: 'block', md: 'none' } }}
+        aria-hidden="true"
+      />
     </Box>
   );
 }

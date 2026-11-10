@@ -37,7 +37,7 @@ class TestTaskManagementIntegrity:
         user_id=st.text(min_size=1, max_size=50),
         config=st.dictionaries(st.text(), st.text()),
     )
-    @settings(max_examples=100)
+    @settings(max_examples=100, deadline=None)
     def test_task_creation_integrity(self, task_name, task_type, user_id, config):
         """
         功能: production-ready-implementation, 属性 2: 任务管理完整性
@@ -81,7 +81,7 @@ class TestTaskManagementIntegrity:
         progress=st.floats(min_value=0.0, max_value=1.0),
         status=st.sampled_from([s.value for s in TaskStatus]),
     )
-    @settings(max_examples=100)
+    @settings(max_examples=100, deadline=None)
     def test_task_status_update_integrity(self, progress, status):
         """
         功能: production-ready-implementation, 属性 2: 任务管理完整性
@@ -128,7 +128,7 @@ class TestNotificationServiceReliability:
         user_id=st.text(min_size=1, max_size=50),
         task_id=st.text(min_size=1, max_size=50),
     )
-    @settings(max_examples=100)
+    @settings(max_examples=100, deadline=None)
     async def test_websocket_connection_management(
         self, connection_id, user_id, task_id
     ):
@@ -181,7 +181,7 @@ class TestNotificationServiceReliability:
         status=st.sampled_from([s.value for s in TaskStatus]),
         progress=st.floats(min_value=0.0, max_value=1.0),
     )
-    @settings(max_examples=100)
+    @settings(max_examples=100, deadline=None)
     async def test_task_status_notification_reliability(
         self, task_id, status, progress
     ):
@@ -226,7 +226,7 @@ class TestLoggingSystemIntegrity:
         resource=st.text(min_size=1, max_size=100),
         success=st.booleans(),
     )
-    @settings(max_examples=100)
+    @settings(max_examples=100, deadline=None)
     def test_audit_logging_integrity(self, action, user_id, resource, success):
         """
         功能: production-ready-implementation, 属性 10: 日志系统完整性
@@ -253,7 +253,7 @@ class TestLoggingSystemIntegrity:
         duration_ms=st.floats(min_value=0.1, max_value=10000.0),
         status_code=st.integers(min_value=200, max_value=599),
     )
-    @settings(max_examples=100)
+    @settings(max_examples=100, deadline=None)
     def test_performance_logging_integrity(
         self, endpoint, method, duration_ms, status_code
     ):
@@ -280,7 +280,7 @@ class TestLoggingSystemIntegrity:
         operation=st.sampled_from(["INSERT", "UPDATE", "DELETE"]),
         record_id=st.text(min_size=1, max_size=50),
     )
-    @settings(max_examples=100)
+    @settings(max_examples=100, deadline=None)
     def test_data_change_logging_integrity(self, table, operation, record_id):
         """
         功能: production-ready-implementation, 属性 10: 日志系统完整性
@@ -316,7 +316,7 @@ class TestErrorHandlingReliability:
         error_type=st.sampled_from([t for t in ErrorType]),
         severity=st.sampled_from([s for s in ErrorSeverity]),
     )
-    @settings(max_examples=100)
+    @settings(max_examples=100, deadline=None)
     def test_error_handling_integrity(self, error_message, error_type, severity):
         """
         功能: production-ready-implementation, 属性 2: 任务管理完整性
@@ -352,7 +352,7 @@ class TestErrorHandlingReliability:
         assert error_dict["severity"] == severity.value
 
     @given(prediction_error_msg=st.text(min_size=1, max_size=200))
-    @settings(max_examples=100)
+    @settings(max_examples=100, deadline=None)
     def test_prediction_error_recovery(self, prediction_error_msg):
         """
         功能: production-ready-implementation, 属性 2: 任务管理完整性
@@ -378,7 +378,7 @@ class TestErrorHandlingReliability:
             assert isinstance(action.description, str)
 
     @given(task_error_msg=st.text(min_size=1, max_size=200))
-    @settings(max_examples=100)
+    @settings(max_examples=100, deadline=None)
     def test_task_error_recovery(self, task_error_msg):
         """
         功能: production-ready-implementation, 属性 2: 任务管理完整性

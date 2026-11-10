@@ -90,7 +90,9 @@ def _worker_backtest(
                     cache = data.attrs.setdefault("_precomputed_signals", {})
                     cache[id(strategy)] = signals
             except Exception as e:
-                logger.warning(f"Worker {worker_id}: 预计算信号失败 {code}: {e}")
+                logger.opt(exception=True).warning(
+                    f"Worker {worker_id}: 预计算信号失败 {code}: {e}"
+                )
 
         precompute_time = time.perf_counter() - precompute_start
         logger.info(f"Worker {worker_id}: 预计算完成，耗时 {precompute_time:.2f}秒")
@@ -148,7 +150,9 @@ def _worker_backtest(
                             )
                             all_signals.append(signal)
                 except Exception as e:
-                    logger.warning(f"Worker {worker_id}: 生成信号失败 {code}: {e}")
+                    logger.opt(exception=True).warning(
+                        f"Worker {worker_id}: 生成信号失败 {code}: {e}"
+                    )
 
             total_signals += len(all_signals)
 
@@ -212,7 +216,7 @@ def _worker_backtest(
         return result
 
     except Exception as e:
-        logger.error(f"Worker {worker_id} 执行失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"Worker {worker_id} 执行失败: {e}")
         return {
             "worker_id": worker_id,
             "error": str(e),
@@ -264,9 +268,11 @@ def run_multiprocess_backtest(
 
     from .data_loader import DataLoader
 
-    # 使用传入的数据目录或默认绝对路径
+    # 使用传入的数据目录；缺省交给 DataLoader 自己的默认（"data"，由它按项目根解析）
+    # ⚠️ 原来这里硬编码旧机器路径 "/Users/ronghui/Documents/GitHub/willrone/data"，
+    #    本机根本不存在 → 多进程回测一启动就失败。§12.44
     if data_dir is None:
-        data_dir = "/Users/ronghui/Documents/GitHub/willrone/data"
+        data_dir = "data"
 
     logger.info(f"数据目录: {data_dir}")
     data_loader = DataLoader(data_dir=data_dir, max_workers=num_workers)
@@ -369,9 +375,11 @@ def run_multiprocess_backtest(
     # 检查是否有错误
     errors = [r for r in results if "error" in r]
     if errors:
-        logger.error(f"❌ {len(errors)} 个进程执行失败:")
+        logger.opt(exception=True).error(f"❌ {len(errors)} 个进程执行失败:")
         for err in errors:
-            logger.error(f"  Worker {err['worker_id']}: {err['error']}")
+            logger.opt(exception=True).error(
+                f"  Worker {err['worker_id']}: {err['error']}"
+            )
 
     # 合并成功的结果
     successful_results = [r for r in results if "error" not in r]
@@ -421,7 +429,11 @@ def run_multiprocess_backtest(
         )
 
         volatility = returns.std() * np.sqrt(252)
-        sharpe_ratio = annualized_return / volatility if volatility > 0 else 0
+        # 夏普比率(标准定义: 日收益 μ/σ 年化 √252; 旧实现 年化收益/波动 复利口径已修正。
+        # 用日波动 returns.std() 而非已年化的 volatility, 否则 √252 被抵消成日夏普)
+        sharpe_ratio = (
+            returns.mean() / returns.std() * np.sqrt(252) if returns.std() > 0 else 0
+        )
 
         cumulative_returns = (1 + returns).cumprod()
         running_max = cumulative_returns.expanding().max()

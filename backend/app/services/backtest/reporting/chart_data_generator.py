@@ -35,7 +35,7 @@ class ChartDataGenerator:
                 raise ValueError(f"不支持的图表类型: {chart_type}")
 
         except Exception as e:
-            logger.error(f"生成图表数据失败: {chart_type}, {e}", exc_info=True)
+            logger.opt(exception=True).error(f"生成图表数据失败: {chart_type}, {e}")
             raise TaskError(
                 message=f"生成图表数据失败: {str(e)}",
                 severity=ErrorSeverity.MEDIUM,

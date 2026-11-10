@@ -107,5 +107,5 @@ async def get_system_status(request: Request) -> Any:
         )
 
     except Exception as e:
-        logger.error(f"获取系统状态失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取系统状态失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取系统状态失败: {str(e)}")

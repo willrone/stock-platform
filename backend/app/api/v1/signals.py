@@ -246,7 +246,9 @@ def _compute_latest_signal_for_stock(
         side, ts, strength, price, reason = last_event
         return side, ts, strength, price, reason or ""
     except Exception as e:
-        logger.warning(f"计算信号时发生未预期错误: {stock_code}: {e}", exc_info=True)
+        logger.opt(exception=True).warning(
+            f"计算信号时发生未预期错误: {stock_code}: {e}"
+        )
         return "HOLD", None, 0.0, None, f"计算错误: {type(e).__name__}"
 
 
@@ -325,7 +327,7 @@ async def get_latest_signals(
             },
         )
     except Exception as e:
-        logger.error(f"获取最新信号失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取最新信号失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取最新信号失败: {str(e)}")
 
 
@@ -402,7 +404,7 @@ async def get_latest_signals_multi(
                     name, strategy_configs_obj.get(name, {})
                 )
             except Exception as e:
-                logger.error(f"创建策略失败: {name}: {e}")
+                logger.opt(exception=True).error(f"创建策略失败: {name}: {e}")
                 raise HTTPException(
                     status_code=400, detail=f"创建策略失败: {name}: {e}"
                 )
@@ -457,12 +459,16 @@ async def get_latest_signals_multi(
                     except Exception as se:
                         # 记录更详细的错误信息
                         error_msg = f"{code}@{name}: {type(se).__name__}: {str(se)}"
-                        logger.warning(f"计算最新信号失败: {error_msg}")
+                        logger.opt(exception=True).warning(
+                            f"计算最新信号失败: {error_msg}"
+                        )
                         per_strategy[name] = None
                         failures.append(error_msg)
                         # 如果失败太多，记录警告但继续处理
                         if len(failures) > 100:
-                            logger.warning(f"失败数量较多，已记录{len(failures)}个失败")
+                            logger.opt(exception=True).warning(
+                                f"失败数量较多，已记录{len(failures)}个失败"
+                            )
 
                 results.append(
                     {
@@ -473,7 +479,7 @@ async def get_latest_signals_multi(
             except Exception as e:
                 # 记录股票级别的错误
                 error_msg = f"{code}: {type(e).__name__}: {str(e)}"
-                logger.warning(f"处理股票失败: {error_msg}", exc_info=True)
+                logger.opt(exception=True).warning(f"处理股票失败: {error_msg}")
                 failures.append(error_msg)
                 # 即使股票处理失败，也返回一个空结果，确保响应结构一致
                 results.append(
@@ -508,7 +514,7 @@ async def get_latest_signals_multi(
         else:
             # 如果一只股票都没处理成功，返回错误
             error_msg = f"未能处理任何股票。失败原因: {failures[:5] if failures else '未知错误'}"
-            logger.error(error_msg)
+            logger.opt(exception=True).error(error_msg)
             raise HTTPException(status_code=500, detail=error_msg)
     except HTTPException:
         raise
@@ -516,7 +522,7 @@ async def get_latest_signals_multi(
         error_detail = f"获取多策略最新信号失败: {type(e).__name__}: {str(e)}"
         if "results" in locals():
             error_detail += f" (已处理{len(results)}只股票)"
-        logger.error(error_detail, exc_info=True)
+        logger.opt(exception=True).error(error_detail)
         raise HTTPException(status_code=500, detail=error_detail)
 
 
@@ -590,7 +596,7 @@ async def get_signal_history(
             },
         )
     except Exception as e:
-        logger.error(f"获取信号历史失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取信号历史失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取信号历史失败: {str(e)}")
 
 
@@ -693,5 +699,5 @@ async def get_signal_history_multi(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取多策略信号历史失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取多策略信号历史失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取多策略信号历史失败: {str(e)}")

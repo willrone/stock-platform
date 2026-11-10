@@ -1,0 +1,668 @@
+{
+  "generated_at": "2026-11-02T01:40:26",
+  "git_commit": "295a4f9b",
+  "data_dir": "data/backtest",
+  "sha256_mode": "normalized-json-v2",
+  "sha256_excludes": [
+    "wall_s",
+    "total_wall_s",
+    "mainloop_sub_progress_update_s",
+    "precompute_sub_build_date_index_s",
+    "generated_at"
+  ],
+  "files": {
+    "ALL_real_lag1_v2.json": {
+      "sha256": "66ea76736db8379ad894243109542faf1048e45496f3ab7795b257f5ae6323d7",
+      "bytes": 8326,
+      "mtime": "2026-10-28T11:45:21"
+    },
+    "multi_asset_l3.json": {
+      "sha256": "589eac1e655a4103a425f44efe04a39fbd57f75d5e31b09db007d1a4cca67d62",
+      "bytes": 1062308,
+      "mtime": "2026-10-31T03:58:54"
+    },
+    "multi_asset_l3_oos.json": {
+      "sha256": "2d59594926c3f155c359d086425150aae7d05c5bf41ff0d3a6a208908f595fc0",
+      "bytes": 721563,
+      "mtime": "2026-10-31T04:00:24"
+    },
+    "multi_asset_p2_main.json": {
+      "sha256": "46c2acc6faaa5b49effd61937e4e2926d7100a78dfb5c7e70a70d84f30c0a58d",
+      "bytes": 241185,
+      "mtime": "2026-10-31T03:56:26"
+    },
+    "multi_asset_p2_oos.json": {
+      "sha256": "f3e59ccd06963a2722ec79e91a1788575113faab5ed0ba6d1a045c8a5b089697",
+      "bytes": 166137,
+      "mtime": "2026-10-31T03:56:28"
+    },
+    "multi_asset_p2_long.json": {
+      "sha256": "039aad86e85727376b971dd7c1e686d3a24b514fc899d302f10d0549abf659a3",
+      "bytes": 533316,
+      "mtime": "2026-10-31T03:56:49"
+    },
+    "multi_asset_p2_attrib.json": {
+      "sha256": "0b7f9b3af33ef996782b0351b179ee455fa978750bee65d2e61cc3bfb47c57ee",
+      "bytes": 2821,
+      "mtime": "2026-10-31T03:56:51"
+    },
+    "multi_asset_p3_main.json": {
+      "sha256": "ce3dc985b33d583cdb46fc297d08989f09b19e5a75264bd529c8979eed5f868d",
+      "bytes": 165068,
+      "mtime": "2026-10-31T09:48:39"
+    },
+    "multi_asset_p3_oos.json": {
+      "sha256": "71da0865bda43cb1b59386e3c7428342770095261b1a01d1af08cfd0535bdebf",
+      "bytes": 128876,
+      "mtime": "2026-10-31T09:48:43"
+    },
+    "multi_asset_p3_long.json": {
+      "sha256": "32cecbbdf6a56c89cca549fee5dde7d6896a9b59370cb0866d823f4c5fd74704",
+      "bytes": 48288,
+      "mtime": "2026-10-31T03:57:01"
+    },
+    "p3_recon.json": {
+      "sha256": "88645ab2a22a118fbb1107f21e17f76a87e3cf4da6551ec122cc80401da77128",
+      "bytes": 55438,
+      "mtime": "2026-10-31T02:48:30"
+    },
+    "p3_bond_recon.json": {
+      "sha256": "03bdf7bc59a7b727069a65cb8074b116bae1c738f03675ca25fdd4bf14749fe3",
+      "bytes": 3027,
+      "mtime": "2026-10-31T02:50:23"
+    },
+    "multi_asset_p4_main.json": {
+      "sha256": "c8e21f97e0daf66c632ee40f07b3ec93dd3f3903188516ee37e3944857a6ff16",
+      "bytes": 852886,
+      "mtime": "2026-10-31T09:48:48"
+    },
+    "multi_asset_p4_oos.json": {
+      "sha256": "5e58bcb8b60867179b4749976cd6e84690788a8d287518132b6d4b31cfe47166",
+      "bytes": 575585,
+      "mtime": "2026-10-31T09:48:51"
+    },
+    "multi_asset_p4_long.json": {
+      "sha256": "d3a85f527e59efab91ca2aa4e4f1acf14db2d30f1074cfc1c6125d01adaba89f",
+      "bytes": 2150943,
+      "mtime": "2026-10-31T09:48:55"
+    },
+    "p5_class_audit.json": {
+      "sha256": "84d24ef07d135424319748775babaeb00997eca17b315d0b1b120476906cadad",
+      "bytes": 21636,
+      "mtime": "2026-10-31T04:03:51"
+    },
+    "multi_asset_p6_main.json": {
+      "sha256": "704fcf89952c2b8d2fe16fa1c6d9f620413658ce5f0b3ccef7e4b7cd836f6671",
+      "bytes": 16161,
+      "mtime": "2026-10-31T21:53:54"
+    },
+    "multi_asset_p6_oos.json": {
+      "sha256": "6e22b1cdb4afad6a6a536659102b63d512da99e4363f33c181b910d370a7d3ad",
+      "bytes": 15470,
+      "mtime": "2026-10-31T21:53:59"
+    },
+    "p6_order_diag.json": {
+      "sha256": "9288f6e41b0fab8f2db3e329f387db8f06da44d0edb1298f92ad3934dfee8ca5",
+      "bytes": 1783,
+      "mtime": "2026-10-31T08:52:29"
+    },
+    "multi_asset_p7_main.json": {
+      "sha256": "6ba44a6d294752fe563ebaaab7adc41e5c6a9197b051dd44c70a0b7cb761e7eb",
+      "bytes": 30236,
+      "mtime": "2026-11-01T03:05:07"
+    },
+    "multi_asset_p7_oos.json": {
+      "sha256": "6826ae5a24cc7a9f331ec13d68728cd42739c35dd341b990b5bcd2cc9a5417ac",
+      "bytes": 9140,
+      "mtime": "2026-11-01T03:17:09"
+    },
+    "multi_asset_p8_main.json": {
+      "sha256": "99fc822930ac07e5c25af75d412a16c8e2f634e828fd4b4ada8d7820f824bef5",
+      "bytes": 2962,
+      "mtime": "2026-11-01T03:41:38"
+    },
+    "multi_asset_p8_oos.json": {
+      "sha256": "2181e1ae9e302c7e5d6c956de0bc6195d5e16db52d216fa5947220be6fb3bed1",
+      "bytes": 2916,
+      "mtime": "2026-11-01T03:46:58"
+    },
+    "multi_asset_p9_main.json": {
+      "sha256": "121a5e8970c0f95cb099a7188fe65fa1834965d6315923f15b2558793df274de",
+      "bytes": 76078,
+      "mtime": "2026-11-01T04:04:42"
+    },
+    "multi_asset_p9_oos.json": {
+      "sha256": "2b790696d880eb138bf3a22581f6338d4bc9d2d91dae7301e8b99e1f563a0f11",
+      "bytes": 55709,
+      "mtime": "2026-11-01T04:03:27"
+    },
+    "multi_asset_final_robustness.json": {
+      "sha256": "a5a724eee5d7dc15f1a34ea96ca9b0a9214155d8542e7a26e78340474842c320",
+      "bytes": 18624,
+      "mtime": "2026-10-31T04:03:42"
+    },
+    "multi_asset_final_robustness_oos.json": {
+      "sha256": "72b37890216f3518851fa32fbd02f1cb4fca4e258a0aab903c0bfd57af9fab01",
+      "bytes": 14217,
+      "mtime": "2026-10-31T04:03:44"
+    },
+    "multi_asset_long_history.json": {
+      "sha256": "ca62e73fb5f406f1e80052d3c4b807a18951c4c2491dcf57c65f61c26b72fbad",
+      "bytes": 16763,
+      "mtime": "2026-10-31T04:03:50"
+    },
+    "multi_asset_controls.json": {
+      "sha256": "74bdf2877dacf2237266781082d81de8ce07a510dee6bc1b6c3509b452e627e1",
+      "bytes": 5176,
+      "mtime": "2026-10-31T04:03:41"
+    },
+    "multi_asset_xclass.json": {
+      "sha256": "4c601cf455ed38c299f413985b57d8e7e380c5342c275f06c955502c8321798d",
+      "bytes": 433375,
+      "mtime": "2026-10-31T04:01:59"
+    },
+    "multi_asset_xclass_oos.json": {
+      "sha256": "c5ffada510dcb0693cb8caca3c68a82035390a14a236ea1cfadb22053569fabc",
+      "bytes": 296447,
+      "mtime": "2026-10-31T04:03:29"
+    },
+    "multi_asset_xclass_long_history.json": {
+      "sha256": "b19f845e186e8526b5762936bbd7e12d24eeb787ad1b88217bc304e37bf0e22c",
+      "bytes": 607651,
+      "mtime": "2026-10-31T04:03:40"
+    },
+    "multi_asset_p10_gate.json": {
+      "sha256": "c83d2813920332816c2e95c69ee7ca70844670a8b3628943a7840f3d77ae81ae",
+      "bytes": 1006,
+      "mtime": "2026-10-31T06:43:12"
+    },
+    "multi_asset_p10_long.json": {
+      "sha256": "b7eaf14d6ee15e8c8f237c9ed1599420ce6c4000f8e9954010bed21b6ccbde4f",
+      "bytes": 3103,
+      "mtime": "2026-10-31T08:25:37"
+    },
+    "multi_asset_p10_stats.json": {
+      "sha256": "15b3ce4dde2b61a1fe1e2628250b2aa833e41be6fae8005c520a83c71cdf000c",
+      "bytes": 297,
+      "mtime": "2026-10-31T08:51:44"
+    },
+    "multi_asset_p11_alpha.json": {
+      "sha256": "239e750785faad3572b9626a81e250eaf1a3b4dd9e145d1ac3fc7adcace6daf1",
+      "bytes": 546209,
+      "mtime": "2026-11-01T06:59:19"
+    },
+    "multi_asset_p11_stats.json": {
+      "sha256": "ce321f3fe10db2d315eafce3f095aeabdd4aaf0385d8846454c563507beef3b7",
+      "bytes": 993,
+      "mtime": "2026-10-31T12:09:21"
+    },
+    "multi_asset_p12_main.json": {
+      "sha256": "7a8c4621f969ba8e2d4bb8f5b3b2750eb36c00f9bd2675e56b496e074e30c85c",
+      "bytes": 31472,
+      "mtime": "2026-10-31T13:01:30"
+    },
+    "multi_asset_p12_oos.json": {
+      "sha256": "94e5760a1d5c48a6b7763c11ecd43a91629797ada05151b8d337dc11891a0632",
+      "bytes": 30646,
+      "mtime": "2026-10-31T13:01:50"
+    },
+    "multi_asset_p12_main_degraded.json": {
+      "sha256": "51b110d1bfb862f8ff5f9857edda635eb1b0b6f4f011dc56a1d0efc79ca9f964",
+      "bytes": 31358,
+      "mtime": "2026-10-31T13:57:07"
+    },
+    "multi_asset_p12_oos_degraded.json": {
+      "sha256": "c3d80f39b2dfc170a06017ddb5fa792c42a509ec702d026a81ef055d05eb3c52",
+      "bytes": 30560,
+      "mtime": "2026-10-31T13:57:28"
+    },
+    "multi_asset_p12_long.json": {
+      "sha256": "801e72d9000b691a0ed98bd1e41323b994abf44d268c915ddcd0e58a54e84686",
+      "bytes": 8867,
+      "mtime": "2026-11-01T01:38:56"
+    },
+    "multi_asset_p12_longw.json": {
+      "sha256": "d4e7d133d296d2125390bcbbe5a115b8b825c6136ad5949240f3c3f0e6713761",
+      "bytes": 64410,
+      "mtime": "2026-11-01T01:39:28"
+    },
+    "multi_asset_p12_diag.json": {
+      "sha256": "8b4a21c37b9567820a4c3e2450410269aabedef741b6a2050b12a7285a2f4164",
+      "bytes": 51262,
+      "mtime": "2026-11-01T01:39:28"
+    },
+    "multi_asset_p13_main.json": {
+      "sha256": "14b1f0b7f7ffaf29de372527ef3b72a1e46b69fcda9ae5e307b18fbfcbe8648b",
+      "bytes": 10905,
+      "mtime": "2026-10-31T20:44:41"
+    },
+    "multi_asset_p13_oos.json": {
+      "sha256": "e2759abea12c8f88249cc4f821f9f2aac3c280ac121ba03c6c1b8993f7036717",
+      "bytes": 10919,
+      "mtime": "2026-10-31T20:44:45"
+    },
+    "multi_asset_p13_long.json": {
+      "sha256": "62c70701bdec249e746f3ae8ae363f7d8a0f9c6dd49e39cda1675761917a7db2",
+      "bytes": 21324,
+      "mtime": "2026-10-31T20:44:47"
+    },
+    "multi_asset_p14_main.json": {
+      "sha256": "1a2999fb522f6af4a49d5d4e914d02bbdb3fbfa86e760ea84ba386b100e0ff04",
+      "bytes": 4153,
+      "mtime": "2026-10-31T23:02:52"
+    },
+    "multi_asset_p14_oos.json": {
+      "sha256": "113d4f37ba5663b0097972bb0fcdf24eb089e1aeb01328d17b3fa623c0da2672",
+      "bytes": 4156,
+      "mtime": "2026-10-31T23:02:56"
+    },
+    "multi_asset_p15_long_pastj.json": {
+      "sha256": "7e19db30a97e345dff3120b256f14abd28c6d6ffc84038e5572f420c83dd9430",
+      "bytes": 11453,
+      "mtime": "2026-11-01T14:19:45"
+    },
+    "multi_asset_p17_single_main.json": {
+      "sha256": "55e83a97c7cae78d8be5539859a080c84121f3faf44002f34d0d3b1b4cf68e63",
+      "bytes": 183982,
+      "mtime": "2026-11-01T03:29:20"
+    },
+    "multi_asset_p17_single_oos.json": {
+      "sha256": "04bd1260560cbfd71ea8a3639f9c874578694ddfcd421799e6025896d6ac3084",
+      "bytes": 164397,
+      "mtime": "2026-11-01T03:29:23"
+    },
+    "multi_asset_p17_verify_main.json": {
+      "sha256": "b55a1b32fbd2bac8f6cf316ef89e43e06a13018ab676ea526749bac9d71a768c",
+      "bytes": 9809,
+      "mtime": "2026-11-01T03:30:24"
+    },
+    "multi_asset_p17_verify_oos.json": {
+      "sha256": "07d50ba6cdf8dd13a42e6b73ac5c0a4846f06aa402537700b078900c82091fc8",
+      "bytes": 9811,
+      "mtime": "2026-11-01T03:30:27"
+    },
+    "multi_asset_p17_freq_main.json": {
+      "sha256": "8873f571dd196d3b0b095aa2f8c03a23ce5b982c0df9ccd73a7d5c6fad925ff7",
+      "bytes": 2116,
+      "mtime": "2026-11-01T03:31:38"
+    },
+    "multi_asset_p17_freq_oos.json": {
+      "sha256": "2590fe11d383e420db8405abf8b104b584da018e48d634ede0d0600813401944",
+      "bytes": 2113,
+      "mtime": "2026-11-01T03:31:41"
+    },
+    "multi_asset_p18_main.json": {
+      "sha256": "b35ab447a380f33260b04df1d117f3d24dece72fa560c68d36b91b7c46e7c96f",
+      "bytes": 802860,
+      "mtime": "2026-11-01T05:18:11"
+    },
+    "trial_budget.json": {
+      "sha256": "2814b92524c954033882a27f5bf809ec80ce9b6c2b0cccc4df55b04eb65517f8",
+      "bytes": 1676,
+      "mtime": "2026-11-01T04:19:58"
+    },
+    "_blend_nav_25f.json": {
+      "sha256": "7a992a4e7aa84023e8bdaa00e685a9b89dfd4055ca78075ee1655d0d33be28ec",
+      "bytes": 97466,
+      "mtime": "2026-10-27T01:59:45"
+    },
+    "baseline_final.json": {
+      "sha256": "47b863f9b9bf827a1a63a66bf5faeb2d6fb94c1ddcc65ad8fc1f988c7a873907",
+      "bytes": 2919,
+      "mtime": "2026-10-27T02:08:35"
+    },
+    "deflated_sharpe.json": {
+      "sha256": "457a1300155a1335596c18743f467f6cafbbdc275b66e21dfb4b4092bb24109f",
+      "bytes": 1598,
+      "mtime": "2026-10-27T04:18:16"
+    },
+    "ensemble_correlation.json": {
+      "sha256": "75bfd277756ceba7ed01541603befa2fadfda1258b19ca0713f0d2e58ab21246",
+      "bytes": 1124,
+      "mtime": "2026-10-26T23:26:13"
+    },
+    "full_history_features_progress.json": {
+      "sha256": "23b7ed08b1054cb88d8ddb85312f45ce2c3eb456725fda829d19fe7f017f0d15",
+      "bytes": 566899,
+      "mtime": "2026-10-26T18:19:31"
+    },
+    "full_history_reconcile.json": {
+      "sha256": "d541e4823c2778c2bfd09c218da1788c1a79d929296c1e89eaf7e37c2f46b307",
+      "bytes": 277726,
+      "mtime": "2026-10-26T18:24:29"
+    },
+    "fundamental_ic.json": {
+      "sha256": "30575b3afa2e1247b624ff58acc7c5585d66b3ebac4079ec25176da2ee01f5d2",
+      "bytes": 3457,
+      "mtime": "2026-10-27T04:12:30"
+    },
+    "fundseg_seg3_fund.json": {
+      "sha256": "2d9b759f8da9bcae5136ba382801dbacd50b99a2e5ba8e5148c31554143877f5",
+      "bytes": 2263,
+      "mtime": "2026-10-27T04:39:29"
+    },
+    "gbm_lag1.json": {
+      "sha256": "9b427cb963f45d779274c249ebf8fe50de90dd77ef8a0b7696968262b1c08c3f",
+      "bytes": 2905,
+      "mtime": "2026-10-27T04:56:46"
+    },
+    "gbm_ref_baselines.json": {
+      "sha256": "500e330f8499a3a0a269ea71ded0fe33aff629f04832783e95ec50c760dfc4b5",
+      "bytes": 2736,
+      "mtime": "2026-10-27T03:52:31"
+    },
+    "methods_5y_validation.json": {
+      "sha256": "fdc98880bf33d55227e6d2b4e5f86c14f368bc7f9e836ed875ed6318779abfb9",
+      "bytes": 7761,
+      "mtime": "2026-10-27T02:08:37"
+    },
+    "methods_engine_v2.json": {
+      "sha256": "9386f72cc9e2be3d7668a78db7a85c272e98d419f7b72292527d340a53f9a32c",
+      "bytes": 1584,
+      "mtime": "2026-10-27T01:58:19"
+    },
+    "methods_weights_fixed.json": {
+      "sha256": "56d31b6ee3975919213bfd73ba439bf24952ef21462e94c39acd9036881e5112",
+      "bytes": 7253,
+      "mtime": "2026-10-27T00:41:12"
+    },
+    "multi_asset_leg.json": {
+      "sha256": "979a2d6310f3ae1c1de623fb2a4e73d6e56ac7c7c9b375c8ef062f1cbd4aaef4",
+      "bytes": 9252,
+      "mtime": "2026-10-30T21:23:36"
+    },
+    "multi_asset_leg_oos.json": {
+      "sha256": "a8946d61da2015dddae74f454f0c07de8a98c4753cef757720f9bee1acdc8342",
+      "bytes": 8801,
+      "mtime": "2026-10-30T21:30:58"
+    },
+    "multi_asset_oos_validation.json": {
+      "sha256": "1a51659a01a388f734ff1e552e2d483a3921579c556ea361dc8fa3a317d51b01",
+      "bytes": 7503,
+      "mtime": "2026-10-30T22:13:07"
+    },
+    "multi_asset_p18_oos_smoke.json": {
+      "sha256": "ffe951d45c9dc7d76089b36259531bf82bf93358f417b08ceae9f9106038aa10",
+      "bytes": 18471,
+      "mtime": "2026-11-01T04:26:22"
+    },
+    "multi_asset_robustness.json": {
+      "sha256": "314a4720707dce1743ac2defa47a3635db7318378eddbf351ba40ccf81f5d72d",
+      "bytes": 10455,
+      "mtime": "2026-10-30T16:22:07"
+    },
+    "neut_segments.json": {
+      "sha256": "9b0de3ed9e66efe009386a685bc31c4e75d74b0c60d43e737e616fd2aeea6a1f",
+      "bytes": 1768,
+      "mtime": "2026-10-27T02:43:47"
+    },
+    "pool_partition.json": {
+      "sha256": "7245eb2d2edc7d0b22c33dda3b77c25a643d368153294fe15f587dd9b2cd5a2e",
+      "bytes": 23156,
+      "mtime": "2026-11-01T19:04:58"
+    },
+    "turnover_truth.json": {
+      "sha256": "d7e8180a13ac1cfc2ac83e12b96fa75bb9282e4f547996bb95eb350f46a9fec2",
+      "bytes": 9886,
+      "mtime": "2026-10-28T11:45:21"
+    },
+    "verify_10y_pit.json": {
+      "sha256": "270afa5768d78fdd97a97eabdc24fc29253c3697f4a137e10ef94f8b716c7bf2",
+      "bytes": 29654,
+      "mtime": "2026-10-26T11:09:30"
+    },
+    "sleeve_verify.json": {
+      "sha256": "098276bcb2668752265afbc5afcd0c5588b62aa3e8a5d34b088d262ea25d8f8e",
+      "bytes": 542,
+      "mtime": "2026-11-01T20:00:31"
+    },
+    "parity_backtest_main.json": {
+      "sha256": "787faa530e56aeffeb3079517d26202315c7170bda1358188648f91ffbef6554",
+      "bytes": 40672,
+      "mtime": "2026-11-01T07:42:04"
+    },
+    "diag_sleeve_drift.json": {
+      "sha256": "9cfdeeba321c4ad45af79418423a1fbe2cac5b8829e157f8f56b9d434da4df2b",
+      "bytes": 357235,
+      "mtime": "2026-11-01T06:31:31"
+    },
+    "diag_sleeve_class_order.json": {
+      "sha256": "a1a3af143d9f4ca57469a18bc62688444071b272b8a5d83b91882a6234bf4f40",
+      "bytes": 353094,
+      "mtime": "2026-11-01T06:30:04"
+    },
+    "data/strategy_baseline/baseline_full_market_3y.json": {
+      "sha256": "94149f230b11f1316d01f8caae033960e0235b569f426fbf532f91e53866b386",
+      "bytes": 43522,
+      "mtime": "2026-10-12T23:04:58"
+    },
+    "data/strategy_baseline/expanded_legs_10y.json": {
+      "sha256": "4bffb0c0db2381eb7ba401729de21c79ee23fb3653ed1c5ac30b6f4b9f08eb69",
+      "bytes": 812714,
+      "mtime": "2026-10-13T18:23:38"
+    },
+    "data/strategy_baseline/factor_ranking_10y_fixed.json": {
+      "sha256": "eddbffcc5b1db781cfcb1f5d930a59c893a6fe181a192e61faf83cfeefb2242b",
+      "bytes": 570,
+      "mtime": "2026-10-14T09:37:45"
+    },
+    "data/strategy_baseline/ic_composite_10y_execution_ab.json": {
+      "sha256": "475f8d9739d220a5eeb3a89141a8910b02c70382e6cefebff234a87ad320946b",
+      "bytes": 4070,
+      "mtime": "2026-10-19T21:34:20"
+    },
+    "data/strategy_baseline/ic_composite_10y_hygiene.json": {
+      "sha256": "ca6f803396998d51341ae985ae29be24aff00977d3eb81fbba611a847efa564b",
+      "bytes": 3815,
+      "mtime": "2026-10-19T20:25:11"
+    },
+    "data/strategy_baseline/ic_composite_10y_registered_topk.json": {
+      "sha256": "d03c515977669d5b359d5ba00c5d27f7c2a550423e31aa8cdd4fc3b2dbabf5d2",
+      "bytes": 2833,
+      "mtime": "2026-10-19T20:14:13"
+    },
+    "data/strategy_baseline/ic_composite_10y_signfix.json": {
+      "sha256": "85c0d901aa0d9c04679c8ea7e8080c0eb53d9c161812414a89979fbf99962ae2",
+      "bytes": 5829,
+      "mtime": "2026-10-25T11:14:26"
+    },
+    "data/strategy_baseline/ic_composite_rolling_walkforward.json": {
+      "sha256": "654623fb00df05ab807996f349a4a09eb95ed80894bb36ee79864fed673c5bed",
+      "bytes": 7089,
+      "mtime": "2026-10-19T22:16:45"
+    },
+    "data/strategy_baseline/ic_composite_walkforward.json": {
+      "sha256": "ee411e6e5ddab7421f9100b3a1190ea9c3c9f039fb9277c2bf36739b5708a8a6",
+      "bytes": 6686,
+      "mtime": "2026-10-19T21:45:10"
+    },
+    "data/strategy_baseline/moving_average_fix_3y.json": {
+      "sha256": "cd2d3a08bb31584712b0ae9b00d9a5f1dc2c8c07f56ae4bf844c38616e9c0bfa",
+      "bytes": 2061,
+      "mtime": "2026-10-25T16:20:21"
+    },
+    "data/strategy_baseline/portfolio_vol_experiment.json": {
+      "sha256": "3900f571fd05159cae5370f812d04ebe67f835122ada588964fcbf84d9b8ef3f",
+      "bytes": 3492,
+      "mtime": "2026-10-12T17:43:54"
+    },
+    "data/strategy_baseline/quality_weight_10y.json": {
+      "sha256": "59681a24f6a885eff35e9f18ff2fef9c07cc11e3bd40ce59d1fa54d2b4bb2ad1",
+      "bytes": 345569,
+      "mtime": "2026-10-13T13:46:13"
+    },
+    "data/strategy_baseline/risk_parity_10y_dsr_final.json": {
+      "sha256": "d6c5dff6191661928b62075dbc53771e5702e53787b2f27a45df0a6b4a843bf5",
+      "bytes": 1907,
+      "mtime": "2026-10-13T11:16:36"
+    },
+    "data/strategy_baseline/risk_parity_10y_experiment.json": {
+      "sha256": "44b3b80b511e927e0906819aba7ddcc5314f3967181cb9b761323354be023977",
+      "bytes": 779445,
+      "mtime": "2026-10-13T11:12:13"
+    },
+    "data/strategy_baseline/risk_parity_3y_control.json": {
+      "sha256": "a638e1c1fd3fa560468636be079f8f2914618501528bf2950303aa7c606f99c1",
+      "bytes": 232733,
+      "mtime": "2026-10-13T11:10:38"
+    },
+    "data/strategy_baseline/risk_parity_dsr_final.json": {
+      "sha256": "7d6373463855626792778e52d3e37276ffe9c7c3878f9f5a11a703803170a99a",
+      "bytes": 274450,
+      "mtime": "2026-11-01T21:10:11"
+    },
+    "data/strategy_baseline/sharpe_overlay_experiment.json": {
+      "sha256": "bda90596df635fbb6c419f4a8055ac6163cbe3d7d4a226ad1d0fab0668c8b0c2",
+      "bytes": 18043,
+      "mtime": "2026-10-12T15:21:11"
+    },
+    "data/strategy_baseline/sharpe_serial_verify.json": {
+      "sha256": "7752e66b65b8cfd45f136dd0ab7760a1efe8c96effc8eaf0a2397f4f690ad61c",
+      "bytes": 2137,
+      "mtime": "2026-10-12T15:38:09"
+    },
+    "data/strategy_baseline/sharpe_vol_sweep.json": {
+      "sha256": "cb5b4b3eb7728900d8fc463dc9112add24542d26827105a4da3eeda69f5f3a5a",
+      "bytes": 2074,
+      "mtime": "2026-10-12T15:24:39"
+    },
+    "data/strategy_baseline/sharpe_vol_sweep_serial.json": {
+      "sha256": "899c3c9ef44b85223ec761482968130244ed3c1bcf7b7d188bbc9202850e90de",
+      "bytes": 2020,
+      "mtime": "2026-10-12T15:44:36"
+    },
+    "data/strategy_baseline/stochastic_signal_fullmarket.json": {
+      "sha256": "58974a29dd59f8ae97576fcba85ba1aaad59208f28179ad91038883cee0f1631",
+      "bytes": 2092,
+      "mtime": "2026-10-12T19:22:40"
+    },
+    "data/strategy_baseline/stochastic_signal_fullmarket_yearly.json": {
+      "sha256": "ae7844be368395fcd5dc73e1d4b93f1b1d5ca43b4937dd4a7867a366dc375a48",
+      "bytes": 3020,
+      "mtime": "2026-10-12T19:39:30"
+    },
+    "data/strategy_baseline/stochastic_signal_grid.json": {
+      "sha256": "f5b72c8e9d4fb08a50d3c258f9934ecfa30b0a9bf85bc5cea0c5350016b4a042",
+      "bytes": 7854,
+      "mtime": "2026-10-12T19:06:18"
+    },
+    "data/etf/etf_universe.json": {
+      "sha256": "87e3375800f78b4a30518f17c80f4712f26ce4c07db20991e92ef14b791f2c3b",
+      "bytes": 154800,
+      "mtime": "2026-10-30T21:55:13"
+    },
+    "data/industry/industry_map.json": {
+      "sha256": "bf216630ac2c407ba85b1976ad45fc8b1978914868c54a30f63416340fe9dfd0",
+      "bytes": 151975,
+      "mtime": "2026-10-26T08:10:23"
+    },
+    "data/stocks/st_names.json": {
+      "sha256": "0f3df0934f60ec48265fd2ae1ff7dcf28bfdc4839cb261fe1d7420519559d62c",
+      "bytes": 737707,
+      "mtime": "2026-10-26T14:27:58"
+    }
+  },
+  "missing": [],
+  "expected_missing": {
+    "multi_asset_p18_oos.json": "P18 main 被判据(a)否决，按预注册 §10.2/§11.6 不跑 oos"
+  },
+  "uncovered_audited": [],
+  "doc_cited": [
+    "ALL_real_lag1_v2.json",
+    "_blend_nav_25f.json",
+    "baseline_final.json",
+    "data/etf/etf_universe.json",
+    "data/industry/industry_map.json",
+    "data/paper/portfolio.json",
+    "data/signals/paper_holdings.json",
+    "data/signals/paper_holdings_42f.json",
+    "data/signals/signal_2026-10-16.json",
+    "data/stocks/st_names.json",
+    "data/strategy_baseline/baseline_full_market_3y.json",
+    "data/strategy_baseline/expanded_legs_10y.json",
+    "data/strategy_baseline/factor_ranking_10y_fixed.json",
+    "data/strategy_baseline/ic_composite_10y_execution_ab.json",
+    "data/strategy_baseline/ic_composite_10y_hygiene.json",
+    "data/strategy_baseline/ic_composite_10y_registered_topk.json",
+    "data/strategy_baseline/ic_composite_10y_signfix.json",
+    "data/strategy_baseline/ic_composite_rolling_walkforward.json",
+    "data/strategy_baseline/ic_composite_walkforward.json",
+    "data/strategy_baseline/moving_average_fix_3y.json",
+    "data/strategy_baseline/portfolio_vol_experiment.json",
+    "data/strategy_baseline/quality_weight_10y.json",
+    "data/strategy_baseline/risk_parity_10y_dsr_final.json",
+    "data/strategy_baseline/risk_parity_10y_experiment.json",
+    "data/strategy_baseline/risk_parity_3y_control.json",
+    "data/strategy_baseline/risk_parity_dsr_final.json",
+    "data/strategy_baseline/sharpe_overlay_experiment.json",
+    "data/strategy_baseline/sharpe_serial_verify.json",
+    "data/strategy_baseline/sharpe_vol_sweep.json",
+    "data/strategy_baseline/sharpe_vol_sweep_serial.json",
+    "data/strategy_baseline/stochastic_signal_fullmarket.json",
+    "data/strategy_baseline/stochastic_signal_fullmarket_yearly.json",
+    "data/strategy_baseline/stochastic_signal_grid.json",
+    "data/tdx_daily/state.json",
+    "deflated_sharpe.json",
+    "diag_sleeve_class_order.json",
+    "diag_sleeve_drift.json",
+    "ensemble_correlation.json",
+    "full_history_features_progress.json",
+    "full_history_reconcile.json",
+    "fundamental_ic.json",
+    "fundseg_seg3_fund.json",
+    "gbm_lag1.json",
+    "gbm_ref_baselines.json",
+    "methods_5y_validation.json",
+    "methods_engine_v2.json",
+    "methods_weights_fixed.json",
+    "multi_asset_controls.json",
+    "multi_asset_final_robustness.json",
+    "multi_asset_final_robustness_oos.json",
+    "multi_asset_l3.json",
+    "multi_asset_l3_oos.json",
+    "multi_asset_leg.json",
+    "multi_asset_leg_oos.json",
+    "multi_asset_long_history.json",
+    "multi_asset_oos_validation.json",
+    "multi_asset_p11_alpha.json",
+    "multi_asset_p11_stats.json",
+    "multi_asset_p12_diag.json",
+    "multi_asset_p12_long.json",
+    "multi_asset_p12_longw.json",
+    "multi_asset_p12_main.json",
+    "multi_asset_p12_oos.json",
+    "multi_asset_p13_long.json",
+    "multi_asset_p13_main.json",
+    "multi_asset_p13_oos.json",
+    "multi_asset_p15_long_pastj.json",
+    "multi_asset_p18_main.json",
+    "multi_asset_p18_oos_smoke.json",
+    "multi_asset_p2_attrib.json",
+    "multi_asset_p2_main.json",
+    "multi_asset_p3_long.json",
+    "multi_asset_p3_main.json",
+    "multi_asset_p3_oos.json",
+    "multi_asset_p9_main.json",
+    "multi_asset_p9_oos.json",
+    "multi_asset_robustness.json",
+    "multi_asset_xclass.json",
+    "multi_asset_xclass_long_history.json",
+    "multi_asset_xclass_oos.json",
+    "neut_segments.json",
+    "p3_bond_recon.json",
+    "p3_recon.json",
+    "p5_class_audit.json",
+    "parity_backtest_main.json",
+    "pool_partition.json",
+    "sleeve_verify.json",
+    "trial_budget.json",
+    "turnover_truth.json",
+    "verify_10y_pit.json"
+  ],
+  "uncovered_doc_cited": [],
+  "live_state_excluded": [
+    "data/paper/",
+    "data/signals/",
+    "data/tdx_daily/"
+  ]
+}

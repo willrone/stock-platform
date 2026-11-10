@@ -525,20 +525,25 @@ class TestIntegration:
 
         # 注意：这个测试可能需要mock一些依赖
         # 这里主要测试数据准备流程不会出错
+        # try **只包这一步**：断言在 try 之外 —— 否则 `except Exception` 会把
+        # AssertionError 一起吞成 skip，"数据集不为空"这条断言永远不会真正生效。
+        train_dataset = None
+        val_dataset = None
         try:
             train_dataset, val_dataset = await engine._prepare_training_datasets(
                 complete_sample_data.copy(),
                 validation_split=0.2,
                 config=config,
             )
-
-            # 验证返回的数据集不为空
-            assert train_dataset is not None, "训练集不应该为空"
-            assert val_dataset is not None, "验证集不应该为空"
-
+        except AssertionError:
+            # 断言失败属于**被测行为违规**，不是环境问题 —— 必须让它红，不能当 skip 吞掉。
+            raise
         except Exception as e:
             # 如果因为Qlib不可用等原因失败，这是可以接受的
             pytest.skip(f"集成测试跳过（可能是Qlib不可用）: {e}")
+
+        assert train_dataset is not None, "训练集不应该为空"
+        assert val_dataset is not None, "验证集不应该为空"
 
 
 if __name__ == "__main__":

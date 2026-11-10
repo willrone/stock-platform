@@ -26,10 +26,8 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableRow,
-  Paper,
   CircularProgress,
   Alert,
   Slider,
@@ -48,6 +46,12 @@ import { DataService, PredictionRequest } from '../../services/dataService';
 import { useDataStore } from '../../stores/useDataStore';
 import type { Model } from '../../types/model';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
+import { MobileBottomNav } from '../../components/mobile/MobileBottomNav';
+import { SafeAreaTop } from '../../components/mobile/SafeAreaTop';
+import { ErrorState } from '../../components/mobile/ErrorState';
+import { DeltaValue } from '../../components/mobile/DeltaValue';
+import { ResponsiveTable } from '../../components/mobile/ResponsiveTable';
+import { BOTTOM_NAV_CONTENT_PADDING, MIN_TOUCH_TARGET } from '../../components/mobile/safeArea';
 
 interface PredictionResult {
   stock_code: string;
@@ -76,6 +80,7 @@ export default function PredictionsPage() {
   const [confidenceLevel, setConfidenceLevel] = useState<number>(0.95);
   const [predictions, setPredictions] = useState<PredictionResult[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [errorDetail, setErrorDetail] = useState<unknown>(null);
 
   // 加载模型列表
   useEffect(() => {
@@ -112,6 +117,7 @@ export default function PredictionsPage() {
     }
 
     setError(null);
+    setErrorDetail(null);
     setPredicting(true);
 
     try {
@@ -132,6 +138,7 @@ export default function PredictionsPage() {
       }
     } catch (err: any) {
       setError(err.message || '预测失败，请稍后重试');
+      setErrorDetail(err?.response?.data ?? err?.detail ?? err);
       console.error('预测失败:', err);
     } finally {
       setPredicting(false);
@@ -181,8 +188,19 @@ export default function PredictionsPage() {
   }
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h4" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+    <Box sx={{ p: { xs: 1.5, sm: 2, md: 3 }, pb: { xs: 10, md: 3 } }}>
+      <SafeAreaTop />
+      <MobileBottomNav />
+      <Typography
+        variant="h4"
+        gutterBottom
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          fontSize: { xs: '1.5rem', sm: '2rem' },
+        }}
+      >
         <Brain size={32} />
         预测分析
       </Typography>
@@ -252,9 +270,13 @@ export default function PredictionsPage() {
 
             {/* 错误提示 */}
             {error && (
-              <Alert severity="error" onClose={() => setError(null)}>
-                {error}
-              </Alert>
+              <ErrorState
+                title="预测失败"
+                message={error}
+                detail={errorDetail}
+                onRetry={() => void handlePredict()}
+                retrying={predicting}
+              />
             )}
 
             {/* 预测按钮 */}
@@ -287,7 +309,7 @@ export default function PredictionsPage() {
             }
           />
           <CardContent>
-            <TableContainer component={Paper} variant="outlined">
+            <ResponsiveTable minWidth={820}>
               <Table>
                 <TableHead>
                   <TableRow>
@@ -320,13 +342,11 @@ export default function PredictionsPage() {
                           />
                         </TableCell>
                         <TableCell align="right">
-                          <Typography
-                            color={prediction.predicted_return >= 0 ? 'success.main' : 'error.main'}
-                            fontWeight="bold"
-                          >
-                            {prediction.predicted_return >= 0 ? '+' : ''}
-                            {formatPercent(prediction.predicted_return)}
-                          </Typography>
+                          <DeltaValue
+                            value={prediction.predicted_return * 100}
+                            suffix="%"
+                            variant="body2"
+                          />
                         </TableCell>
                         <TableCell align="right">
                           {prediction.predicted_price
@@ -390,7 +410,16 @@ export default function PredictionsPage() {
                               </Box>
                             }
                           >
-                            <IconButton size="small">
+                            <IconButton
+                              size="medium"
+                              aria-label={
+                                prediction.risk_assessment.value_at_risk &&
+                                prediction.risk_assessment.value_at_risk > 0.1
+                                  ? '风险较高：VaR 超过 10%'
+                                  : '风险正常：VaR 未超过 10%'
+                              }
+                              sx={{ minWidth: MIN_TOUCH_TARGET, minHeight: MIN_TOUCH_TARGET }}
+                            >
                               {prediction.risk_assessment.value_at_risk &&
                               prediction.risk_assessment.value_at_risk > 0.1 ? (
                                 <AlertTriangle size={20} color="#f44336" />
@@ -405,7 +434,7 @@ export default function PredictionsPage() {
                   })}
                 </TableBody>
               </Table>
-            </TableContainer>
+            </ResponsiveTable>
 
             {/* 预测说明 */}
             <Alert severity="info" sx={{ mt: 2 }}>
@@ -443,6 +472,11 @@ export default function PredictionsPage() {
           </CardContent>
         </Card>
       )}
+
+      <Box
+        sx={{ height: BOTTOM_NAV_CONTENT_PADDING, display: { xs: 'block', md: 'none' } }}
+        aria-hidden="true"
+      />
     </Box>
   );
 }

@@ -7,6 +7,7 @@
  * - 实时数据推送
  * - 连接管理和重连
  */
+import { DEFAULT_BACKEND_WS_URL } from '@/config/backend';
 
 // WebSocket事件类型
 type TaskCreatedData = { task_id: string; task_name: string };
@@ -89,7 +90,7 @@ export class WebSocketService {
       wsUrl = `${protocol}//${hostname}:${port}/ws`;
     } else {
       // 服务端：使用默认值
-      wsUrl = 'ws://localhost:8000/ws';
+      wsUrl = DEFAULT_BACKEND_WS_URL;
     }
 
     wsLogger.debug('[WebSocket] 连接到:', wsUrl);

@@ -2,9 +2,14 @@ name: 测试运行
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, develop, "feat/*" ]
   pull_request:
     branches: [ main, develop ]
+
+# 同一条分支上连推多个 commit：只留最新一次的门禁，旧 run 直接取消（省 CI 分钟）
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   backend-test:

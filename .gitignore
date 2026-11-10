@@ -294,6 +294,10 @@ frontend/logs/
 
 # 数据文件
 /data/
+# 行业分类映射是运行时必需数据（申万一级，1579 只）——必须入库，
+# 否则部署后「行业中性化」策略线会因找不到映射而静默退化成普通 42f。
+!/data/industry/
+!/data/industry/industry_map.json
 backend/data/*
 !backend/data/.gitkeep
 !backend/data/stocks/
@@ -354,6 +358,10 @@ backend/secrets.json
 
 # 数据文件
 *.csv
+
+# 市场基准离线快照（P11 的无幸存者偏差基准）—— 纳入版本控制，保证可离线复现
+!backend/fixtures/market_benchmarks/
+!backend/fixtures/market_benchmarks/*.csv
 *.xlsx
 *.xls
 *.parquet
@@ -504,3 +512,7 @@ junit.xml
 .pre-commit-config.yaml.bak
 # Frontend isolated verification build output
 frontend/.next-build-check/
+
+# 临时探针脚本（一次性排查用，不入库）
+backend/scripts/_tmp_*.py
+backend/scripts/probe_*.py

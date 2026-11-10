@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/check-backend-endpoint.js",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -27,11 +28,8 @@
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@heroicons/react": "^2.2.0",
-    "@heroui/react": "^2.2.9",
-    "@heroui/theme": "^2.4.0",
     "@mui/icons-material": "^7.3.7",
     "@mui/material": "^7.3.7",
-    "antd": "^6.5.2",
     "axios": "1.6.2",
     "clsx": "^2.0.0",
     "dayjs": "1.11.10",
@@ -74,5 +72,8 @@
   "engines": {
     "node": ">=18.0.0",
     "npm": ">=8.0.0"
+  },
+  "overrides": {
+    "zrender": "5.6.1"
   }
 }

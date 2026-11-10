@@ -113,13 +113,24 @@ class TestApplication:
         assert "/metrics" in routes, "metrics路由不存在"
 
     def test_middleware_configured(self) -> None:
-        """测试当前应用中间件配置"""
+        """测试当前应用中间件配置
+
+        契约（2026-11-01 迁移）：限流中间件当前实现是 `IdentityRateLimitMiddleware`
+        ——按用户身份计数（登录用户按 user_id，未登录回退 IP），它是
+        `RateLimitMiddleware` 的**子类**（见 app/main.py:43）。旧断言用 `in` 做
+        精确类身份匹配，子类不等于基类 → 契约变更后必然失败。这里改成
+        `issubclass` 判定：断言的是「有按身份计数的限流中间件」，而不是
+        「恰好是基类本身」。
+        """
         app = create_application()
         middleware_classes = [middleware.cls for middleware in app.user_middleware]
 
         assert CORSMiddleware in middleware_classes, "CORS中间件未配置"
         assert GZipMiddleware in middleware_classes, "GZip中间件未配置"
-        assert RateLimitMiddleware in middleware_classes, "RateLimit中间件未配置"
+        assert any(
+            isinstance(cls, type) and issubclass(cls, RateLimitMiddleware)
+            for cls in middleware_classes
+        ), "RateLimit中间件未配置"
         assert ErrorHandlingMiddleware in middleware_classes, "错误处理中间件未配置"
         assert RequestLoggingMiddleware in middleware_classes, "请求日志中间件未配置"
 

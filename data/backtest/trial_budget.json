@@ -1,0 +1,45 @@
+{
+  "best_known": {
+    "label": "honest_composite 42f（A 腿单策略，main 真实盘 lag1）",
+    "sharpe": 0.8796,
+    "source": "data/backtest/ALL_real_lag1_v2.json"
+  },
+  "created": "2026-11-01",
+  "entries": [
+    {
+      "date": "2026-10-31",
+      "label": "历史累计（截至 P16）",
+      "note": "来源 deflated_sharpe.json methodology.n_trials；未逐条登记",
+      "source": "data/backtest/deflated_sharpe.json",
+      "trials": 1070
+    },
+    {
+      "date": "2026-11-01",
+      "label": "P17-A 类内选标的穷举",
+      "note": "gold 364 + commodity 4 + bond 84(main) / 35(oos) = 452 + 403 次精确撮合",
+      "source": "data/backtest/multi_asset_p17_single_{main,oos}.json",
+      "trials": 855
+    },
+    {
+      "date": "2026-11-01",
+      "label": "P17-B 袖套调仓频率",
+      "note": "6 个频率 × 2 窗口",
+      "source": "data/backtest/multi_asset_p17_freq_{main,oos}.json",
+      "trials": 12
+    },
+    {
+      "date": "2026-11-01",
+      "experiment_dsr95_threshold": 2.1964,
+      "experiment_trials": 5,
+      "label": "P18 42f+gbm 分数级融合",
+      "n_trials_total_after": 1942,
+      "note": "预注册搜索空间：w_gbm∈{0.10,0.20,0.30,0.50}+基线，融合方式固定（截面z后线性加权），placebo 3 种子/臂 → 本实验口径 5 次试验",
+      "override": true,
+      "trials": 5
+    }
+  ],
+  "n_trials_total": 1942,
+  "note": "n_trials 只能增不能减。降低阈值等于放宽统计标准，必须显式 --override 并留痕，且仅在「本实验的搜索空间被先验压缩到 N 次」这种正当理由下使用。",
+  "schema": "trial-budget-v1",
+  "updated": "2026-11-01"
+}

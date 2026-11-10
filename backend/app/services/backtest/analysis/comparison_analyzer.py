@@ -76,7 +76,7 @@ class BacktestComparisonAnalyzer:
             }
 
         except Exception as e:
-            logger.error(f"回测对比分析失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"回测对比分析失败: {e}")
             raise TaskError(
                 message=f"回测对比分析失败: {str(e)}",
                 severity=ErrorSeverity.HIGH,
@@ -180,7 +180,7 @@ class BacktestComparisonAnalyzer:
             }
 
         except Exception as e:
-            logger.error(f"计算相关性分析失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"计算相关性分析失败: {e}")
             return {"correlation_matrix": [], "average_correlation": 0}
 
     async def _generate_risk_return_scatter(

@@ -24,6 +24,7 @@ from app.api.v1 import (
     data_versioning,
     features,
     files,
+    funnel,
     health,
     infrastructure,
     laya,
@@ -37,6 +38,7 @@ from app.api.v1 import (
     strategy_configs,
     system,
     tasks,
+    trading,
     training_progress,
 )
 from app.api.v1.dependencies import get_current_user
@@ -50,6 +52,9 @@ api_router.include_router(auth.router)
 api_router.include_router(health.router)
 api_router.include_router(billing.public_router)
 api_router.include_router(billing.webhook_router)
+# 漏斗埋点：track 公开（注册前也能埋），report 自带管理员依赖
+api_router.include_router(funnel.public_router)
+api_router.include_router(funnel.router)
 
 # ── 受保护路由（需要 JWT 认证）──
 protected_router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -73,6 +78,7 @@ protected_router.include_router(files.router)
 protected_router.include_router(strategy_configs.router)
 protected_router.include_router(optimization.router)
 protected_router.include_router(signals.router)
+protected_router.include_router(trading.router)
 protected_router.include_router(dashboard.router)
 protected_router.include_router(billing.router)
 protected_router.include_router(commerce.router)

@@ -42,5 +42,5 @@ async def download_file(filename: str) -> Any:
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"下载文件失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"下载文件失败: {e}")
         raise HTTPException(status_code=500, detail=f"下载文件失败: {str(e)}")

@@ -1,0 +1,188 @@
+#!/usr/bin/env python3
+"""财务因子的 RankIC 验证（2026-10-27）
+
+## 目的
+检验「财务因子是否真的有 alpha」—— 这是今晚所有价量因子改造全部证伪后，
+唯一剩下的「引入新信息」路径。
+
+对照基准：现有 22 个价量因子的 RankIC(fwd5) 全部显著，|t| 4.13~18.54，
+最强 CORR10 = −0.0673。**财务因子只要 IC 同量级且与价量因子低相关，
+就值得全量接入。**
+
+## PIT 正确性
+财务数据按 **`pubDate`（公布日）** 对齐：因子值从公布当天才可用。
+用 statDate（报告期）会引入未来函数 —— 2024Q4 财报在 2025-03 才公布。
+
+## 用法
+  env -u PYTHONPATH -u PYTHONHOME backend/.venv-py313/bin/python3 \
+    backend/scripts/verify_fundamental_ic.py
+"""
+from __future__ import annotations
+
+import json
+import os
+import sys
+from datetime import datetime
+
+BACKEND = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.path.dirname(BACKEND)
+sys.path.insert(0, BACKEND)
+
+import numpy as np  # noqa: E402
+import pandas as pd  # noqa: E402
+
+OUT = os.path.join(ROOT, "data", "backtest", "fundamental_ic.json")
+FWD = 5
+FUND_FILE = os.path.join(ROOT, "data", "fundamentals", "fundamentals_pit.json")
+
+FWD = 5
+
+
+def main() -> int:
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--fund", default=os.path.join(
+        ROOT, "data", "fundamentals", "financial_ak_full.json"))
+    ap.add_argument("--forward", type=int, default=5)
+    ap.add_argument("--min-stocks", type=int, default=30)
+    ap.add_argument("--out", default=OUT)
+    args = ap.parse_args()
+    global FWD
+    FWD = args.forward
+
+    if not os.path.exists(args.fund):
+        print(f"[fic] 缺少 {args.fund}，先跑 fetch_financial_ak.py")
+        return 1
+    with open(args.fund) as fh:
+        raw = json.load(fh)
+    print(f"[fic] 财务数据：{len(raw)} 只股票（{os.path.basename(args.fund)}）",
+          flush=True)
+    if not raw:
+        return 1
+
+    # ── 加载价格（同一股票池，用于前瞻收益）────────────────────────
+    from app.services.backtest.execution.data_loader import DataLoader
+    dl = DataLoader(data_dir=os.path.join(ROOT, "data"))
+    # 价格加载器要「600000.SH」完整代码；财务侧是 6 位 → 这里统一用完整代码
+    full_codes = []
+    inst = os.path.join(ROOT, "data", "qlib_official_data", "instruments", "all.txt")
+    with open(inst) as fh:
+        for line in fh:
+            parts = line.strip().split("\t")
+            if parts and "_" in parts[0]:
+                c, _, m = parts[0].partition("_")
+                if m.upper() in ("SH", "SZ", "BJ") and c.isdigit():
+                    full_codes.append(f"{c}.{m.upper()}")
+    codes = sorted(full_codes)
+    s, e = datetime(2019, 1, 1), datetime(2026, 5, 8)
+    close = {}
+    for i, c in enumerate(codes):
+        try:
+            d = dl.load_stock_data(c, s, e)
+        except Exception:
+            continue
+        if d is None or d.empty:
+            continue
+        col = "$close" if "$close" in d.columns else "close"
+        close[c] = pd.to_numeric(d[col], errors="coerce")
+        if (i + 1) % 50 == 0:
+            print(f"  价格 {i+1}/{len(codes)}", flush=True)
+    if not close:
+        print("[fic] 没有价格数据")
+        return 1
+    idx = pd.DatetimeIndex(sorted(set().union(*[set(v.index) for v in close.values()])))
+    close_df = pd.DataFrame(close).reindex(idx)
+    # 代码格式对齐：财务侧是 6 位（600000），价格侧是 600000.SH
+    code_alias = {}
+    for c in close_df.columns:
+        base = str(c).split(".")[0]
+        code_alias.setdefault(base, c)
+    fwd = (close_df.shift(-FWD) / close_df - 1.0)
+    print(f"[fic] 价格矩阵 {close_df.shape}  交易日 {len(idx)}", flush=True)
+
+    # ── 构建 PIT 因子面板（阶梯函数：公布日才生效）──────────────────
+    def _vals(rec):
+        """兼容 [avail, {f: v}]（akshare）与 [pub, stat, {f: v}]（baostock）"""
+        return rec[1] if len(rec) == 2 else rec[2]
+
+    factor_names = sorted({f for recs in raw.values() for rec in recs
+                           for f in _vals(rec)})
+    print(f"[fic] 因子：{factor_names}", flush=True)
+    panels = {f: pd.DataFrame(np.nan, index=idx, columns=list(close_df.columns))
+              for f in factor_names}
+
+    for code, recs in raw.items():
+        code = code_alias.get(str(code).split(".")[0], code)
+        if code not in close_df.columns:
+            continue
+        for rec in recs:
+            # 兼容两种格式：
+            #   akshare: [avail_date, {factor: value}]
+            #   baostock: [pub_date, stat_date, {factor: value}]
+            if len(rec) == 3:
+                pub, _stat, vals = rec
+            else:
+                pub, vals = rec[0], rec[1]
+            ts = pd.Timestamp(pub)
+            # 归到该日期所在（或之前）的交易日；从这一天起生效
+            pos = idx.searchsorted(ts, side="left")
+            if pos >= len(idx):
+                continue
+            start_ts = idx[pos]
+            for f, v in vals.items():
+                panels[f].loc[start_ts:, code] = v
+
+    # ── 逐因子算逐日 RankIC ─────────────────────────────────────
+    rows = []
+    for f, panel in panels.items():
+        ics = []
+        for i in range(len(idx) - FWD):
+            x = panel.iloc[i]
+            y = fwd.iloc[i]
+            ok = x.notna() & y.notna()
+            if ok.sum() < args.min_stocks:
+                continue
+            xv, yv = x[ok], y[ok]
+            if xv.nunique() < 3 or yv.nunique() < 3:
+                continue
+            r = xv.rank().corr(yv.rank())
+            if pd.notna(r):
+                ics.append(float(r))
+        if len(ics) < 60:
+            print(f"  {f:<22} 样本不足（{len(ics)} 天）", flush=True)
+            continue
+        arr = np.array(ics)
+        icir = arr.mean() / (arr.std() + 1e-12)
+        rows.append({
+            "factor": f,
+            "mean_ic": round(float(arr.mean()), 5),
+            "std_ic": round(float(arr.std()), 5),
+            "icir": round(float(icir), 4),
+            "t_stat": round(float(icir * np.sqrt(len(arr))), 2),
+            "ic_positive_ratio": round(float((arr > 0).mean()), 4),
+            "n_days": len(arr),
+        })
+    rows.sort(key=lambda r: -abs(r["t_stat"]))
+    print(f"\n{'因子':<22}{'meanIC':>9}{'ICIR':>8}{'t':>7}{'IC>0':>8}")
+    print("-" * 56)
+    for r in rows:
+        print(f"{r['factor']:<22}{r['mean_ic']:>9.4f}{r['icir']:>8.3f}"
+              f"{r['t_stat']:>7.2f}{r['ic_positive_ratio']*100:>7.0f}%")
+
+    os.makedirs(os.path.dirname(args.out), exist_ok=True)
+    with open(args.out, "w") as fh:
+        json.dump({
+            "window": f"{idx[0].date()}→{idx[-1].date()}",
+            "n_stocks": int(close_df.shape[1]),
+            "methodology": {
+                "lag": 1, "enable_tradability": True, "realistic": True,
+                "note": "财务因子 RankIC(fwd5)；按 pubDate 对齐（PIT）",
+            },
+            "factors": rows,
+        }, fh, ensure_ascii=False, indent=1)
+    print(f"\n[fic] 已写入 {args.out}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

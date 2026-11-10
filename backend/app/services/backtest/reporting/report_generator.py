@@ -198,7 +198,7 @@ class BacktestReportGenerator:
             return filepath
 
         except Exception as e:
-            logger.error(f"生成PDF报告失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"生成PDF报告失败: {e}")
             raise TaskError(
                 message=f"生成PDF报告失败: {str(e)}",
                 severity=ErrorSeverity.HIGH,
@@ -347,7 +347,7 @@ class BacktestReportGenerator:
             return filepath
 
         except Exception as e:
-            logger.error(f"生成Excel报告失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"生成Excel报告失败: {e}")
             raise TaskError(
                 message=f"生成Excel报告失败: {str(e)}",
                 severity=ErrorSeverity.HIGH,

@@ -76,7 +76,7 @@ try:
     DeepModelTrainingService = ImportedDeepModelTrainingService
     DEEP_TRAINING_AVAILABLE = True
 except ImportError as e:
-    logger.warning(f"深度学习训练服务导入失败: {e}")
+    logger.opt(exception=True).warning(f"深度学习训练服务导入失败: {e}")
 
 try:
     from app.services.models.model_storage import ModelStorage as ImportedModelStorage
@@ -88,7 +88,7 @@ try:
     MLModelTrainingService = ImportedMLModelTrainingService
     ML_TRAINING_AVAILABLE = True
 except ImportError as e:
-    logger.warning(f"传统ML训练服务导入失败: {e}")
+    logger.opt(exception=True).warning(f"传统ML训练服务导入失败: {e}")
 
 TRAINING_AVAILABLE = DEEP_TRAINING_AVAILABLE or ML_TRAINING_AVAILABLE
 
@@ -200,7 +200,7 @@ def _notify_on_loop(
     try:
         asyncio.run_coroutine_threadsafe(coro, main_loop)
     except RuntimeError as exc:
-        logger.warning(f"跳过{description}: {exc}")
+        logger.opt(exception=True).warning(f"跳过{description}: {exc}")
         try:
             coro.close()
         except Exception:
@@ -343,7 +343,7 @@ def _run_train_model_task_sync(
         finally:
             loop.close()
     except Exception as e:
-        logger.error(f"训练任务执行失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"训练任务执行失败: {e}")
 
 
 # 创建线程池执行器（单例）
@@ -386,7 +386,7 @@ async def train_model_task(
         model_info = _as_model_info(model_repository.get_model_info(model_id))
 
         if not model_info:
-            logger.error(f"模型不存在: {model_id}")
+            logger.opt(exception=True).error(f"模型不存在: {model_id}")
             # 如果提供了主事件循环，在主循环中发送通知
             _notify_on_loop(
                 main_loop,
@@ -523,7 +523,7 @@ async def train_model_task(
                             "r2": result.validation_metrics.get("r2", 0.0),
                         }
                     except Exception as e:
-                        logger.warning(f"超参数试验失败: {e}")
+                        logger.opt(exception=True).warning(f"超参数试验失败: {e}")
                         return {"score": 0.0, "accuracy": 0.0, "r2": 0.0}
 
                 # 执行超参数搜索（需要处理异步函数）
@@ -568,13 +568,17 @@ async def train_model_task(
                 if strategy == SearchStrategy.GRID_SEARCH.value:
                     combinations = _generate_grid_combinations(param_space)
                     if not combinations:
-                        logger.warning("超参数网格为空，改用随机搜索")
+                        logger.opt(exception=True).warning(
+                            "超参数网格为空，改用随机搜索"
+                        )
                         combinations = []
                     if combinations and len(combinations) > total_trials:
                         combinations = random.sample(combinations, total_trials)
                     trial_params = combinations
                 elif strategy == SearchStrategy.BAYESIAN_OPTIMIZATION.value:
-                    logger.warning("暂不支持贝叶斯优化，改用随机搜索")
+                    logger.opt(exception=True).warning(
+                        "暂不支持贝叶斯优化，改用随机搜索"
+                    )
                     trial_params = []
                 else:
                     trial_params = []
@@ -622,7 +626,9 @@ async def train_model_task(
                             )()
                             logger.info(f"发现更好的超参数组合，得分: {score:.4f}")
                     except Exception as e:
-                        logger.error(f"超参数试验 {trial_id} 失败: {e}", exc_info=True)
+                        logger.opt(exception=True).error(
+                            f"超参数试验 {trial_id} 失败: {e}"
+                        )
 
                 if best_trial and best_trial.score > 0:
                     final_hyperparameters.update(best_trial.hyperparameters)
@@ -646,7 +652,9 @@ async def train_model_task(
                         },
                     )
                 else:
-                    logger.warning("超参数调优未找到有效结果，使用默认参数")
+                    logger.opt(exception=True).warning(
+                        "超参数调优未找到有效结果，使用默认参数"
+                    )
                     tuning_summary = {
                         "strategy": strategy,
                         "trials": len(trial_params),
@@ -732,7 +740,9 @@ async def train_model_task(
 
             # 确保超参数不为空
             if not final_hyperparameters or len(final_hyperparameters) == 0:
-                logger.warning(f"模型 {model_id} 的超参数为空，使用默认值")
+                logger.opt(exception=True).warning(
+                    f"模型 {model_id} 的超参数为空，使用默认值"
+                )
                 final_hyperparameters = (
                     hyperparameters.copy() if hyperparameters else {}
                 )
@@ -841,7 +851,9 @@ async def train_model_task(
                 "模型训练取消通知",
             )
         except Exception as e:
-            logger.error(f"统一Qlib模型训练失败: {model_id}, 错误: {e}", exc_info=True)
+            logger.opt(exception=True).error(
+                f"统一Qlib模型训练失败: {model_id}, 错误: {e}"
+            )
             model_info.status = "failed"
             model_info.training_stage = "failed"
             model_info.performance_metrics = _build_training_failure_payload(e)
@@ -866,7 +878,7 @@ async def train_model_task(
             )
 
     except Exception as e:
-        logger.error(f"训练任务执行失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"训练任务执行失败: {e}")
         session.rollback()
         try:
             model_info = (
@@ -891,7 +903,7 @@ async def train_model_task(
                 }
                 session.commit()
         except Exception:
-            logger.error("记录训练任务外层失败信息失败", exc_info=True)
+            logger.opt(exception=True).error("记录训练任务外层失败信息失败")
         _notify_on_loop(
             main_loop,
             notify_model_training_failed(model_id, str(e)),
@@ -953,7 +965,7 @@ async def get_model_versions(model_id: str) -> StandardResponse:
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取模型版本失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取模型版本失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取模型版本失败: {str(e)}")
     finally:
         session.close()
@@ -968,7 +980,7 @@ async def get_model_evaluation_report(model_id: str) -> StandardResponse:
             session.query(ModelInfo).filter(ModelInfo.model_id == model_id).first()
         )
         if not model:
-            logger.warning(f"模型不存在: {model_id}")
+            logger.opt(exception=True).warning(f"模型不存在: {model_id}")
             raise HTTPException(status_code=404, detail=f"模型不存在: {model_id}")
 
         logger.info(
@@ -978,21 +990,23 @@ async def get_model_evaluation_report(model_id: str) -> StandardResponse:
         # 检查评估报告是否存在
         report_payload = model.evaluation_report
         if report_payload is None:
-            logger.warning(f"模型 {model_id} 的评估报告为 None，状态: {model.status}")
+            logger.opt(exception=True).warning(
+                f"模型 {model_id} 的评估报告为 None，状态: {model.status}"
+            )
             raise HTTPException(
                 status_code=404, detail="该模型尚未生成评估报告，请等待训练完成"
             )
 
         # 检查评估报告是否为空字典
         if isinstance(report_payload, dict) and len(report_payload) == 0:
-            logger.warning(f"模型 {model_id} 的评估报告为空字典")
+            logger.opt(exception=True).warning(f"模型 {model_id} 的评估报告为空字典")
             raise HTTPException(
                 status_code=404, detail="该模型尚未生成评估报告，请等待训练完成"
             )
 
         # 检查评估报告是否为空字符串
         if isinstance(report_payload, str) and len(report_payload.strip()) == 0:
-            logger.warning(f"模型 {model_id} 的评估报告为空字符串")
+            logger.opt(exception=True).warning(f"模型 {model_id} 的评估报告为空字符串")
             raise HTTPException(
                 status_code=404, detail="该模型尚未生成评估报告，请等待训练完成"
             )
@@ -1011,7 +1025,7 @@ async def get_model_evaluation_report(model_id: str) -> StandardResponse:
                     success=True, message="评估报告获取成功", data=evaluation_report
                 )
             except json.JSONDecodeError as e:
-                logger.error(f"解析评估报告JSON失败: {e}")
+                logger.opt(exception=True).error(f"解析评估报告JSON失败: {e}")
                 raise HTTPException(status_code=500, detail="评估报告格式错误")
 
         logger.info(f"成功获取模型 {model_id} 的评估报告")
@@ -1037,7 +1051,7 @@ async def get_model_evaluation_report(model_id: str) -> StandardResponse:
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取评估报告失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取评估报告失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取评估报告失败: {str(e)}")
     finally:
         session.close()
@@ -1060,7 +1074,7 @@ async def list_models() -> StandardResponse:
         )
 
     except Exception as e:
-        logger.error(f"获取模型列表失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取模型列表失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取模型列表失败: {str(e)}")
     finally:
         session.close()
@@ -1234,7 +1248,9 @@ async def get_available_features(
                         },
                     )
             except Exception as e:
-                logger.warning(f"获取实际特征失败，返回理论特征列表: {e}")
+                logger.opt(exception=True).warning(
+                    f"获取实际特征失败，返回理论特征列表: {e}"
+                )
 
         # 返回理论特征列表（使用实际训练时的特征名称格式）
         # 将理论特征名称转换为实际训练时使用的格式
@@ -1308,7 +1324,7 @@ async def get_available_features(
         )
 
     except Exception as e:
-        logger.error(f"获取可用特征列表失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取可用特征列表失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取可用特征列表失败: {str(e)}")
 
 
@@ -1335,7 +1351,7 @@ async def get_model_detail(model_id: str) -> StandardResponse:
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取模型详情失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取模型详情失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取模型详情失败: {str(e)}")
     finally:
         session.close()
@@ -1360,7 +1376,9 @@ async def delete_model(model_id: str) -> StandardResponse:
                     model_file.unlink()
                     logger.info(f"已删除模型文件: {model.file_path}")
             except Exception as e:
-                logger.warning(f"删除模型文件失败: {e}，继续删除数据库记录")
+                logger.opt(exception=True).warning(
+                    f"删除模型文件失败: {e}，继续删除数据库记录"
+                )
 
         # 删除数据库记录
         session.delete(model)
@@ -1376,7 +1394,7 @@ async def delete_model(model_id: str) -> StandardResponse:
         raise
     except Exception as e:
         session.rollback()
-        logger.error(f"删除模型失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"删除模型失败: {e}")
         raise HTTPException(status_code=500, detail=f"删除模型失败: {str(e)}")
     finally:
         session.close()
@@ -1431,7 +1449,7 @@ async def cancel_model_training(model_id: str) -> StandardResponse:
         raise
     except Exception as e:
         session.rollback()
-        logger.error(f"取消模型训练失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"取消模型训练失败: {e}")
         raise HTTPException(status_code=500, detail=f"取消模型训练失败: {str(e)}")
     finally:
         session.close()
@@ -1597,7 +1615,7 @@ async def create_training_task(request: ModelTrainingRequest) -> StandardRespons
         raise
     except Exception as e:
         session.rollback()
-        logger.error(f"创建模型训练任务失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"创建模型训练任务失败: {e}")
         raise HTTPException(status_code=500, detail=f"创建模型训练任务失败: {str(e)}")
     finally:
         session.close()
@@ -1626,7 +1644,7 @@ async def get_model_lifecycle(model_id: str) -> StandardResponse:
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取模型生命周期信息失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取模型生命周期信息失败: {e}")
         raise HTTPException(
             status_code=500, detail=f"获取模型生命周期信息失败: {str(e)}"
         )
@@ -1650,7 +1668,7 @@ async def get_model_lineage(model_id: str) -> StandardResponse:
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取模型血缘信息失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取模型血缘信息失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取模型血缘信息失败: {str(e)}")
 
 
@@ -1680,7 +1698,7 @@ async def get_model_dependencies(model_id: str) -> StandardResponse:
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取模型依赖关系失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取模型依赖关系失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取模型依赖关系失败: {str(e)}")
 
 
@@ -1729,7 +1747,7 @@ async def transition_model_lifecycle(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"转换模型生命周期失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"转换模型生命周期失败: {e}")
         raise HTTPException(status_code=500, detail=f"转换模型生命周期失败: {str(e)}")
 
 
@@ -1791,7 +1809,7 @@ async def get_model_performance_history(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取模型性能历史失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取模型性能历史失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取模型性能历史失败: {str(e)}")
 
 
@@ -1892,7 +1910,7 @@ async def search_models(
         )
 
     except Exception as e:
-        logger.error(f"模型搜索失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"模型搜索失败: {e}")
         raise HTTPException(status_code=500, detail=f"模型搜索失败: {str(e)}")
     finally:
         session.close()
@@ -1933,7 +1951,7 @@ async def add_model_tags(model_id: str, tags: List[str]) -> StandardResponse:
         raise
     except Exception as e:
         session.rollback()
-        logger.error(f"添加模型标签失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"添加模型标签失败: {e}")
         raise HTTPException(status_code=500, detail=f"添加模型标签失败: {str(e)}")
     finally:
         session.close()
@@ -1974,7 +1992,7 @@ async def remove_model_tags(model_id: str, tags: List[str]) -> StandardResponse:
         raise
     except Exception as e:
         session.rollback()
-        logger.error(f"移除模型标签失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"移除模型标签失败: {e}")
         raise HTTPException(status_code=500, detail=f"移除模型标签失败: {str(e)}")
     finally:
         session.close()

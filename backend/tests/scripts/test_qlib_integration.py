@@ -6,13 +6,22 @@
 """
 
 import asyncio
+import faulthandler
 import logging
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
+# 段错误（SIGSEGV）时打印 Python 栈 —— lightgbm 的 C 层崩溃没有 faulthandler
+# 就是一句 "Segmentation fault"，根本不知道崩在哪（§12.44 定位靠的就是它）
+faulthandler.enable()
+
 # 添加项目根目录到Python路径
+# ⚠️ 必须同时加 **backend 根**：本文件既被 pytest 收集，也支持 `python tests/scripts/xxx.py`
+# 直接运行。pytest 下 rootdir 会把 backend 加进 sys.path，但直接运行时不会 ——
+# 只加 scripts 目录会 `ModuleNotFoundError: No module named 'app'`（§12.44 实测）。
 sys.path.append(str(Path(__file__).parent))
+sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from app.services.qlib.enhanced_qlib_provider import EnhancedQlibDataProvider
 from app.services.qlib.unified_qlib_training_engine import (
@@ -28,6 +37,37 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def qlib_trading_window(n_days: int = 90) -> tuple[datetime, datetime]:
+    """返回 qlib **交易日历里真实可用**的窗口 (end, start)。
+
+    ⚠️ 绝对不能用 ``datetime.now()`` 当窗口右端（2026-11-03 踩过，§12.44）：
+    本机 qlib 数据的末日是 **2026-05-08**，而 ``now - 60 天`` 落在 2026-09 之后
+    → **整个训练窗口完全在数据范围之外** → 训练集为空 →
+    LightGBM 在空数据上 ``Booster.predict`` 触发**原生段错误（SIGSEGV）**。
+
+    这个崩溃是 lightgbm 的 C 扩展内部错误，Python 层 **catch 不到** →
+    直接把整个 pytest 进程带走（整轮 700+ 测试的结果全部丢失），
+    这就是台账 §12.36 F2 里"qlib segfault 归入既有缺陷台账"的真身。
+
+    现在从 ``settings.QLIB_DATA_PATH/calendars/day.txt`` 动态解析数据窗口 ——
+    **不硬编码日期**（数据会更新），也不硬编码路径（§12.40 的教训）。
+    """
+    from app.core.config import settings
+
+    cal_path = Path(settings.QLIB_DATA_PATH).resolve() / "calendars" / "day.txt"
+    if not cal_path.exists():
+        raise FileNotFoundError(
+            f"找不到 qlib 交易日历: {cal_path}（QLIB_DATA_PATH={settings.QLIB_DATA_PATH}）"
+        )
+    days = [line.strip() for line in cal_path.read_text().splitlines() if line.strip()]
+    if len(days) < n_days:
+        raise ValueError(f"交易日历只有 {len(days)} 天，不足 {n_days} 天窗口")
+    end = datetime.strptime(days[-1], "%Y%m%d")
+    start = datetime.strptime(days[-n_days], "%Y%m%d")
+    logger.info(f"qlib 数据可用窗口: {start.date()} ~ {end.date()}（共 {n_days} 个交易日）")
+    return end, start
+
+
 async def test_enhanced_qlib_provider():
     """测试增强的Qlib数据提供器"""
     logger.info("=== 测试增强的Qlib数据提供器 ===")
@@ -38,8 +78,7 @@ async def test_enhanced_qlib_provider():
 
         # 测试参数
         stock_codes = ["000001.SZ", "000002.SZ"]
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=90)
+        end_date, start_date = qlib_trading_window(90)
 
         logger.info(f"测试股票: {stock_codes}")
         logger.info(f"日期范围: {start_date.date()} 到 {end_date.date()}")
@@ -114,8 +153,9 @@ async def test_unified_training_engine():
 
         # 测试参数
         stock_codes = ["000001.SZ"]  # 使用单只股票减少测试时间
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=60)  # 减少数据量
+        # ⚠️ 窗口必须落在 qlib 真实数据范围内（见 qlib_trading_window 的说明）：
+        # 用 datetime.now() 会让训练集为空 → lightgbm 原生 SIGSEGV。
+        end_date, start_date = qlib_trading_window(60)
 
         logger.info(f"测试股票: {stock_codes}")
         logger.info(f"日期范围: {start_date.date()} 到 {end_date.date()}")

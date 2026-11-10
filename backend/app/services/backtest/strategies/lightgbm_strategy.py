@@ -9,10 +9,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
 
-import joblib
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
+from loguru import logger
 
 from app.core.config import settings
 from app.services.backtest.models import SignalType, TradingSignal
@@ -34,8 +34,10 @@ class LightGBMPredictionStrategy(BaseModelPredictionStrategy):
         # LightGBM 模型路径
         self.lgb_model_path = cast(str, config.get("lgb_model_path", ""))
         if not self.lgb_model_path:
-            # 默认路径
-            self.lgb_model_path = str(settings.MODEL_STORAGE_PATH / "lgb_model.txt")
+            # 默认路径（MODEL_STORAGE_PATH 是 str，必须先转 Path 再用 / 拼接）
+            self.lgb_model_path = str(
+                Path(settings.MODEL_STORAGE_PATH) / "lgb_model.txt"
+            )
 
         # 策略参数
         self.top_k = int(config.get("top_k", 5))
@@ -62,8 +64,12 @@ class LightGBMPredictionStrategy(BaseModelPredictionStrategy):
             model_path.with_suffix(".pkl") if model_path.suffix == ".txt" else None
         )
         if meta_path and meta_path.exists():
-            meta = joblib.load(str(meta_path))
-            self._feature_cols = meta.get("features", [])
+            from app.core.model_loader import safe_joblib_load
+
+            meta = safe_joblib_load(str(meta_path)) or {}
+            self._feature_cols = (
+                meta.get("features", []) if isinstance(meta, dict) else []
+            )
 
         if not self._feature_cols:
             self._feature_cols = [f for f in _DEFAULT_FEATURES]
@@ -128,18 +134,31 @@ class LightGBMPredictionStrategy(BaseModelPredictionStrategy):
         return result.values
 
     def _get_prediction_series(self, data: pd.DataFrame) -> Optional[pd.Series]:
-        """重写：用 LightGBM 模型生成预测信号，替代从缓存读取。"""
-        self._load_model()
+        """生成预测信号。
+
+        2026-10-25 修复：原实现**只**认本地 ``lgb_model.txt``（该文件在本机
+        不存在）→ 抛 FileNotFoundError 被上层吞掉 → 整条策略 0 交易 0 信号，
+        看起来"跑通了"实则什么都没做。
+        现改为：``lgb_model.txt`` 存在时走本地 booster；不存在时回落到基类
+        的 PredictionEngine 路径（用 model_id 加载 official-baseline 模型），
+        两条路径都拿不到预测时才返回 None。
+        """
+        try:
+            self._load_model()
+        except Exception as e:
+            logger.warning(
+                f"lightgbm 本地 booster 不可用（{e}），回落到 PredictionEngine 路径"
+            )
+            return super()._get_prediction_series(data)
 
         features = self._compute_features(data)
         if len(features) == 0:
-            return None
+            return super()._get_prediction_series(data)
 
         # 直接 predict（不用 proba，因为 booster predict 输出就是正类概率）
         probs = self._model.predict(features)
 
-        # 转为连续信号：概率 → [-1, 1]
-        # 0.5 是中性点
+        # 转为连续信号：概率 → [-1, 1]，0.5 是中性点
         signals = pd.Series((probs - 0.5) * 2, index=data.index)
         return signals
 

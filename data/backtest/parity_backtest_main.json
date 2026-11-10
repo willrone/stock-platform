@@ -1,0 +1,1990 @@
+{
+ "window": "main",
+ "start": "2023-05-08",
+ "end": "2026-05-08",
+ "n_trading_days": 722,
+ "capital": 1000000.0,
+ "sharpe": 1.4724,
+ "maxdd": -0.0814,
+ "ann_return": 0.1323,
+ "ann_vol": 0.0871,
+ "final_value": 1442789.2,
+ "research_sharpe": 1.4114,
+ "note": "产品口径（整手 100 股 + 产品撮合器 + 产品成本 + A腿 50 万预算）跑历史得到的数字。research_sharpe 是研究端口径（研究端夏普）。",
+ "rebalances": [
+  {
+   "signal_date": "2023-05-12",
+   "trade_date": "2023-05-15",
+   "value": 999047.4,
+   "cash": 40935.09,
+   "n_positions": 66,
+   "a_invested": 0.949273,
+   "s_invested": 0.968768,
+   "s_class_w": {
+    "gold": 0.333156,
+    "bond": 0.33347,
+    "commodity": 0.333375
+   }
+  },
+  {
+   "signal_date": "2023-05-19",
+   "trade_date": "2023-05-22",
+   "value": 1003214.42,
+   "cash": 41053.74,
+   "n_positions": 67,
+   "a_invested": 0.949888,
+   "s_invested": 0.968495,
+   "s_class_w": {
+    "gold": 0.333488,
+    "bond": 0.336751,
+    "commodity": 0.329761
+   }
+  },
+  {
+   "signal_date": "2023-05-26",
+   "trade_date": "2023-05-29",
+   "value": 999580.55,
+   "cash": 40675.48,
+   "n_positions": 68,
+   "a_invested": 0.950356,
+   "s_invested": 0.968444,
+   "s_class_w": {
+    "gold": 0.3314,
+    "bond": 0.337629,
+    "commodity": 0.330971
+   }
+  },
+  {
+   "signal_date": "2023-06-02",
+   "trade_date": "2023-06-05",
+   "value": 999477.48,
+   "cash": 40428.57,
+   "n_positions": 69,
+   "a_invested": 0.950598,
+   "s_invested": 0.968597,
+   "s_class_w": {
+    "gold": 0.33044,
+    "bond": 0.336469,
+    "commodity": 0.333091
+   }
+  },
+  {
+   "signal_date": "2023-06-09",
+   "trade_date": "2023-06-12",
+   "value": 991788.54,
+   "cash": 47129.95,
+   "n_positions": 69,
+   "a_invested": 0.935999,
+   "s_invested": 0.968736,
+   "s_class_w": {
+    "gold": 0.333059,
+    "bond": 0.335836,
+    "commodity": 0.331104
+   }
+  },
+  {
+   "signal_date": "2023-06-16",
+   "trade_date": "2023-06-19",
+   "value": 1003463.48,
+   "cash": 55870.16,
+   "n_positions": 69,
+   "a_invested": 0.919305,
+   "s_invested": 0.969061,
+   "s_class_w": {
+    "gold": 0.32864,
+    "bond": 0.331526,
+    "commodity": 0.339833
+   }
+  },
+  {
+   "signal_date": "2023-06-30",
+   "trade_date": "2023-07-03",
+   "value": 1010964.48,
+   "cash": 48008.99,
+   "n_positions": 69,
+   "a_invested": 0.935237,
+   "s_invested": 0.969434,
+   "s_class_w": {
+    "gold": 0.323948,
+    "bond": 0.328376,
+    "commodity": 0.347676
+   }
+  },
+  {
+   "signal_date": "2023-07-07",
+   "trade_date": "2023-07-10",
+   "value": 1014827.26,
+   "cash": 52054.95,
+   "n_positions": 69,
+   "a_invested": 0.927635,
+   "s_invested": 0.969464,
+   "s_class_w": {
+    "gold": 0.324524,
+    "bond": 0.328515,
+    "commodity": 0.346961
+   }
+  },
+  {
+   "signal_date": "2023-07-14",
+   "trade_date": "2023-07-17",
+   "value": 1023931.05,
+   "cash": 47351.81,
+   "n_positions": 69,
+   "a_invested": 0.937514,
+   "s_invested": 0.969745,
+   "s_class_w": {
+    "gold": 0.323911,
+    "bond": 0.325656,
+    "commodity": 0.350433
+   }
+  },
+  {
+   "signal_date": "2023-07-21",
+   "trade_date": "2023-07-24",
+   "value": 1030944.03,
+   "cash": 49604.0,
+   "n_positions": 69,
+   "a_invested": 0.933575,
+   "s_invested": 0.969933,
+   "s_class_w": {
+    "gold": 0.324473,
+    "bond": 0.324374,
+    "commodity": 0.351152
+   }
+  },
+  {
+   "signal_date": "2023-07-28",
+   "trade_date": "2023-07-31",
+   "value": 1043741.57,
+   "cash": 48321.68,
+   "n_positions": 69,
+   "a_invested": 0.937294,
+   "s_invested": 0.9701,
+   "s_class_w": {
+    "gold": 0.320369,
+    "bond": 0.321542,
+    "commodity": 0.358089
+   }
+  },
+  {
+   "signal_date": "2023-08-04",
+   "trade_date": "2023-08-07",
+   "value": 1043771.38,
+   "cash": 50154.37,
+   "n_positions": 68,
+   "a_invested": 0.933885,
+   "s_invested": 0.970054,
+   "s_class_w": {
+    "gold": 0.320854,
+    "bond": 0.322746,
+    "commodity": 0.356401
+   }
+  },
+  {
+   "signal_date": "2023-08-11",
+   "trade_date": "2023-08-14",
+   "value": 1035686.0,
+   "cash": 32966.9,
+   "n_positions": 69,
+   "a_invested": 0.950215,
+   "s_invested": 0.985774,
+   "s_class_w": {
+    "gold": 0.345661,
+    "bond": 0.317041,
+    "commodity": 0.337298
+   }
+  },
+  {
+   "signal_date": "2023-08-18",
+   "trade_date": "2023-08-21",
+   "value": 1041282.2,
+   "cash": 32458.6,
+   "n_positions": 69,
+   "a_invested": 0.950978,
+   "s_invested": 0.985988,
+   "s_class_w": {
+    "gold": 0.341648,
+    "bond": 0.313888,
+    "commodity": 0.344464
+   }
+  },
+  {
+   "signal_date": "2023-08-25",
+   "trade_date": "2023-08-28",
+   "value": 1031791.51,
+   "cash": 32189.4,
+   "n_positions": 69,
+   "a_invested": 0.950582,
+   "s_invested": 0.985989,
+   "s_class_w": {
+    "gold": 0.342508,
+    "bond": 0.312985,
+    "commodity": 0.344507
+   }
+  },
+  {
+   "signal_date": "2023-09-01",
+   "trade_date": "2023-09-04",
+   "value": 1041789.71,
+   "cash": 33629.78,
+   "n_positions": 69,
+   "a_invested": 0.948399,
+   "s_invested": 0.986075,
+   "s_class_w": {
+    "gold": 0.344729,
+    "bond": 0.309956,
+    "commodity": 0.345315
+   }
+  },
+  {
+   "signal_date": "2023-09-08",
+   "trade_date": "2023-09-11",
+   "value": 1043320.92,
+   "cash": 32928.15,
+   "n_positions": 69,
+   "a_invested": 0.949695,
+   "s_invested": 0.986137,
+   "s_class_w": {
+    "gold": 0.345814,
+    "bond": 0.308312,
+    "commodity": 0.345874
+   }
+  },
+  {
+   "signal_date": "2023-09-15",
+   "trade_date": "2023-09-18",
+   "value": 1046044.97,
+   "cash": 33056.18,
+   "n_positions": 69,
+   "a_invested": 0.949709,
+   "s_invested": 0.986138,
+   "s_class_w": {
+    "gold": 0.344549,
+    "bond": 0.308244,
+    "commodity": 0.347207
+   }
+  },
+  {
+   "signal_date": "2023-09-22",
+   "trade_date": "2023-09-25",
+   "value": 1045162.23,
+   "cash": 32609.1,
+   "n_positions": 69,
+   "a_invested": 0.950683,
+   "s_invested": 0.98609,
+   "s_class_w": {
+    "gold": 0.350397,
+    "bond": 0.30882,
+    "commodity": 0.340783
+   }
+  },
+  {
+   "signal_date": "2023-10-13",
+   "trade_date": "2023-10-16",
+   "value": 1026963.03,
+   "cash": 32444.46,
+   "n_positions": 69,
+   "a_invested": 0.950102,
+   "s_invested": 0.985853,
+   "s_class_w": {
+    "gold": 0.346785,
+    "bond": 0.31462,
+    "commodity": 0.338594
+   }
+  },
+  {
+   "signal_date": "2023-10-20",
+   "trade_date": "2023-10-23",
+   "value": 1016447.83,
+   "cash": 33840.5,
+   "n_positions": 69,
+   "a_invested": 0.945954,
+   "s_invested": 0.985909,
+   "s_class_w": {
+    "gold": 0.354235,
+    "bond": 0.313297,
+    "commodity": 0.332468
+   }
+  },
+  {
+   "signal_date": "2023-10-27",
+   "trade_date": "2023-10-30",
+   "value": 1034291.58,
+   "cash": 34152.02,
+   "n_positions": 69,
+   "a_invested": 0.946592,
+   "s_invested": 0.986072,
+   "s_class_w": {
+    "gold": 0.352638,
+    "bond": 0.310056,
+    "commodity": 0.337306
+   }
+  },
+  {
+   "signal_date": "2023-11-03",
+   "trade_date": "2023-11-06",
+   "value": 1034760.26,
+   "cash": 31841.07,
+   "n_positions": 69,
+   "a_invested": 0.951133,
+   "s_invested": 0.986106,
+   "s_class_w": {
+    "gold": 0.350233,
+    "bond": 0.31001,
+    "commodity": 0.339757
+   }
+  },
+  {
+   "signal_date": "2023-11-10",
+   "trade_date": "2023-11-13",
+   "value": 1031152.4,
+   "cash": 32218.06,
+   "n_positions": 69,
+   "a_invested": 0.950324,
+   "s_invested": 0.986026,
+   "s_class_w": {
+    "gold": 0.348394,
+    "bond": 0.312319,
+    "commodity": 0.339287
+   }
+  },
+  {
+   "signal_date": "2023-11-17",
+   "trade_date": "2023-11-20",
+   "value": 1031048.04,
+   "cash": 33009.02,
+   "n_positions": 69,
+   "a_invested": 0.948761,
+   "s_invested": 0.986017,
+   "s_class_w": {
+    "gold": 0.347568,
+    "bond": 0.312481,
+    "commodity": 0.339951
+   }
+  },
+  {
+   "signal_date": "2023-11-24",
+   "trade_date": "2023-11-27",
+   "value": 1028817.59,
+   "cash": 34645.64,
+   "n_positions": 69,
+   "a_invested": 0.945715,
+   "s_invested": 0.985901,
+   "s_class_w": {
+    "gold": 0.348512,
+    "bond": 0.314468,
+    "commodity": 0.33702
+   }
+  },
+  {
+   "signal_date": "2023-12-01",
+   "trade_date": "2023-12-04",
+   "value": 1027229.37,
+   "cash": 32955.92,
+   "n_positions": 69,
+   "a_invested": 0.948925,
+   "s_invested": 0.985901,
+   "s_class_w": {
+    "gold": 0.348512,
+    "bond": 0.314468,
+    "commodity": 0.33702
+   }
+  },
+  {
+   "signal_date": "2023-12-08",
+   "trade_date": "2023-12-11",
+   "value": 1019280.13,
+   "cash": 33034.42,
+   "n_positions": 69,
+   "a_invested": 0.947678,
+   "s_invested": 0.985966,
+   "s_class_w": {
+    "gold": 0.35144,
+    "bond": 0.313893,
+    "commodity": 0.334667
+   }
+  },
+  {
+   "signal_date": "2023-12-15",
+   "trade_date": "2023-12-18",
+   "value": 1022823.27,
+   "cash": 34251.38,
+   "n_positions": 69,
+   "a_invested": 0.949096,
+   "s_invested": 0.982691,
+   "s_class_w": {
+    "gold": 0.33656,
+    "bond": 0.315509,
+    "commodity": 0.34793
+   }
+  },
+  {
+   "signal_date": "2023-12-22",
+   "trade_date": "2023-12-25",
+   "value": 1021962.65,
+   "cash": 33530.25,
+   "n_positions": 69,
+   "a_invested": 0.95006,
+   "s_invested": 0.982823,
+   "s_class_w": {
+    "gold": 0.338126,
+    "bond": 0.313431,
+    "commodity": 0.348443
+   }
+  },
+  {
+   "signal_date": "2023-12-29",
+   "trade_date": "2024-01-02",
+   "value": 1028698.81,
+   "cash": 34277.99,
+   "n_positions": 69,
+   "a_invested": 0.949214,
+   "s_invested": 0.982827,
+   "s_class_w": {
+    "gold": 0.340319,
+    "bond": 0.314435,
+    "commodity": 0.345246
+   }
+  },
+  {
+   "signal_date": "2024-01-05",
+   "trade_date": "2024-01-08",
+   "value": 1031717.75,
+   "cash": 34095.34,
+   "n_positions": 69,
+   "a_invested": 0.950267,
+   "s_invested": 0.982705,
+   "s_class_w": {
+    "gold": 0.341787,
+    "bond": 0.31746,
+    "commodity": 0.340753
+   }
+  },
+  {
+   "signal_date": "2024-01-12",
+   "trade_date": "2024-01-15",
+   "value": 1026552.92,
+   "cash": 34570.02,
+   "n_positions": 69,
+   "a_invested": 0.948972,
+   "s_invested": 0.982648,
+   "s_class_w": {
+    "gold": 0.344541,
+    "bond": 0.318313,
+    "commodity": 0.337146
+   }
+  },
+  {
+   "signal_date": "2024-01-19",
+   "trade_date": "2024-01-22",
+   "value": 1014375.01,
+   "cash": 33869.02,
+   "n_positions": 69,
+   "a_invested": 0.949199,
+   "s_invested": 0.982628,
+   "s_class_w": {
+    "gold": 0.341396,
+    "bond": 0.319535,
+    "commodity": 0.339068
+   }
+  },
+  {
+   "signal_date": "2024-01-26",
+   "trade_date": "2024-01-29",
+   "value": 1022901.7,
+   "cash": 34380.35,
+   "n_positions": 69,
+   "a_invested": 0.948941,
+   "s_invested": 0.98266,
+   "s_class_w": {
+    "gold": 0.341485,
+    "bond": 0.319259,
+    "commodity": 0.339257
+   }
+  },
+  {
+   "signal_date": "2024-02-02",
+   "trade_date": "2024-02-05",
+   "value": 983326.69,
+   "cash": 38758.76,
+   "n_positions": 69,
+   "a_invested": 0.934923,
+   "s_invested": 0.982642,
+   "s_class_w": {
+    "gold": 0.342421,
+    "bond": 0.321181,
+    "commodity": 0.336399
+   }
+  },
+  {
+   "signal_date": "2024-02-23",
+   "trade_date": "2024-02-26",
+   "value": 1016335.81,
+   "cash": 33866.04,
+   "n_positions": 69,
+   "a_invested": 0.949191,
+   "s_invested": 0.982697,
+   "s_class_w": {
+    "gold": 0.341958,
+    "bond": 0.3211,
+    "commodity": 0.336941
+   }
+  },
+  {
+   "signal_date": "2024-03-01",
+   "trade_date": "2024-03-04",
+   "value": 1022682.12,
+   "cash": 33944.11,
+   "n_positions": 69,
+   "a_invested": 0.948997,
+   "s_invested": 0.982912,
+   "s_class_w": {
+    "gold": 0.34294,
+    "bond": 0.317427,
+    "commodity": 0.339633
+   }
+  },
+  {
+   "signal_date": "2024-03-08",
+   "trade_date": "2024-03-11",
+   "value": 1031707.0,
+   "cash": 34062.57,
+   "n_positions": 69,
+   "a_invested": 0.948823,
+   "s_invested": 0.983173,
+   "s_class_w": {
+    "gold": 0.349949,
+    "bond": 0.313247,
+    "commodity": 0.336804
+   }
+  },
+  {
+   "signal_date": "2024-03-15",
+   "trade_date": "2024-03-18",
+   "value": 1037611.09,
+   "cash": 34013.19,
+   "n_positions": 69,
+   "a_invested": 0.949366,
+   "s_invested": 0.983225,
+   "s_class_w": {
+    "gold": 0.34615,
+    "bond": 0.311665,
+    "commodity": 0.342185
+   }
+  },
+  {
+   "signal_date": "2024-03-22",
+   "trade_date": "2024-03-25",
+   "value": 1036790.77,
+   "cash": 32113.71,
+   "n_positions": 69,
+   "a_invested": 0.949774,
+   "s_invested": 0.986145,
+   "s_class_w": {
+    "gold": 0.339536,
+    "bond": 0.310009,
+    "commodity": 0.350455
+   }
+  },
+  {
+   "signal_date": "2024-03-29",
+   "trade_date": "2024-04-01",
+   "value": 1047032.08,
+   "cash": 33966.85,
+   "n_positions": 69,
+   "a_invested": 0.946066,
+   "s_invested": 0.986379,
+   "s_class_w": {
+    "gold": 0.347408,
+    "bond": 0.304945,
+    "commodity": 0.347648
+   }
+  },
+  {
+   "signal_date": "2024-04-12",
+   "trade_date": "2024-04-15",
+   "value": 1070027.01,
+   "cash": 35344.8,
+   "n_positions": 69,
+   "a_invested": 0.94414,
+   "s_invested": 0.98674,
+   "s_class_w": {
+    "gold": 0.355092,
+    "bond": 0.298466,
+    "commodity": 0.346442
+   }
+  },
+  {
+   "signal_date": "2024-04-19",
+   "trade_date": "2024-04-22",
+   "value": 1082401.3,
+   "cash": 33679.51,
+   "n_positions": 69,
+   "a_invested": 0.948768,
+   "s_invested": 0.98674,
+   "s_class_w": {
+    "gold": 0.351719,
+    "bond": 0.299252,
+    "commodity": 0.34903
+   }
+  },
+  {
+   "signal_date": "2024-04-26",
+   "trade_date": "2024-04-29",
+   "value": 1078815.28,
+   "cash": 33748.93,
+   "n_positions": 69,
+   "a_invested": 0.948576,
+   "s_invested": 0.98667,
+   "s_class_w": {
+    "gold": 0.349156,
+    "bond": 0.298548,
+    "commodity": 0.352296
+   }
+  },
+  {
+   "signal_date": "2024-05-10",
+   "trade_date": "2024-05-13",
+   "value": 1100821.36,
+   "cash": 41457.7,
+   "n_positions": 69,
+   "a_invested": 0.935362,
+   "s_invested": 0.986824,
+   "s_class_w": {
+    "gold": 0.347668,
+    "bond": 0.296988,
+    "commodity": 0.355344
+   }
+  },
+  {
+   "signal_date": "2024-05-17",
+   "trade_date": "2024-05-20",
+   "value": 1119596.06,
+   "cash": 38371.22,
+   "n_positions": 69,
+   "a_invested": 0.941712,
+   "s_invested": 0.987151,
+   "s_class_w": {
+    "gold": 0.352423,
+    "bond": 0.289551,
+    "commodity": 0.358026
+   }
+  },
+  {
+   "signal_date": "2024-05-24",
+   "trade_date": "2024-05-27",
+   "value": 1102394.04,
+   "cash": 40052.12,
+   "n_positions": 69,
+   "a_invested": 0.937595,
+   "s_invested": 0.986945,
+   "s_class_w": {
+    "gold": 0.344596,
+    "bond": 0.29443,
+    "commodity": 0.360973
+   }
+  },
+  {
+   "signal_date": "2024-05-31",
+   "trade_date": "2024-06-03",
+   "value": 1093972.45,
+   "cash": 33271.67,
+   "n_positions": 69,
+   "a_invested": 0.950479,
+   "s_invested": 0.986791,
+   "s_class_w": {
+    "gold": 0.345734,
+    "bond": 0.298452,
+    "commodity": 0.355814
+   }
+  },
+  {
+   "signal_date": "2024-06-07",
+   "trade_date": "2024-06-11",
+   "value": 1084236.0,
+   "cash": 44947.76,
+   "n_positions": 68,
+   "a_invested": 0.926957,
+   "s_invested": 0.98673,
+   "s_class_w": {
+    "gold": 0.343592,
+    "bond": 0.300506,
+    "commodity": 0.355902
+   }
+  },
+  {
+   "signal_date": "2024-06-14",
+   "trade_date": "2024-06-17",
+   "value": 1075888.82,
+   "cash": 45838.45,
+   "n_positions": 68,
+   "a_invested": 0.924346,
+   "s_invested": 0.986672,
+   "s_class_w": {
+    "gold": 0.348,
+    "bond": 0.301988,
+    "commodity": 0.350012
+   }
+  },
+  {
+   "signal_date": "2024-06-21",
+   "trade_date": "2024-06-24",
+   "value": 1068076.52,
+   "cash": 32925.76,
+   "n_positions": 69,
+   "a_invested": 0.949081,
+   "s_invested": 0.986679,
+   "s_class_w": {
+    "gold": 0.34846,
+    "bond": 0.302403,
+    "commodity": 0.349137
+   }
+  },
+  {
+   "signal_date": "2024-06-28",
+   "trade_date": "2024-07-01",
+   "value": 1066426.11,
+   "cash": 42249.22,
+   "n_positions": 68,
+   "a_invested": 0.929774,
+   "s_invested": 0.986732,
+   "s_class_w": {
+    "gold": 0.347726,
+    "bond": 0.301518,
+    "commodity": 0.350756
+   }
+  },
+  {
+   "signal_date": "2024-07-05",
+   "trade_date": "2024-07-08",
+   "value": 1068269.75,
+   "cash": 33591.23,
+   "n_positions": 69,
+   "a_invested": 0.947288,
+   "s_invested": 0.986782,
+   "s_class_w": {
+    "gold": 0.35194,
+    "bond": 0.299995,
+    "commodity": 0.348066
+   }
+  },
+  {
+   "signal_date": "2024-07-12",
+   "trade_date": "2024-07-15",
+   "value": 1069032.91,
+   "cash": 32831.65,
+   "n_positions": 69,
+   "a_invested": 0.949108,
+   "s_invested": 0.986738,
+   "s_class_w": {
+    "gold": 0.357027,
+    "bond": 0.302198,
+    "commodity": 0.340775
+   }
+  },
+  {
+   "signal_date": "2024-07-19",
+   "trade_date": "2024-07-22",
+   "value": 1067747.66,
+   "cash": 35604.92,
+   "n_positions": 68,
+   "a_invested": 0.94376,
+   "s_invested": 0.986657,
+   "s_class_w": {
+    "gold": 0.357834,
+    "bond": 0.304915,
+    "commodity": 0.337251
+   }
+  },
+  {
+   "signal_date": "2024-07-26",
+   "trade_date": "2024-07-29",
+   "value": 1059255.73,
+   "cash": 39620.42,
+   "n_positions": 69,
+   "a_invested": 0.950112,
+   "s_invested": 0.973474,
+   "s_class_w": {
+    "gold": 0.343021,
+    "bond": 0.312151,
+    "commodity": 0.344828
+   }
+  },
+  {
+   "signal_date": "2024-08-02",
+   "trade_date": "2024-08-05",
+   "value": 1065245.39,
+   "cash": 39730.86,
+   "n_positions": 69,
+   "a_invested": 0.95077,
+   "s_invested": 0.97334,
+   "s_class_w": {
+    "gold": 0.343224,
+    "bond": 0.315478,
+    "commodity": 0.341298
+   }
+  },
+  {
+   "signal_date": "2024-08-09",
+   "trade_date": "2024-08-12",
+   "value": 1060453.8,
+   "cash": 47745.07,
+   "n_positions": 67,
+   "a_invested": 0.934327,
+   "s_invested": 0.973287,
+   "s_class_w": {
+    "gold": 0.348604,
+    "bond": 0.313104,
+    "commodity": 0.338293
+   }
+  },
+  {
+   "signal_date": "2024-08-16",
+   "trade_date": "2024-08-19",
+   "value": 1060496.09,
+   "cash": 39849.74,
+   "n_positions": 69,
+   "a_invested": 0.950137,
+   "s_invested": 0.973304,
+   "s_class_w": {
+    "gold": 0.353237,
+    "bond": 0.314488,
+    "commodity": 0.332275
+   }
+  },
+  {
+   "signal_date": "2024-08-23",
+   "trade_date": "2024-08-26",
+   "value": 1055202.48,
+   "cash": 56520.67,
+   "n_positions": 68,
+   "a_invested": 0.915099,
+   "s_invested": 0.973488,
+   "s_class_w": {
+    "gold": 0.352229,
+    "bond": 0.312791,
+    "commodity": 0.33498
+   }
+  },
+  {
+   "signal_date": "2024-08-30",
+   "trade_date": "2024-09-02",
+   "value": 1048176.0,
+   "cash": 46915.88,
+   "n_positions": 69,
+   "a_invested": 0.934327,
+   "s_invested": 0.973303,
+   "s_class_w": {
+    "gold": 0.351797,
+    "bond": 0.315222,
+    "commodity": 0.332981
+   }
+  },
+  {
+   "signal_date": "2024-09-06",
+   "trade_date": "2024-09-09",
+   "value": 1042624.79,
+   "cash": 40701.28,
+   "n_positions": 69,
+   "a_invested": 0.946787,
+   "s_invested": 0.973184,
+   "s_class_w": {
+    "gold": 0.352629,
+    "bond": 0.317727,
+    "commodity": 0.329644
+   }
+  },
+  {
+   "signal_date": "2024-09-13",
+   "trade_date": "2024-09-18",
+   "value": 1037547.61,
+   "cash": 38456.61,
+   "n_positions": 69,
+   "a_invested": 0.950258,
+   "s_invested": 0.973485,
+   "s_class_w": {
+    "gold": 0.356901,
+    "bond": 0.315328,
+    "commodity": 0.327771
+   }
+  },
+  {
+   "signal_date": "2024-09-20",
+   "trade_date": "2024-09-23",
+   "value": 1044745.48,
+   "cash": 39074.49,
+   "n_positions": 69,
+   "a_invested": 0.949439,
+   "s_invested": 0.973607,
+   "s_class_w": {
+    "gold": 0.361692,
+    "bond": 0.314017,
+    "commodity": 0.324291
+   }
+  },
+  {
+   "signal_date": "2024-09-27",
+   "trade_date": "2024-09-30",
+   "value": 1105929.21,
+   "cash": 43076.43,
+   "n_positions": 69,
+   "a_invested": 0.946832,
+   "s_invested": 0.974029,
+   "s_class_w": {
+    "gold": 0.355749,
+    "bond": 0.305212,
+    "commodity": 0.339039
+   }
+  },
+  {
+   "signal_date": "2024-10-11",
+   "trade_date": "2024-10-14",
+   "value": 1115119.06,
+   "cash": 42334.8,
+   "n_positions": 69,
+   "a_invested": 0.949252,
+   "s_invested": 0.973968,
+   "s_class_w": {
+    "gold": 0.362038,
+    "bond": 0.307935,
+    "commodity": 0.330027
+   }
+  },
+  {
+   "signal_date": "2024-10-18",
+   "trade_date": "2024-10-21",
+   "value": 1130386.56,
+   "cash": 42584.27,
+   "n_positions": 69,
+   "a_invested": 0.949717,
+   "s_invested": 0.974206,
+   "s_class_w": {
+    "gold": 0.372336,
+    "bond": 0.305448,
+    "commodity": 0.322216
+   }
+  },
+  {
+   "signal_date": "2024-10-25",
+   "trade_date": "2024-10-28",
+   "value": 1137159.81,
+   "cash": 43093.27,
+   "n_positions": 69,
+   "a_invested": 0.949343,
+   "s_invested": 0.97424,
+   "s_class_w": {
+    "gold": 0.371727,
+    "bond": 0.304174,
+    "commodity": 0.324098
+   }
+  },
+  {
+   "signal_date": "2024-11-01",
+   "trade_date": "2024-11-04",
+   "value": 1137862.68,
+   "cash": 42975.34,
+   "n_positions": 69,
+   "a_invested": 0.95006,
+   "s_invested": 0.973834,
+   "s_class_w": {
+    "gold": 0.344331,
+    "bond": 0.305427,
+    "commodity": 0.350242
+   }
+  },
+  {
+   "signal_date": "2024-11-08",
+   "trade_date": "2024-11-11",
+   "value": 1157780.47,
+   "cash": 45406.26,
+   "n_positions": 69,
+   "a_invested": 0.947539,
+   "s_invested": 0.973846,
+   "s_class_w": {
+    "gold": 0.338578,
+    "bond": 0.306034,
+    "commodity": 0.355387
+   }
+  },
+  {
+   "signal_date": "2024-11-15",
+   "trade_date": "2024-11-18",
+   "value": 1143196.85,
+   "cash": 50068.89,
+   "n_positions": 69,
+   "a_invested": 0.938952,
+   "s_invested": 0.973385,
+   "s_class_w": {
+    "gold": 0.336146,
+    "bond": 0.311929,
+    "commodity": 0.351925
+   }
+  },
+  {
+   "signal_date": "2024-11-22",
+   "trade_date": "2024-11-25",
+   "value": 1147624.29,
+   "cash": 50796.08,
+   "n_positions": 69,
+   "a_invested": 0.937515,
+   "s_invested": 0.973657,
+   "s_class_w": {
+    "gold": 0.341579,
+    "bond": 0.309546,
+    "commodity": 0.348875
+   }
+  },
+  {
+   "signal_date": "2024-11-29",
+   "trade_date": "2024-12-02",
+   "value": 1157630.87,
+   "cash": 47433.0,
+   "n_positions": 69,
+   "a_invested": 0.944464,
+   "s_invested": 0.973628,
+   "s_class_w": {
+    "gold": 0.339627,
+    "bond": 0.311301,
+    "commodity": 0.349072
+   }
+  },
+  {
+   "signal_date": "2024-12-06",
+   "trade_date": "2024-12-09",
+   "value": 1167748.97,
+   "cash": 44925.8,
+   "n_positions": 69,
+   "a_invested": 0.949769,
+   "s_invested": 0.973574,
+   "s_class_w": {
+    "gold": 0.344071,
+    "bond": 0.312699,
+    "commodity": 0.34323
+   }
+  },
+  {
+   "signal_date": "2024-12-13",
+   "trade_date": "2024-12-16",
+   "value": 1168033.65,
+   "cash": 45016.98,
+   "n_positions": 69,
+   "a_invested": 0.949332,
+   "s_invested": 0.973737,
+   "s_class_w": {
+    "gold": 0.342347,
+    "bond": 0.315007,
+    "commodity": 0.342645
+   }
+  },
+  {
+   "signal_date": "2024-12-20",
+   "trade_date": "2024-12-23",
+   "value": 1164313.14,
+   "cash": 44691.5,
+   "n_positions": 69,
+   "a_invested": 0.949653,
+   "s_invested": 0.973692,
+   "s_class_w": {
+    "gold": 0.343257,
+    "bond": 0.316024,
+    "commodity": 0.340719
+   }
+  },
+  {
+   "signal_date": "2024-12-27",
+   "trade_date": "2024-12-30",
+   "value": 1173546.34,
+   "cash": 44956.58,
+   "n_positions": 69,
+   "a_invested": 0.950006,
+   "s_invested": 0.973683,
+   "s_class_w": {
+    "gold": 0.34184,
+    "bond": 0.315457,
+    "commodity": 0.342702
+   }
+  },
+  {
+   "signal_date": "2025-01-03",
+   "trade_date": "2025-01-06",
+   "value": 1160236.61,
+   "cash": 44499.14,
+   "n_positions": 69,
+   "a_invested": 0.949371,
+   "s_invested": 0.973826,
+   "s_class_w": {
+    "gold": 0.343739,
+    "bond": 0.316354,
+    "commodity": 0.339907
+   }
+  },
+  {
+   "signal_date": "2025-01-10",
+   "trade_date": "2025-01-13",
+   "value": 1156576.85,
+   "cash": 44298.65,
+   "n_positions": 69,
+   "a_invested": 0.948701,
+   "s_invested": 0.974172,
+   "s_class_w": {
+    "gold": 0.34633,
+    "bond": 0.310537,
+    "commodity": 0.343133
+   }
+  },
+  {
+   "signal_date": "2025-01-17",
+   "trade_date": "2025-01-20",
+   "value": 1168356.24,
+   "cash": 44128.0,
+   "n_positions": 69,
+   "a_invested": 0.949877,
+   "s_invested": 0.974255,
+   "s_class_w": {
+    "gold": 0.345819,
+    "bond": 0.309572,
+    "commodity": 0.344609
+   }
+  },
+  {
+   "signal_date": "2025-01-24",
+   "trade_date": "2025-01-27",
+   "value": 1171997.42,
+   "cash": 45097.25,
+   "n_positions": 69,
+   "a_invested": 0.948417,
+   "s_invested": 0.974305,
+   "s_class_w": {
+    "gold": 0.349139,
+    "bond": 0.309819,
+    "commodity": 0.341042
+   }
+  },
+  {
+   "signal_date": "2025-02-07",
+   "trade_date": "2025-02-10",
+   "value": 1185841.85,
+   "cash": 45690.53,
+   "n_positions": 69,
+   "a_invested": 0.949827,
+   "s_invested": 0.972525,
+   "s_class_w": {
+    "gold": 0.343965,
+    "bond": 0.302617,
+    "commodity": 0.353418
+   }
+  },
+  {
+   "signal_date": "2025-02-14",
+   "trade_date": "2025-02-17",
+   "value": 1186109.83,
+   "cash": 45985.49,
+   "n_positions": 69,
+   "a_invested": 0.949666,
+   "s_invested": 0.972355,
+   "s_class_w": {
+    "gold": 0.344952,
+    "bond": 0.303439,
+    "commodity": 0.351609
+   }
+  },
+  {
+   "signal_date": "2025-02-21",
+   "trade_date": "2025-02-24",
+   "value": 1182379.86,
+   "cash": 45164.03,
+   "n_positions": 69,
+   "a_invested": 0.950549,
+   "s_invested": 0.972468,
+   "s_class_w": {
+    "gold": 0.348151,
+    "bond": 0.299894,
+    "commodity": 0.351955
+   }
+  },
+  {
+   "signal_date": "2025-02-28",
+   "trade_date": "2025-03-03",
+   "value": 1177469.65,
+   "cash": 45806.62,
+   "n_positions": 69,
+   "a_invested": 0.949106,
+   "s_invested": 0.972413,
+   "s_class_w": {
+    "gold": 0.342011,
+    "bond": 0.301849,
+    "commodity": 0.35614
+   }
+  },
+  {
+   "signal_date": "2025-03-07",
+   "trade_date": "2025-03-10",
+   "value": 1181816.13,
+   "cash": 45486.83,
+   "n_positions": 69,
+   "a_invested": 0.950074,
+   "s_invested": 0.972398,
+   "s_class_w": {
+    "gold": 0.34698,
+    "bond": 0.300116,
+    "commodity": 0.352904
+   }
+  },
+  {
+   "signal_date": "2025-03-14",
+   "trade_date": "2025-03-17",
+   "value": 1200282.99,
+   "cash": 46846.6,
+   "n_positions": 69,
+   "a_invested": 0.948934,
+   "s_invested": 0.972611,
+   "s_class_w": {
+    "gold": 0.351317,
+    "bond": 0.296702,
+    "commodity": 0.351981
+   }
+  },
+  {
+   "signal_date": "2025-03-21",
+   "trade_date": "2025-03-24",
+   "value": 1209134.64,
+   "cash": 50365.24,
+   "n_positions": 69,
+   "a_invested": 0.943488,
+   "s_invested": 0.972765,
+   "s_class_w": {
+    "gold": 0.35463,
+    "bond": 0.295629,
+    "commodity": 0.349741
+   }
+  },
+  {
+   "signal_date": "2025-03-28",
+   "trade_date": "2025-03-31",
+   "value": 1219816.86,
+   "cash": 48677.88,
+   "n_positions": 69,
+   "a_invested": 0.94685,
+   "s_invested": 0.972974,
+   "s_class_w": {
+    "gold": 0.363681,
+    "bond": 0.293991,
+    "commodity": 0.342328
+   }
+  },
+  {
+   "signal_date": "2025-04-11",
+   "trade_date": "2025-04-14",
+   "value": 1206735.06,
+   "cash": 45742.79,
+   "n_positions": 69,
+   "a_invested": 0.950116,
+   "s_invested": 0.97325,
+   "s_class_w": {
+    "gold": 0.376317,
+    "bond": 0.293715,
+    "commodity": 0.329968
+   }
+  },
+  {
+   "signal_date": "2025-04-18",
+   "trade_date": "2025-04-21",
+   "value": 1226838.96,
+   "cash": 47710.33,
+   "n_positions": 69,
+   "a_invested": 0.947524,
+   "s_invested": 0.973728,
+   "s_class_w": {
+    "gold": 0.389436,
+    "bond": 0.288157,
+    "commodity": 0.322406
+   }
+  },
+  {
+   "signal_date": "2025-04-25",
+   "trade_date": "2025-04-28",
+   "value": 1223781.83,
+   "cash": 46298.28,
+   "n_positions": 69,
+   "a_invested": 0.95037,
+   "s_invested": 0.973373,
+   "s_class_w": {
+    "gold": 0.381666,
+    "bond": 0.292177,
+    "commodity": 0.326157
+   }
+  },
+  {
+   "signal_date": "2025-05-09",
+   "trade_date": "2025-05-12",
+   "value": 1230331.02,
+   "cash": 47030.83,
+   "n_positions": 69,
+   "a_invested": 0.949904,
+   "s_invested": 0.973265,
+   "s_class_w": {
+    "gold": 0.378499,
+    "bond": 0.294054,
+    "commodity": 0.327447
+   }
+  },
+  {
+   "signal_date": "2025-05-16",
+   "trade_date": "2025-05-19",
+   "value": 1230157.44,
+   "cash": 47294.72,
+   "n_positions": 69,
+   "a_invested": 0.94989,
+   "s_invested": 0.973038,
+   "s_class_w": {
+    "gold": 0.373929,
+    "bond": 0.295889,
+    "commodity": 0.330182
+   }
+  },
+  {
+   "signal_date": "2025-05-23",
+   "trade_date": "2025-05-26",
+   "value": 1241835.25,
+   "cash": 48385.64,
+   "n_positions": 69,
+   "a_invested": 0.948536,
+   "s_invested": 0.973319,
+   "s_class_w": {
+    "gold": 0.380454,
+    "bond": 0.292943,
+    "commodity": 0.326603
+   }
+  },
+  {
+   "signal_date": "2025-05-30",
+   "trade_date": "2025-06-03",
+   "value": 1244514.31,
+   "cash": 48215.18,
+   "n_positions": 69,
+   "a_invested": 0.949067,
+   "s_invested": 0.973303,
+   "s_class_w": {
+    "gold": 0.383208,
+    "bond": 0.292942,
+    "commodity": 0.32385
+   }
+  },
+  {
+   "signal_date": "2025-06-06",
+   "trade_date": "2025-06-09",
+   "value": 1249345.07,
+   "cash": 48779.35,
+   "n_positions": 69,
+   "a_invested": 0.948414,
+   "s_invested": 0.973376,
+   "s_class_w": {
+    "gold": 0.378144,
+    "bond": 0.292855,
+    "commodity": 0.329001
+   }
+  },
+  {
+   "signal_date": "2025-06-13",
+   "trade_date": "2025-06-16",
+   "value": 1256326.3,
+   "cash": 47427.62,
+   "n_positions": 69,
+   "a_invested": 0.950511,
+   "s_invested": 0.973709,
+   "s_class_w": {
+    "gold": 0.381477,
+    "bond": 0.289256,
+    "commodity": 0.329267
+   }
+  },
+  {
+   "signal_date": "2025-06-20",
+   "trade_date": "2025-06-23",
+   "value": 1255987.76,
+   "cash": 47703.05,
+   "n_positions": 69,
+   "a_invested": 0.950142,
+   "s_invested": 0.973657,
+   "s_class_w": {
+    "gold": 0.377274,
+    "bond": 0.290211,
+    "commodity": 0.332514
+   }
+  },
+  {
+   "signal_date": "2025-06-27",
+   "trade_date": "2025-06-30",
+   "value": 1253211.59,
+   "cash": 48571.28,
+   "n_positions": 69,
+   "a_invested": 0.949107,
+   "s_invested": 0.973354,
+   "s_class_w": {
+    "gold": 0.374195,
+    "bond": 0.293378,
+    "commodity": 0.332426
+   }
+  },
+  {
+   "signal_date": "2025-07-04",
+   "trade_date": "2025-07-07",
+   "value": 1263429.37,
+   "cash": 48069.49,
+   "n_positions": 69,
+   "a_invested": 0.950675,
+   "s_invested": 0.973375,
+   "s_class_w": {
+    "gold": 0.375924,
+    "bond": 0.293647,
+    "commodity": 0.330429
+   }
+  },
+  {
+   "signal_date": "2025-07-11",
+   "trade_date": "2025-07-14",
+   "value": 1271826.1,
+   "cash": 63989.23,
+   "n_positions": 68,
+   "a_invested": 0.942936,
+   "s_invested": 0.956538,
+   "s_class_w": {
+    "gold": 0.351144,
+    "bond": 0.31552,
+    "commodity": 0.333335
+   }
+  },
+  {
+   "signal_date": "2025-07-18",
+   "trade_date": "2025-07-21",
+   "value": 1278878.36,
+   "cash": 59395.69,
+   "n_positions": 69,
+   "a_invested": 0.950375,
+   "s_invested": 0.956784,
+   "s_class_w": {
+    "gold": 0.349202,
+    "bond": 0.313719,
+    "commodity": 0.337078
+   }
+  },
+  {
+   "signal_date": "2025-07-25",
+   "trade_date": "2025-07-28",
+   "value": 1280827.18,
+   "cash": 59077.23,
+   "n_positions": 69,
+   "a_invested": 0.951295,
+   "s_invested": 0.956532,
+   "s_class_w": {
+    "gold": 0.348652,
+    "bond": 0.31486,
+    "commodity": 0.336489
+   }
+  },
+  {
+   "signal_date": "2025-08-01",
+   "trade_date": "2025-08-04",
+   "value": 1273073.15,
+   "cash": 59499.55,
+   "n_positions": 69,
+   "a_invested": 0.95003,
+   "s_invested": 0.956548,
+   "s_class_w": {
+    "gold": 0.351195,
+    "bond": 0.315006,
+    "commodity": 0.333799
+   }
+  },
+  {
+   "signal_date": "2025-08-08",
+   "trade_date": "2025-08-11",
+   "value": 1283278.76,
+   "cash": 61600.11,
+   "n_positions": 69,
+   "a_invested": 0.947575,
+   "s_invested": 0.956561,
+   "s_class_w": {
+    "gold": 0.350373,
+    "bond": 0.314883,
+    "commodity": 0.334744
+   }
+  },
+  {
+   "signal_date": "2025-08-15",
+   "trade_date": "2025-08-18",
+   "value": 1285710.04,
+   "cash": 69365.16,
+   "n_positions": 69,
+   "a_invested": 0.935946,
+   "s_invested": 0.956528,
+   "s_class_w": {
+    "gold": 0.349862,
+    "bond": 0.31395,
+    "commodity": 0.336188
+   }
+  },
+  {
+   "signal_date": "2025-08-22",
+   "trade_date": "2025-08-25",
+   "value": 1297785.91,
+   "cash": 71438.72,
+   "n_positions": 69,
+   "a_invested": 0.933887,
+   "s_invested": 0.956603,
+   "s_class_w": {
+    "gold": 0.349815,
+    "bond": 0.313596,
+    "commodity": 0.336589
+   }
+  },
+  {
+   "signal_date": "2025-08-29",
+   "trade_date": "2025-09-01",
+   "value": 1295247.45,
+   "cash": 68664.76,
+   "n_positions": 69,
+   "a_invested": 0.937322,
+   "s_invested": 0.95696,
+   "s_class_w": {
+    "gold": 0.356926,
+    "bond": 0.311093,
+    "commodity": 0.331981
+   }
+  },
+  {
+   "signal_date": "2025-09-05",
+   "trade_date": "2025-09-08",
+   "value": 1298366.05,
+   "cash": 74049.66,
+   "n_positions": 69,
+   "a_invested": 0.928854,
+   "s_invested": 0.957343,
+   "s_class_w": {
+    "gold": 0.363046,
+    "bond": 0.308024,
+    "commodity": 0.328929
+   }
+  },
+  {
+   "signal_date": "2025-09-12",
+   "trade_date": "2025-09-15",
+   "value": 1303130.75,
+   "cash": 76115.01,
+   "n_positions": 69,
+   "a_invested": 0.925919,
+   "s_invested": 0.957531,
+   "s_class_w": {
+    "gold": 0.365297,
+    "bond": 0.306729,
+    "commodity": 0.327974
+   }
+  },
+  {
+   "signal_date": "2025-09-19",
+   "trade_date": "2025-09-22",
+   "value": 1289697.17,
+   "cash": 76259.85,
+   "n_positions": 69,
+   "a_invested": 0.923988,
+   "s_invested": 0.95762,
+   "s_class_w": {
+    "gold": 0.369861,
+    "bond": 0.306227,
+    "commodity": 0.323912
+   }
+  },
+  {
+   "signal_date": "2025-09-26",
+   "trade_date": "2025-09-29",
+   "value": 1293104.8,
+   "cash": 77310.72,
+   "n_positions": 69,
+   "a_invested": 0.922095,
+   "s_invested": 0.957979,
+   "s_class_w": {
+    "gold": 0.376101,
+    "bond": 0.302954,
+    "commodity": 0.320945
+   }
+  },
+  {
+   "signal_date": "2025-10-10",
+   "trade_date": "2025-10-13",
+   "value": 1316716.23,
+   "cash": 74611.81,
+   "n_positions": 69,
+   "a_invested": 0.926883,
+   "s_invested": 0.959143,
+   "s_class_w": {
+    "gold": 0.39174,
+    "bond": 0.295078,
+    "commodity": 0.313182
+   }
+  },
+  {
+   "signal_date": "2025-10-17",
+   "trade_date": "2025-10-20",
+   "value": 1333120.88,
+   "cash": 69859.29,
+   "n_positions": 69,
+   "a_invested": 0.934996,
+   "s_invested": 0.959682,
+   "s_class_w": {
+    "gold": 0.404352,
+    "bond": 0.291265,
+    "commodity": 0.304383
+   }
+  },
+  {
+   "signal_date": "2025-10-24",
+   "trade_date": "2025-10-27",
+   "value": 1341477.18,
+   "cash": 71576.48,
+   "n_positions": 69,
+   "a_invested": 0.933739,
+   "s_invested": 0.959373,
+   "s_class_w": {
+    "gold": 0.391864,
+    "bond": 0.293552,
+    "commodity": 0.314584
+   }
+  },
+  {
+   "signal_date": "2025-10-31",
+   "trade_date": "2025-11-03",
+   "value": 1332359.08,
+   "cash": 72777.58,
+   "n_positions": 69,
+   "a_invested": 0.931467,
+   "s_invested": 0.959097,
+   "s_class_w": {
+    "gold": 0.389504,
+    "bond": 0.29682,
+    "commodity": 0.313676
+   }
+  },
+  {
+   "signal_date": "2025-11-07",
+   "trade_date": "2025-11-10",
+   "value": 1354300.45,
+   "cash": 78580.48,
+   "n_positions": 69,
+   "a_invested": 0.924742,
+   "s_invested": 0.959337,
+   "s_class_w": {
+    "gold": 0.393285,
+    "bond": 0.294747,
+    "commodity": 0.311968
+   }
+  },
+  {
+   "signal_date": "2025-11-14",
+   "trade_date": "2025-11-17",
+   "value": 1363153.15,
+   "cash": 86150.59,
+   "n_positions": 69,
+   "a_invested": 0.914892,
+   "s_invested": 0.959347,
+   "s_class_w": {
+    "gold": 0.350632,
+    "bond": 0.317585,
+    "commodity": 0.331783
+   }
+  },
+  {
+   "signal_date": "2025-11-21",
+   "trade_date": "2025-11-24",
+   "value": 1343251.4,
+   "cash": 88224.65,
+   "n_positions": 69,
+   "a_invested": 0.909204,
+   "s_invested": 0.959381,
+   "s_class_w": {
+    "gold": 0.349469,
+    "bond": 0.317285,
+    "commodity": 0.333246
+   }
+  },
+  {
+   "signal_date": "2025-11-28",
+   "trade_date": "2025-12-01",
+   "value": 1356735.24,
+   "cash": 82546.16,
+   "n_positions": 69,
+   "a_invested": 0.918095,
+   "s_invested": 0.959976,
+   "s_class_w": {
+    "gold": 0.355873,
+    "bond": 0.312114,
+    "commodity": 0.332012
+   }
+  },
+  {
+   "signal_date": "2025-12-05",
+   "trade_date": "2025-12-08",
+   "value": 1357840.67,
+   "cash": 83146.59,
+   "n_positions": 69,
+   "a_invested": 0.91745,
+   "s_invested": 0.959923,
+   "s_class_w": {
+    "gold": 0.35444,
+    "bond": 0.312149,
+    "commodity": 0.33341
+   }
+  },
+  {
+   "signal_date": "2025-12-12",
+   "trade_date": "2025-12-15",
+   "value": 1346421.68,
+   "cash": 86100.11,
+   "n_positions": 69,
+   "a_invested": 0.911059,
+   "s_invested": 0.960156,
+   "s_class_w": {
+    "gold": 0.361513,
+    "bond": 0.310284,
+    "commodity": 0.328204
+   }
+  },
+  {
+   "signal_date": "2025-12-19",
+   "trade_date": "2025-12-22",
+   "value": 1361641.72,
+   "cash": 85930.13,
+   "n_positions": 69,
+   "a_invested": 0.912323,
+   "s_invested": 0.960594,
+   "s_class_w": {
+    "gold": 0.363252,
+    "bond": 0.306879,
+    "commodity": 0.32987
+   }
+  },
+  {
+   "signal_date": "2025-12-26",
+   "trade_date": "2025-12-29",
+   "value": 1362814.71,
+   "cash": 79227.33,
+   "n_positions": 69,
+   "a_invested": 0.921815,
+   "s_invested": 0.960918,
+   "s_class_w": {
+    "gold": 0.362155,
+    "bond": 0.304171,
+    "commodity": 0.333674
+   }
+  },
+  {
+   "signal_date": "2026-01-09",
+   "trade_date": "2026-01-12",
+   "value": 1376871.54,
+   "cash": 74875.18,
+   "n_positions": 69,
+   "a_invested": 0.928414,
+   "s_invested": 0.961666,
+   "s_class_w": {
+    "gold": 0.363109,
+    "bond": 0.298018,
+    "commodity": 0.338873
+   }
+  },
+  {
+   "signal_date": "2026-01-16",
+   "trade_date": "2026-01-19",
+   "value": 1377190.7,
+   "cash": 70443.59,
+   "n_positions": 69,
+   "a_invested": 0.934882,
+   "s_invested": 0.961793,
+   "s_class_w": {
+    "gold": 0.370258,
+    "bond": 0.297748,
+    "commodity": 0.331995
+   }
+  },
+  {
+   "signal_date": "2026-01-23",
+   "trade_date": "2026-01-26",
+   "value": 1420425.91,
+   "cash": 77573.28,
+   "n_positions": 69,
+   "a_invested": 0.925586,
+   "s_invested": 0.963341,
+   "s_class_w": {
+    "gold": 0.386871,
+    "bond": 0.285649,
+    "commodity": 0.32748
+   }
+  },
+  {
+   "signal_date": "2026-01-30",
+   "trade_date": "2026-02-02",
+   "value": 1387231.42,
+   "cash": 82337.16,
+   "n_positions": 69,
+   "a_invested": 0.91882,
+   "s_invested": 0.961502,
+   "s_class_w": {
+    "gold": 0.369871,
+    "bond": 0.300834,
+    "commodity": 0.329295
+   }
+  },
+  {
+   "signal_date": "2026-02-06",
+   "trade_date": "2026-02-09",
+   "value": 1419888.83,
+   "cash": 84738.1,
+   "n_positions": 69,
+   "a_invested": 0.916071,
+   "s_invested": 0.962876,
+   "s_class_w": {
+    "gold": 0.385277,
+    "bond": 0.290273,
+    "commodity": 0.32445
+   }
+  },
+  {
+   "signal_date": "2026-02-13",
+   "trade_date": "2026-02-24",
+   "value": 1423040.58,
+   "cash": 88828.66,
+   "n_positions": 69,
+   "a_invested": 0.917523,
+   "s_invested": 0.95586,
+   "s_class_w": {
+    "gold": 0.351009,
+    "bond": 0.307893,
+    "commodity": 0.341098
+   }
+  },
+  {
+   "signal_date": "2026-02-27",
+   "trade_date": "2026-03-02",
+   "value": 1452340.18,
+   "cash": 84322.1,
+   "n_positions": 69,
+   "a_invested": 0.925528,
+   "s_invested": 0.956838,
+   "s_class_w": {
+    "gold": 0.357272,
+    "bond": 0.300661,
+    "commodity": 0.342067
+   }
+  },
+  {
+   "signal_date": "2026-03-06",
+   "trade_date": "2026-03-09",
+   "value": 1460728.46,
+   "cash": 82606.49,
+   "n_positions": 69,
+   "a_invested": 0.928249,
+   "s_invested": 0.957181,
+   "s_class_w": {
+    "gold": 0.337496,
+    "bond": 0.297789,
+    "commodity": 0.364716
+   }
+  },
+  {
+   "signal_date": "2026-03-13",
+   "trade_date": "2026-03-16",
+   "value": 1468120.36,
+   "cash": 85316.43,
+   "n_positions": 69,
+   "a_invested": 0.925239,
+   "s_invested": 0.957128,
+   "s_class_w": {
+    "gold": 0.331459,
+    "bond": 0.297933,
+    "commodity": 0.370608
+   }
+  },
+  {
+   "signal_date": "2026-03-20",
+   "trade_date": "2026-03-23",
+   "value": 1412575.63,
+   "cash": 83032.23,
+   "n_positions": 69,
+   "a_invested": 0.926735,
+   "s_invested": 0.954849,
+   "s_class_w": {
+    "gold": 0.293632,
+    "bond": 0.314656,
+    "commodity": 0.391712
+   }
+  },
+  {
+   "signal_date": "2026-03-27",
+   "trade_date": "2026-03-30",
+   "value": 1424569.51,
+   "cash": 79010.89,
+   "n_positions": 69,
+   "a_invested": 0.932181,
+   "s_invested": 0.955838,
+   "s_class_w": {
+    "gold": 0.309817,
+    "bond": 0.308176,
+    "commodity": 0.382007
+   }
+  },
+  {
+   "signal_date": "2026-04-03",
+   "trade_date": "2026-04-07",
+   "value": 1417280.73,
+   "cash": 70967.69,
+   "n_positions": 69,
+   "a_invested": 0.94328,
+   "s_invested": 0.955918,
+   "s_class_w": {
+    "gold": 0.314875,
+    "bond": 0.307567,
+    "commodity": 0.377558
+   }
+  },
+  {
+   "signal_date": "2026-04-10",
+   "trade_date": "2026-04-13",
+   "value": 1420858.07,
+   "cash": 66870.51,
+   "n_positions": 69,
+   "a_invested": 0.949827,
+   "s_invested": 0.955774,
+   "s_class_w": {
+    "gold": 0.318747,
+    "bond": 0.308834,
+    "commodity": 0.372419
+   }
+  },
+  {
+   "signal_date": "2026-04-17",
+   "trade_date": "2026-04-20",
+   "value": 1424126.6,
+   "cash": 72151.92,
+   "n_positions": 68,
+   "a_invested": 0.941941,
+   "s_invested": 0.956033,
+   "s_class_w": {
+    "gold": 0.320289,
+    "bond": 0.307867,
+    "commodity": 0.371844
+   }
+  },
+  {
+   "signal_date": "2026-04-24",
+   "trade_date": "2026-04-27",
+   "value": 1432820.12,
+   "cash": 67180.0,
+   "n_positions": 69,
+   "a_invested": 0.949701,
+   "s_invested": 0.956216,
+   "s_class_w": {
+    "gold": 0.314601,
+    "bond": 0.306241,
+    "commodity": 0.379158
+   }
+  }
+ ]
+}

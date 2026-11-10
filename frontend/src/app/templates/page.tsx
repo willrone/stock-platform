@@ -21,20 +21,9 @@ import {
   Grid,
   Chip,
   Divider,
-  Stack,
   Alert,
 } from '@mui/material';
-import {
-  TrendingUp,
-  Activity,
-  Brain,
-  CheckCircle,
-  ArrowRight,
-  BarChart3,
-  Zap,
-  Shield,
-  Clock,
-} from 'lucide-react';
+import { TrendingUp, Activity, Brain, ArrowRight, Zap } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 // 预设策略模板

@@ -510,7 +510,7 @@ class Alpha158Calculator:
                 return pd.DataFrame(index=qlib_data.index)
 
         except Exception as e:
-            logger.error(f"Alpha因子计算失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"Alpha因子计算失败: {e}")
             # 如果计算失败，尝试回退到简化版本
             logger.warning("回退到简化版Alpha因子计算")
             try:
@@ -667,9 +667,8 @@ class Alpha158Calculator:
                     )
 
             except Exception as e:
-                logger.error(
+                logger.opt(exception=True).error(
                     f"[Alpha158] 无法读取Qlib数据目录: {e}, 路径: {qlib_features_dir}",
-                    exc_info=True,
                 )
                 available_files = set()
 
@@ -1345,7 +1344,7 @@ class Alpha158Calculator:
             return factors
 
         except Exception as e:
-            logger.error(f"计算股票 {stock_code} 的因子失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"计算股票 {stock_code} 的因子失败: {e}")
             return pd.DataFrame(index=stock_data.index)
 
     async def _calculate_qlib_alpha158_factors(
@@ -1463,7 +1462,7 @@ class Alpha158Calculator:
                     return pd.DataFrame(index=data.index)
 
         except Exception as e:
-            logger.error(f"Qlib Alpha158因子计算失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"Qlib Alpha158因子计算失败: {e}")
             return pd.DataFrame(index=data.index)
 
     def _evaluate_qlib_expression(
@@ -2646,6 +2645,75 @@ class EnhancedQlibDataProvider:
             logger.error(f"Qlib初始化失败: {e}")
             raise
 
+    @staticmethod
+    def _align_alpha_index(
+        alpha_factors: pd.DataFrame, target: pd.DataFrame
+    ) -> pd.DataFrame:
+        """把 Alpha 因子的 MultiIndex 对齐到 qlib 原始数据的**层级顺序与 instrument 命名**。
+
+        ⚠️ 2026-11-03（§12.44）：这是**生产训练路径上的真 bug**，不是测试问题。
+
+        Alpha158 handler 返回的 index 是 **(datetime, instrument)**，
+        而 qlib 原始数据经 `_convert_to_qlib_format` 后是 **(instrument, datetime)**。
+        直接 `pd.concat([qlib_data, alpha_factors], axis=1)` 会按 index 对齐 ——
+        两边键完全对不上 → pandas 造出 `('000001.SZ', '000001_SZ')` 这类垃圾键，
+        **159 个 Alpha 因子整列变 NaN**。训练照样"成功"，但模型拿不到任何因子信息。
+
+        对齐做两件事：
+          1. instrument 命名：qlib 内部用 `000001_SZ`，对外用 `000001.SZ` → 规范化
+          2. 层级顺序：把 Alpha 的 (datetime, instrument) 重排成目标的 (instrument, datetime)
+
+        **按值的类型判断哪一层是 datetime**（不依赖 `index.names` ——
+        qlib 数据的 names 实测是 `[None, None]`，靠名字对齐必然错）。
+        """
+        if not isinstance(alpha_factors.index, pd.MultiIndex):
+            return alpha_factors
+        if not isinstance(target.index, pd.MultiIndex):
+            return alpha_factors
+        if alpha_factors.index.nlevels != target.index.nlevels:
+            return alpha_factors
+
+        def _datetime_level(idx: pd.MultiIndex) -> Optional[int]:
+            for i in range(idx.nlevels):
+                vals = [v for v in idx.get_level_values(i)[:50] if v is not None]
+                if vals and all(hasattr(v, "year") for v in vals):
+                    return i
+            return None
+
+        a_dt = _datetime_level(alpha_factors.index)
+        t_dt = _datetime_level(target.index)
+        if a_dt is None or t_dt is None:
+            return alpha_factors
+
+        out = alpha_factors
+        # ── 1. instrument 命名规范化
+        a_inst_level = 1 - a_dt if alpha_factors.index.nlevels == 2 else 0
+        t_inst_level = 1 - t_dt if target.index.nlevels == 2 else 0
+        target_insts = set(target.index.get_level_values(t_inst_level).unique())
+        alpha_levels = out.index.levels[a_inst_level]
+        mapping = {}
+        for raw in alpha_levels:
+            s = str(raw)
+            cand = s.replace("_", ".")
+            mapping[raw] = cand if cand in target_insts else s
+        if any(mapping[k] != k for k in mapping):
+            out = out.copy()
+            new_levels = alpha_levels.map(lambda v: mapping.get(v, v))
+            out.index = out.index.set_levels(new_levels, level=a_inst_level)
+
+        # ── 2. 层级顺序对齐（datetime 层放到目标同位置）
+        order = [i for i in range(out.index.nlevels) if i != a_dt]
+        order.insert(t_dt, a_dt)
+        if order != list(range(out.index.nlevels)):
+            out = out.copy()
+            out.index = out.index.reorder_levels(order)
+        # names 也统一到目标（qlib 数据的 names 实测是 [None, None]，
+        # 这里统一成 ['instrument', 'datetime']，两边才真正一致）
+        if list(out.index.names) != list(target.index.names):
+            out = out.copy()
+            out.index.names = list(target.index.names)
+        return out
+
     async def prepare_qlib_dataset(
         self,
         stock_codes: List[str],
@@ -2670,6 +2738,12 @@ class EnhancedQlibDataProvider:
 
         # 2. 转换为Qlib标准格式
         qlib_data = self._convert_to_qlib_format(base_features)
+        # 统一 MultiIndex 的层级名（实测这条路径出来的是 [None, None]），
+        # 让 qlib 数据与 Alpha 因子的 index 结构真正一致（§12.44）
+        if isinstance(qlib_data.index, pd.MultiIndex) and qlib_data.index.nlevels == 2:
+            if list(qlib_data.index.names) != ["instrument", "datetime"]:
+                qlib_data = qlib_data.copy()
+                qlib_data.index.names = ["instrument", "datetime"]
 
         # 3. 计算Alpha158因子（如果需要）
         if include_alpha_factors and QLIB_AVAILABLE:
@@ -2679,9 +2753,31 @@ class EnhancedQlibDataProvider:
                 )
 
                 if not alpha_factors.empty:
+                    # ⚠️ 必须先对齐 index 层级顺序与 instrument 命名（§12.44）：
+                    # Alpha 因子是 (datetime, instrument)，qlib 数据是 (instrument, datetime)，
+                    # 不对齐就 concat → 键错位 → 159 个因子整列 NaN。
+                    alpha_factors = self._align_alpha_index(alpha_factors, qlib_data)
                     # 合并Alpha因子
                     qlib_data = pd.concat([qlib_data, alpha_factors], axis=1)
                     logger.info(f"成功添加 {len(alpha_factors.columns)} 个Alpha因子")
+
+                    # Alpha158 handler 按 qlib 日历展开（含节假日行），而
+                    # qlib_data 的价格只在真实交易日有值 → merge 后 OHLCV
+                    # 出现大量 NaN（实测 51.9%）。这些行没有价格，不能作为
+                    # 特征样本（特征提取器会因"缺失值过多"直接报错），
+                    # 必须剔除。
+                    price_cols = [
+                        c for c in ("open", "close", "volume") if c in qlib_data.columns
+                    ]
+                    if price_cols:
+                        before = len(qlib_data)
+                        qlib_data = qlib_data.dropna(subset=price_cols)
+                        dropped = before - len(qlib_data)
+                        if dropped:
+                            logger.info(
+                                f"剔除无价格行(节假日/非交易日): {dropped} 行, "
+                                f"剩余 {len(qlib_data)} 行"
+                            )
             except Exception as e:
                 logger.error(f"Alpha因子计算失败: {e}")
 

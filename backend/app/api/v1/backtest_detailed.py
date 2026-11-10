@@ -42,7 +42,9 @@ async def get_detailed_backtest_result(
         detailed_result = await repository.get_detailed_result_by_task_id(task_id)
 
         if not detailed_result:
-            logger.warning(f"[API] 未找到任务 {task_id} 的回测详细结果")
+            logger.opt(exception=True).warning(
+                f"[API] 未找到任务 {task_id} 的回测详细结果"
+            )
             raise HTTPException(status_code=404, detail="未找到回测详细结果")
 
         logger.info(f"[API] 成功获取回测详细结果: task_id={task_id}")
@@ -65,7 +67,7 @@ async def get_detailed_backtest_result(
                     f"[API] position_analysis 是数组，长度: {len(pos_analysis)}"
                 )
         else:
-            logger.warning("[API] position_analysis 为空或不存在")
+            logger.opt(exception=True).warning("[API] position_analysis 为空或不存在")
 
         return StandardResponse(
             success=True, message="获取回测详细结果成功", data=result_dict
@@ -74,8 +76,8 @@ async def get_detailed_backtest_result(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(
-            f"[API] 获取回测详细结果失败: task_id={task_id}, error={e}", exc_info=True
+        logger.opt(exception=True).error(
+            f"[API] 获取回测详细结果失败: task_id={task_id}, error={e}"
         )
         raise HTTPException(status_code=500, detail=f"获取回测详细结果失败: {str(e)}")
 
@@ -119,11 +121,11 @@ async def get_portfolio_snapshots(
         )
 
     except ValueError as e:
-        logger.error(f"[API] 日期格式错误: {e}")
+        logger.opt(exception=True).error(f"[API] 日期格式错误: {e}")
         raise HTTPException(status_code=400, detail=f"日期格式错误: {str(e)}")
     except Exception as e:
-        logger.error(
-            f"[API] 获取组合快照失败: task_id={task_id}, error={e}", exc_info=True
+        logger.opt(exception=True).error(
+            f"[API] 获取组合快照失败: task_id={task_id}, error={e}"
         )
         raise HTTPException(status_code=500, detail=f"获取组合快照失败: {str(e)}")
 
@@ -188,7 +190,7 @@ async def get_trade_records(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"日期格式错误: {str(e)}")
     except Exception as e:
-        logger.error(f"获取交易记录失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取交易记录失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取交易记录失败: {str(e)}")
 
 
@@ -204,7 +206,7 @@ async def get_trade_statistics(
         return StandardResponse(success=True, message="获取交易统计成功", data=stats)
 
     except Exception as e:
-        logger.error(f"获取交易统计失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取交易统计失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取交易统计失败: {str(e)}")
 
 
@@ -263,7 +265,7 @@ async def get_signal_records(
                     signal_dict["execution_reason"] = None
                 signals_data.append(signal_dict)
             except Exception as e:
-                logger.warning(
+                logger.opt(exception=True).warning(
                     f"转换信号记录失败 (signal_id={getattr(signal, 'signal_id', 'unknown')}): {e}"
                 )
                 # 如果转换失败，尝试手动构建字典
@@ -291,7 +293,9 @@ async def get_signal_records(
                     }
                     signals_data.append(signal_dict)
                 except Exception as e2:
-                    logger.error(f"手动构建信号记录字典也失败: {e2}")
+                    logger.opt(exception=True).error(
+                        f"手动构建信号记录字典也失败: {e2}"
+                    )
                     continue
 
         return StandardResponse(
@@ -309,7 +313,7 @@ async def get_signal_records(
         import traceback
 
         error_detail = traceback.format_exc()
-        logger.error(f"获取信号记录失败: {e}\n{error_detail}", exc_info=True)
+        logger.opt(exception=True).error(f"获取信号记录失败: {e}\n{error_detail}")
         raise HTTPException(status_code=500, detail=f"获取信号记录失败: {str(e)}")
 
 
@@ -328,7 +332,7 @@ async def get_signal_statistics(
         import traceback
 
         error_detail = traceback.format_exc()
-        logger.error(f"获取信号统计失败: {e}\n{error_detail}", exc_info=True)
+        logger.opt(exception=True).error(f"获取信号统计失败: {e}\n{error_detail}")
         raise HTTPException(status_code=500, detail=f"获取信号统计失败: {str(e)}")
 
 
@@ -353,7 +357,7 @@ async def get_benchmark_data(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取基准数据失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取基准数据失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取基准数据失败: {str(e)}")
 
 
@@ -379,7 +383,7 @@ async def cache_chart_data(task_id: str, request: CacheChartRequest) -> Any:
             raise HTTPException(status_code=500, detail="图表数据缓存失败")
 
     except Exception as e:
-        logger.error(f"缓存图表数据失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"缓存图表数据失败: {e}")
         raise HTTPException(status_code=500, detail=f"缓存图表数据失败: {str(e)}")
 
 
@@ -400,7 +404,7 @@ async def get_cached_chart_data(task_id: str, chart_type: str) -> Any:
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取缓存图表数据失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取缓存图表数据失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取缓存图表数据失败: {str(e)}")
 
 
@@ -430,7 +434,7 @@ async def invalidate_cache(
             raise HTTPException(status_code=500, detail="缓存清理失败")
 
     except Exception as e:
-        logger.error(f"缓存清理失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"缓存清理失败: {e}")
         raise HTTPException(status_code=500, detail=f"缓存清理失败: {str(e)}")
 
 
@@ -444,7 +448,7 @@ async def get_cache_statistics() -> Any:
         return StandardResponse(success=True, message="获取缓存统计成功", data=stats)
 
     except Exception as e:
-        logger.error(f"获取缓存统计失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取缓存统计失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取缓存统计失败: {str(e)}")
 
 
@@ -462,7 +466,7 @@ async def cleanup_expired_cache() -> Any:
         )
 
     except Exception as e:
-        logger.error(f"清理过期缓存失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"清理过期缓存失败: {e}")
         raise HTTPException(status_code=500, detail=f"清理过期缓存失败: {str(e)}")
 
 
@@ -487,5 +491,5 @@ async def delete_task_data(
         raise
     except Exception as e:
         await session.rollback()
-        logger.error(f"删除任务数据失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"删除任务数据失败: {e}")
         raise HTTPException(status_code=500, detail=f"删除任务数据失败: {str(e)}")

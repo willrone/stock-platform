@@ -1,4 +1,5 @@
 import { logger } from '@/utils/logger';
+import { DEFAULT_BACKEND_WS_URL } from '@/config/backend';
 /**
  * 回测进度WebSocket客户端
  *
@@ -110,7 +111,7 @@ export class BacktestProgressWebSocket {
       baseUrl = `${protocol}//${hostname}:${port}`;
     } else {
       // 服务端：使用默认值
-      baseUrl = 'ws://localhost:8000';
+      baseUrl = DEFAULT_BACKEND_WS_URL;
     }
 
     // 清理URL末尾的斜杠，并确保不包含多余的/ws前缀

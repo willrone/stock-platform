@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 
 from app.api.v1.dependencies import require_current_user
+from app.api.v1.schemas import StandardResponse
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.security import (
@@ -22,6 +23,7 @@ from app.core.security import (
 )
 from app.models.user_models import User
 from app.services.billing.email_service import send_password_reset_email
+from app.services.funnel import funnel_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -30,6 +32,9 @@ class RegisterRequest(BaseModel):
     email: str = Field(..., examples=["user@example.com"])
     username: str = Field(..., min_length=2, max_length=50, examples=["quant_wang"])
     password: str = Field(..., min_length=6, max_length=128)
+    # 2026-11-01 漏斗埋点：前端生成的匿名设备标识。带上它才能把
+    # "注册前看了价格页" 这类匿名行为归并到注册后的 user_id 上。
+    anon_id: Optional[str] = Field(None, max_length=64)
 
 
 class LoginRequest(BaseModel):
@@ -54,7 +59,27 @@ class ProfileUpdateRequest(BaseModel):
     username: str = Field(..., min_length=2, max_length=50)
 
 
-class AuthResponse(BaseModel):
+class AuthResponse(StandardResponse):
+    """认证响应（信封 + 顶层冗余字段，双形态）。
+
+    2026-10-27：登录/注册原先只返回裸 dict（access_token/refresh_token/
+    token_type/user），与项目其它 40+ 端点的 StandardResponse 信封不一致；
+    前端 api.ts 的响应拦截器要求 success 字段，任何走信封路径读 token 的
+    逻辑都会拿到 undefined。
+
+    这里同时给出两种形态，兼容过渡期的新旧前端：
+      - 信封形态：success / message / data / timestamp，data 内含四个 token 字段；
+      - 顶层形态：access_token / refresh_token / token_type / user 直接在响应体顶层。
+
+    顶层字段是**过渡期兼容冗余**（frontend/src/app/login/page.tsx:46 与
+    register/page.tsx:51 写的是 localStorage.setItem('access_token', data.access_token)，
+    其中 data 是 axios response.data 即响应体顶层）。后端全量统一、
+    前端全部改为读 data.access_token 之后，可以删除这里的顶层冗余字段。
+
+    注意：字段顺序即 JSON 输出顺序 —— 基类字段在前（success/message/data/
+    timestamp），子类字段在后（access_token/...）。
+    """
+
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
@@ -71,6 +96,8 @@ class UserInfo(BaseModel):
     email_verified: bool = False
     avatar_url: Optional[str] = None
     last_login_at: Optional[datetime] = None
+    # 2026-10-25：前端需要按角色显示管理端入口（如「充值订单」确认到账）
+    is_admin: bool = False
 
 
 class ForgotPasswordResponse(BaseModel):
@@ -81,6 +108,18 @@ class ForgotPasswordResponse(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+def _track_funnel(session, event: str, **kwargs) -> None:
+    """记录漏斗事件。**埋点失败绝不影响主流程**（注册/登录必须成功）。"""
+    try:
+        funnel_service.record_event(session, event, **kwargs)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"漏斗埋点失败（忽略）: {exc}")
+        try:
+            session.rollback()
+        except Exception:  # noqa: BLE001
+            pass
 
 
 def _get_user_by_email(session, email: str):
@@ -97,6 +136,8 @@ def _user_payload(user: User) -> dict:
         "email": user.email,
         "username": user.username,
         "subscription_tier": user.subscription_tier,
+        # 2026-10-25：前端按角色显示管理端入口（充值订单确认到账）
+        "is_admin": bool(getattr(user, "is_admin", False)),
     }
 
 
@@ -107,12 +148,29 @@ def _tokens_for_user(user: User) -> tuple[str, str]:
     )
 
 
-def _auth_response(user: User) -> AuthResponse:
+def _auth_response(user: User, message: str = "认证成功") -> AuthResponse:
+    """构造认证响应（信封 + 顶层冗余字段，双形态）。
+
+    - data 里放 access_token/refresh_token/token_type/user（信封路径消费）
+    - 同样的四个字段同时冗余在响应体顶层（旧前端路径消费）
+    """
     access_token, refresh_token = _tokens_for_user(user)
+    user_payload = _user_payload(user)
+    token_payload = {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "user": user_payload,
+    }
     return AuthResponse(
+        success=True,
+        message=message,
+        data=token_payload,
+        # 顶层冗余：过渡期兼容旧前端（详见 AuthResponse 文档字符串）
         access_token=access_token,
         refresh_token=refresh_token,
-        user=_user_payload(user),
+        token_type="bearer",
+        user=user_payload,
     )
 
 
@@ -140,7 +198,16 @@ def register(req: RegisterRequest):
             logger.warning("注册唯一约束冲突: {}", integrity_err)
             raise HTTPException(status_code=409, detail="邮箱或用户名已被使用")
         session.refresh(user)
-        return _auth_response(user)
+        # 漏斗：注册成功（服务端事实，前端不重复上报）
+        _track_funnel(
+            session,
+            funnel_service.EVENT_SIGNUP,
+            user_id=user.id,
+            anon_id=req.anon_id,
+            props={"username": user.username},
+            source="backend",
+        )
+        return _auth_response(user, message="注册成功")
     except HTTPException:
         raise
     except OperationalError as op_err:
@@ -172,7 +239,14 @@ def login(req: LoginRequest):
         user.last_login_at = datetime.utcnow()
         session.commit()
         session.refresh(user)
-        return _auth_response(user)
+        # 漏斗：登录成功（服务端事实）
+        _track_funnel(
+            session,
+            funnel_service.EVENT_LOGIN,
+            user_id=user.id,
+            source="backend",
+        )
+        return _auth_response(user, message="登录成功")
     except HTTPException:
         raise
     except OperationalError as op_err:
@@ -210,7 +284,7 @@ def refresh_token(req: RefreshTokenRequest):
             raise HTTPException(status_code=401, detail="用户不存在")
         if not user.is_active:
             raise HTTPException(status_code=403, detail="账户已被禁用")
-        return _auth_response(user)
+        return _auth_response(user, message="Token 刷新成功")
     finally:
         session.close()
 
@@ -305,6 +379,7 @@ def update_profile(
             email_verified=user.email_verified,
             avatar_url=user.avatar_url,
             last_login_at=user.last_login_at,
+            is_admin=bool(getattr(user, "is_admin", False)),
         )
     except HTTPException:
         raise
@@ -351,6 +426,7 @@ def get_profile(user_id: str = Depends(get_current_user_from_auth)):
             email_verified=user.email_verified,
             avatar_url=user.avatar_url,
             last_login_at=user.last_login_at,
+            is_admin=bool(getattr(user, "is_admin", False)),
         )
     except HTTPException:
         raise

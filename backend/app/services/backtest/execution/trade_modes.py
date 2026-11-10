@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Protocol
@@ -9,6 +10,8 @@ from typing import Any, Dict, List, Optional, Protocol
 from ..core.base_strategy import BaseStrategy
 from ..core.portfolio_manager import PortfolioManager
 from ..models import SignalType, TradingSignal
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -20,6 +23,9 @@ class TradeModeExecutionContext:
     strategy: Optional[BaseStrategy]
     strategy_config: Dict[str, Any]
     stock_universe: List[str]
+    # 2026-10-26：BacktestConfig 里的 stop_loss_pct / take_profit_pct
+    # 之前是**死参数**（模型里定义了，引擎从不消费）→ 所有回测的止损都是假的。
+    backtest_config: Optional[Any] = None
 
 
 @dataclass(frozen=True)
@@ -225,6 +231,67 @@ class TopkDropoutTradeModeExecutor:
                 trades_this_day,
                 signal_records,
             )
+
+        # ── 个股止损 / 止盈（2026-10-26 新增接线）─────────────────────
+        # BacktestConfig.stop_loss_pct / take_profit_pct 之前从未被引擎消费，
+        # 意味着所有历史回测的「止损」都是纸面上的。这里真正接上：
+        # 持仓浮亏超过 stop_loss → 卖出；浮盈超过 take_profit → 卖出。
+        # 卖出的名额会在下面的买入候选里补上（不缩仓）。
+        _bt = getattr(context, "backtest_config", None)
+        _sl = float(getattr(_bt, "stop_loss_pct", 0) or 0) if _bt else 0.0
+        _tp = float(getattr(_bt, "take_profit_pct", 0) or 0) if _bt else 0.0
+        if _sl > 0 or _tp > 0:
+            _pm = context.portfolio_manager
+            _positions = _pm.positions if hasattr(_pm, "positions") else {}
+            _hits = []
+            for _code in list(_positions.keys()):
+                _pos = _positions.get(_code)
+                _cost = float(getattr(_pos, "avg_cost", 0) or 0)
+                _px = float(context.current_prices.get(_code, 0) or 0)
+                if _cost <= 0 or _px <= 0:
+                    continue
+                _ret = _px / _cost - 1.0
+                if _sl > 0 and _ret <= -_sl:
+                    _hits.append((_code, "stop_loss", _ret))
+                elif _tp > 0 and _ret >= _tp:
+                    _hits.append((_code, "take_profit", _ret))
+            for _code, _kind, _ret in _hits:
+                _signal = _build_rebalance_signal(
+                    current_date=context.current_date,
+                    stock_code=_code,
+                    current_prices=context.current_prices,
+                    signal_type=SignalType.SELL,
+                    reason=f"{_kind} triggered (ret={_ret:.2%})",
+                    trade_mode=self.mode_name,
+                )
+                signal_records.append(_signal)
+                if _validate_and_execute(
+                    context=context,
+                    signal=_signal,
+                    executed_trade_signals=executed_trade_signals,
+                    unexecuted_signals=unexecuted_signals,
+                ):
+                    trades_this_day += 1
+                    holdings_set.discard(_code)
+
+        # ── P0-3：先尝试执行之前因跌停/停牌被挂起的卖单 ──────────
+        # 连续一字跌停的票，策略想跑却跑不掉。挂起 = 等解封再卖。
+        _pm = context.portfolio_manager
+        _flush = getattr(_pm, "flush_pending_sells", None)
+        if _flush is not None:
+            try:
+                for _t in _flush(context.current_date, context.current_prices):
+                    executed_trade_signals.append(
+                        {
+                            "stock_code": _t.stock_code,
+                            "timestamp": _t.timestamp,
+                            "signal_type": _t.action,
+                            "reason": "挂起卖单解封后成交",
+                        }
+                    )
+                    trades_this_day += 1
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"挂起卖单 flush 失败: {e}")
 
         rank_index = {code: idx for idx, (code, _) in enumerate(ranked)}
         held_sorted_best_to_worst = sorted(

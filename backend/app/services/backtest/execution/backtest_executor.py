@@ -4,7 +4,7 @@
 
 import time
 from concurrent.futures import as_completed
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
@@ -274,7 +274,25 @@ class BacktestExecutor:
                     task_id, "strategy_setup", progress=100, status="completed"
                 )
 
-            # 创建组合管理器
+            # 单仓上限对齐策略建议值（TopK 等权类）。
+            # 引擎默认 max_position_size=0.2，对 topk=30/50/60 的等权组合是错的：
+            # topk × 0.2 远超可投现金 → 建仓到现金耗尽 → 组合冻结
+            # （实测 topk=60 时只买到 9 只、559 笔交易塌成 9 笔）。
+            # 策略已按 (1-cash_reserve)/topk 自算出等权上限；仅当调用方
+            # **没有**显式指定 max_position_size 时才采用策略建议值，
+            # 显式传值一律以调用方为准。
+            if "max_position_size" not in (strategy_config or {}):
+                try:
+                    _hint = strategy.get_position_size_hint()
+                except Exception:
+                    _hint = None
+                if _hint is not None and _hint > 0:
+                    logger.info(
+                        f"单仓上限采用策略建议值: {_hint:.6f} "
+                        f"(topk 类策略等权口径, 原本 {backtest_config.max_position_size})"
+                    )
+                    backtest_config.max_position_size = float(_hint)
+
             # Phase 1: 数据加载后再创建（需要 stock_codes）
             portfolio_manager: Any = None
 
@@ -325,6 +343,14 @@ class BacktestExecutor:
                 required_columns=required_data_columns,
             )
 
+            # 确定性修复：并行加载用 as_completed 收集，dict 插入顺序受线程
+            # 完成时序影响（非确定），而下游按 stock_data 顺序迭代股票生成/
+            # 执行信号，同日多信号的执行顺序与资金分配路径随之分叉。
+            # 按输入 stock_codes 顺序重建（与串行路径一致），使任意加载路径
+            # 顺序固定可复现。
+            if stock_data:
+                stock_data = {c: stock_data[c] for c in stock_codes if c in stock_data}
+
             if self.enable_performance_profiling:
                 self._profiler().end_stage(
                     "data_loading",
@@ -356,6 +382,45 @@ class BacktestExecutor:
 
             # 获取交易日历
             trading_dates = self._get_trading_calendar(stock_data, start_date, end_date)
+
+            # ── 2026-10-26：可成交性矩阵（回测引擎下沉可成交性检查）──
+            # 回测引擎此前**没有任何**可成交性检查：能买涨停、能卖跌停，
+            # 回测夏普虚高，纸面盘跑出来的收益永远达不到回测预期。
+            # 口径与纸面盘/对外信号共用 app/services/trading/execution_rules.py。
+            if self.use_array_portfolio and getattr(
+                backtest_config, "enable_tradability", True
+            ):
+                try:
+                    from app.services.backtest.execution.tradability import (
+                        build_tradability,
+                    )
+
+                    # 窗口前一日收盘价：stock_data 按窗口裁剪 → 窗口首日
+                    # 的涨跌幅是 NaN，会让首日的涨停股漏拦（实测 24 只分歧
+                    # 全部集中在窗口首日）。这里单独取前 10 个日历日补上。
+                    _prev_close = await self._load_prev_close_map(
+                        actual_stock_codes, start_date
+                    )
+                    _tm = build_tradability(
+                        stock_data,
+                        trading_dates,
+                        actual_stock_codes,
+                        prev_close=_prev_close,
+                        participation_rate=float(
+                            getattr(backtest_config, "participation_rate", 0.005)
+                        ),
+                        min_turnover=float(
+                            getattr(backtest_config, "min_turnover", 5_000_000.0)
+                        ),
+                    )
+                    portfolio_manager.tradability = _tm
+                    logger.info(
+                        f"✅ 可成交性矩阵已启用：不可买 "
+                        f"{int((~_tm.can_buy).sum())} 格 / 不可卖 "
+                        f"{int((~_tm.can_sell).sum())} 格"
+                    )
+                except Exception as e:  # noqa: BLE001
+                    logger.warning(f"可成交性矩阵构建失败，回测按旧口径继续: {e}")
 
             # 预处理（日期索引 + 预计算信号 + 信号提取）
             _t0 = time.perf_counter()
@@ -484,6 +549,18 @@ class BacktestExecutor:
                 perf_breakdown=perf_breakdown,
             )
             perf_breakdown["main_loop_s"] = time.perf_counter() - _t0
+            # 2026-10-27：把日度净值曲线暴露到结果里
+            # 用途：多策略「资金分配」合成 —— 各策略单独跑拿日度收益率序列，
+            #       再按资金权重组合（数学上等价于真实资金分配）。
+            try:
+                _eq = getattr(portfolio_manager, "equity_curve", None)
+                if _eq:
+                    backtest_results["equity_curve"] = [
+                        [str(d.date()) if hasattr(d, "date") else str(d), float(v)]
+                        for d, v in _eq
+                    ]
+            except Exception as e:  # noqa: BLE001
+                logger.debug(f"导出 equity_curve 失败: {e}")
 
             if self.enable_performance_profiling:
                 self._profiler().end_stage(
@@ -651,6 +728,17 @@ class BacktestExecutor:
                 perf_breakdown,
             )
 
+            # 2026-10-27：把日度净值曲线放进**返回值**（run_backtest 返回的是
+            # backtest_report，不是 backtest_results —— 之前加错对象了）
+            try:
+                _eq = getattr(portfolio_manager, "equity_curve", None)
+                if _eq:
+                    backtest_report["equity_curve"] = [
+                        [str(d.date()) if hasattr(d, "date") else str(d), float(v)]
+                        for d, v in _eq
+                    ]
+            except Exception as e:  # noqa: BLE001
+                logger.debug(f"导出 equity_curve 失败: {e}")
             return backtest_report
 
         except Exception as e:
@@ -671,6 +759,46 @@ class BacktestExecutor:
             raise TaskError(
                 message=error_msg, severity=ErrorSeverity.HIGH, original_exception=e
             )
+
+    async def _load_prev_close_map(
+        self, stock_codes: List[str], start_date: datetime
+    ) -> Dict[str, float]:
+        """取每只股票在窗口起始日之前的最后一个收盘价。
+
+        回测数据按窗口裁剪，窗口第一天的 `close.pct_change()` 是 NaN，
+        导致 tradability 矩阵跳过首行 → **窗口首日的涨停股没被拦住**。
+        这里额外加载窗口前 10 个日历日的数据，只取 close 列。
+        """
+        out: Dict[str, float] = {}
+        try:
+            pre_start = start_date - timedelta(days=10)
+            pre_end = start_date - timedelta(days=1)
+            for code in stock_codes:
+                try:
+                    df = (
+                        await self.data_loader.load_stock_data_async(
+                            code, pre_start, pre_end
+                        )
+                        if hasattr(self.data_loader, "load_stock_data_async")
+                        else self.data_loader.load_stock_data(code, pre_start, pre_end)
+                    )
+                except Exception:
+                    continue
+                if df is None or df.empty:
+                    continue
+                close_col = None
+                for cand in ("$close", "close"):
+                    if cand in df.columns:
+                        close_col = cand
+                        break
+                if close_col is None:
+                    continue
+                ser = pd.to_numeric(df[close_col], errors="coerce").dropna()
+                if len(ser):
+                    out[str(code)] = float(ser.iloc[-1])
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"加载窗口前收盘价失败（首日涨跌停会漏判）: {e}")
+        return out
 
     def _get_trading_calendar(
         self,
@@ -1892,6 +2020,11 @@ class BacktestExecutor:
                             strategy=strategy,
                             strategy_config=trade_mode_config,
                             stock_universe=list(stock_data.keys()),
+                            # 2026-10-26：传 backtest_config 让 trade mode 能读到
+                            # stop_loss_pct / take_profit_pct（之前是死参数）
+                            # 注意：_execute_backtest_loop 没有 backtest_config 形参，
+                            # 配置挂在 portfolio_manager 上 → 从那里取。
+                            backtest_config=getattr(portfolio_manager, "config", None),
                         )
                     )
                     executed_trade_signals = mode_result.executed_trade_signals

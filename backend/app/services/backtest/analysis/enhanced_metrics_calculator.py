@@ -43,7 +43,7 @@ class EnhancedMetricsCalculator:
         """
         try:
             if not portfolio_history:
-                logger.warning("组合历史数据为空，无法计算绩效指标")
+                logger.opt(exception=True).warning("组合历史数据为空，无法计算绩效指标")
                 return {}
 
             # 转换为pandas DataFrame
@@ -55,7 +55,7 @@ class EnhancedMetricsCalculator:
             returns = portfolio_df["portfolio_value"].pct_change().dropna()
 
             if len(returns) == 0:
-                logger.warning("收益率序列为空，无法计算绩效指标")
+                logger.opt(exception=True).warning("收益率序列为空，无法计算绩效指标")
                 return {}
 
             # 基础收益指标
@@ -96,7 +96,7 @@ class EnhancedMetricsCalculator:
             return all_metrics
 
         except Exception as e:
-            logger.error(f"计算绩效指标失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"计算绩效指标失败: {e}")
             raise TaskError(
                 message=f"计算绩效指标失败: {str(e)}",
                 severity=ErrorSeverity.MEDIUM,
@@ -138,20 +138,20 @@ class EnhancedMetricsCalculator:
     ) -> Dict[str, float]:
         """计算风险调整收益指标"""
 
-        # 夏普比率
-        volatility = returns.std() * np.sqrt(252)
+        # 夏普比率(标准定义: 日收益 μ/σ 年化, 减无风险利率; 旧实现 年化收益/波动 复利口径已修正)
+        rf_daily = self.risk_free_rate / 252
         sharpe_ratio = (
-            (annualized_return - self.risk_free_rate) / volatility
-            if volatility > 0
+            (returns - rf_daily).mean() * np.sqrt(252) / returns.std()
+            if returns.std() > 0
             else 0
         )
 
-        # Sortino比率
+        # Sortino比率(标准定义: 日收益 μ/下行σ 年化; 旧实现 年化收益/下行σ 复利口径已修正)
         downside_returns = returns[returns < 0]
         if len(downside_returns) > 0:
             downside_deviation = downside_returns.std() * np.sqrt(252)
             sortino_ratio = (
-                (annualized_return - self.risk_free_rate) / downside_deviation
+                (returns - rf_daily).mean() * np.sqrt(252) / downside_deviation
                 if downside_deviation > 0
                 else 0
             )
@@ -399,7 +399,7 @@ class EnhancedMetricsCalculator:
         """计算滚动指标"""
 
         if len(returns) < window:
-            logger.warning(
+            logger.opt(exception=True).warning(
                 f"数据长度 {len(returns)} 小于滚动窗口 {window}，跳过滚动指标计算"
             )
             return {}
@@ -457,7 +457,7 @@ class EnhancedMetricsCalculator:
             logger.info(f"计算与基准 {benchmark_symbol} 的对比指标")
 
             if not portfolio_history:
-                logger.warning("组合历史数据为空，无法计算基准对比")
+                logger.opt(exception=True).warning("组合历史数据为空，无法计算基准对比")
                 return {}
 
             # 获取基准数据
@@ -495,7 +495,9 @@ class EnhancedMetricsCalculator:
                     benchmark_df = benchmark_df.sort_index()
 
             if benchmark_df.empty or len(benchmark_df) == 0:
-                logger.warning(f"无法获取基准数据: {benchmark_symbol}，返回空结果")
+                logger.opt(exception=True).warning(
+                    f"无法获取基准数据: {benchmark_symbol}，返回空结果"
+                )
                 return {
                     "benchmark_symbol": benchmark_symbol,
                     "benchmark_name": self._get_benchmark_name(benchmark_symbol),
@@ -515,7 +517,9 @@ class EnhancedMetricsCalculator:
             # 对齐日期
             common_dates = portfolio_returns.index.intersection(benchmark_returns.index)
             if len(common_dates) == 0:
-                logger.warning("组合和基准数据没有共同的日期，无法计算对比指标")
+                logger.opt(exception=True).warning(
+                    "组合和基准数据没有共同的日期，无法计算对比指标"
+                )
                 return {
                     "benchmark_symbol": benchmark_symbol,
                     "benchmark_name": self._get_benchmark_name(benchmark_symbol),
@@ -593,7 +597,7 @@ class EnhancedMetricsCalculator:
             }
 
         except Exception as e:
-            logger.error(f"计算基准对比指标失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"计算基准对比指标失败: {e}")
             return {
                 "benchmark_symbol": benchmark_symbol,
                 "benchmark_name": self._get_benchmark_name(benchmark_symbol),
@@ -644,7 +648,7 @@ class EnhancedMetricsCalculator:
 
             return up_capture, down_capture
         except Exception as e:
-            logger.error(f"计算捕获率失败: {e}")
+            logger.opt(exception=True).error(f"计算捕获率失败: {e}")
             return 0.0, 0.0
 
     def calculate_sector_analysis(self, trade_history: List[Dict]) -> Dict[str, Any]:
@@ -699,5 +703,5 @@ class EnhancedMetricsCalculator:
             }
 
         except Exception as e:
-            logger.error(f"计算行业分析失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"计算行业分析失败: {e}")
             return {}

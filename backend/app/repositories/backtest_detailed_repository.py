@@ -82,7 +82,7 @@ class BacktestDetailedRepository:
             return detailed_result
 
         except Exception as e:
-            self.logger.error("创建回测详细结果失败: {}", e, exc_info=True)
+            self.logger.opt(exception=True).error("创建回测详细结果失败: {}", e)
             return None
 
     async def get_detailed_result_by_task_id(
@@ -113,7 +113,7 @@ class BacktestDetailedRepository:
             )
 
         except Exception as e:
-            self.logger.error("获取回测详细结果失败: {}", e, exc_info=True)
+            self.logger.opt(exception=True).error("获取回测详细结果失败: {}", e)
             return None
 
     async def update_detailed_result(
@@ -131,7 +131,9 @@ class BacktestDetailedRepository:
             detailed_result = result.scalar_one_or_none()
 
             if not detailed_result:
-                self.logger.warning(f"未找到回测详细结果: task_id={task_id}")
+                self.logger.opt(exception=True).warning(
+                    f"未找到回测详细结果: task_id={task_id}"
+                )
                 return False
 
             result_row = cast(Any, detailed_result)
@@ -178,7 +180,7 @@ class BacktestDetailedRepository:
             return True
 
         except Exception as e:
-            self.logger.error("更新回测详细结果失败: {}", e, exc_info=True)
+            self.logger.opt(exception=True).error("更新回测详细结果失败: {}", e)
             return False
 
     # ==================== PortfolioSnapshot 相关操作 ====================
@@ -212,7 +214,7 @@ class BacktestDetailedRepository:
             return True
 
         except Exception as e:
-            self.logger.error("批量创建组合快照失败: {}", e, exc_info=True)
+            self.logger.opt(exception=True).error("批量创建组合快照失败: {}", e)
             return False
 
     async def get_portfolio_snapshots(
@@ -240,7 +242,7 @@ class BacktestDetailedRepository:
             return list(result.scalars().all())
 
         except Exception as e:
-            self.logger.error("获取组合快照失败: {}", e, exc_info=True)
+            self.logger.opt(exception=True).error("获取组合快照失败: {}", e)
             return []
 
     # ==================== TradeRecord 相关操作 ====================
@@ -278,7 +280,7 @@ class BacktestDetailedRepository:
             return True
 
         except Exception as e:
-            self.logger.error("批量创建交易记录失败: {}", e, exc_info=True)
+            self.logger.opt(exception=True).error("批量创建交易记录失败: {}", e)
             return False
 
     async def get_trade_records(
@@ -328,7 +330,7 @@ class BacktestDetailedRepository:
             return list(result.scalars().all())
 
         except Exception as e:
-            self.logger.error("获取交易记录失败: {}", e, exc_info=True)
+            self.logger.opt(exception=True).error("获取交易记录失败: {}", e)
             return []
 
     async def get_trade_records_count(
@@ -358,7 +360,7 @@ class BacktestDetailedRepository:
             return result.scalar() or 0
 
         except Exception as e:
-            self.logger.error("获取交易记录总数失败: {}", e, exc_info=True)
+            self.logger.opt(exception=True).error("获取交易记录总数失败: {}", e)
             return 0
 
     async def get_trade_statistics(self, task_id: str) -> Dict[str, Any]:
@@ -398,7 +400,7 @@ class BacktestDetailedRepository:
                         f"统计表不存在，回退到实时计算: task_id={task_id}"
                     )
                 else:
-                    self.logger.warning(
+                    self.logger.opt(exception=True).warning(
                         f"查询统计表失败，回退到实时计算: task_id={task_id}, error={stats_error}"
                     )
 
@@ -495,7 +497,7 @@ class BacktestDetailedRepository:
                 ):
                     self.logger.info(f"交易记录表不存在，返回空统计: task_id={task_id}")
                 else:
-                    self.logger.warning(
+                    self.logger.opt(exception=True).warning(
                         f"计算交易统计失败: task_id={task_id}, error={calc_error}"
                     )
                 # 返回空统计
@@ -518,8 +520,8 @@ class BacktestDetailedRepository:
             import traceback
 
             error_detail = traceback.format_exc()
-            self.logger.error(
-                "获取交易统计失败: {}\n{}", e, error_detail, exc_info=True
+            self.logger.opt(exception=True).error(
+                "获取交易统计失败: {}\n{}", e, error_detail
             )
             # 返回空统计而不是抛出异常，避免前端报错
             return {
@@ -580,7 +582,7 @@ class BacktestDetailedRepository:
             return signal_record
 
         except Exception as e:
-            self.logger.error("保存信号记录失败: {}", e, exc_info=True)
+            self.logger.opt(exception=True).error("保存信号记录失败: {}", e)
             return None
 
     async def batch_save_signal_records(
@@ -620,7 +622,7 @@ class BacktestDetailedRepository:
             return True
 
         except Exception as e:
-            self.logger.error("批量保存信号记录失败: {}", e, exc_info=True)
+            self.logger.opt(exception=True).error("批量保存信号记录失败: {}", e)
             return False
 
     async def get_signal_records(
@@ -673,7 +675,7 @@ class BacktestDetailedRepository:
             return list(result.scalars().all())
 
         except Exception as e:
-            self.logger.error("获取信号记录失败: {}", e, exc_info=True)
+            self.logger.opt(exception=True).error("获取信号记录失败: {}", e)
             return []
 
     async def get_signal_records_count(
@@ -717,7 +719,7 @@ class BacktestDetailedRepository:
             )
 
         except Exception as e:
-            self.logger.error("获取信号记录总数失败: {}", e, exc_info=True)
+            self.logger.opt(exception=True).error("获取信号记录总数失败: {}", e)
             return 0
 
     async def _get_rejection_breakdown_and_actionable(
@@ -755,7 +757,7 @@ class BacktestDetailedRepository:
             breakdown, top_list = aggregate_rejection_reasons(raw_reasons)
             return breakdown, top_list, actionable_count
         except Exception as e:
-            self.logger.warning(f"获取拒绝原因聚合失败: {e}")
+            self.logger.opt(exception=True).warning(f"获取拒绝原因聚合失败: {e}")
             return {}, [], 0
 
     async def get_signal_statistics(self, task_id: str) -> Dict[str, Any]:
@@ -821,7 +823,7 @@ class BacktestDetailedRepository:
                         f"统计表不存在，回退到实时计算: task_id={task_id}"
                     )
                 else:
-                    self.logger.warning(
+                    self.logger.opt(exception=True).warning(
                         f"查询统计表失败，回退到实时计算: task_id={task_id}, error={stats_error}"
                     )
 
@@ -866,7 +868,7 @@ class BacktestDetailedRepository:
 
                 elapsed_time = time.time() - start_time
                 if elapsed_time > 1.0:
-                    self.logger.warning(
+                    self.logger.opt(exception=True).warning(
                         f"信号统计查询耗时较长: {elapsed_time:.2f}秒, task_id={task_id}, total_signals={total_signals}"
                     )
 
@@ -902,7 +904,7 @@ class BacktestDetailedRepository:
                 ):
                     self.logger.info(f"信号记录表不存在，返回空统计: task_id={task_id}")
                 else:
-                    self.logger.warning(
+                    self.logger.opt(exception=True).warning(
                         f"计算信号统计失败: task_id={task_id}, error={calc_error}"
                     )
                 return base_fail.copy()
@@ -911,8 +913,8 @@ class BacktestDetailedRepository:
             import traceback
 
             error_detail = traceback.format_exc()
-            self.logger.error(
-                "获取信号统计失败: {}\n{}", e, error_detail, exc_info=True
+            self.logger.opt(exception=True).error(
+                "获取信号统计失败: {}\n{}", e, error_detail
             )
             return base_fail.copy()
 
@@ -959,7 +961,7 @@ class BacktestDetailedRepository:
             return False
 
         except Exception as e:
-            self.logger.error("标记信号为已执行失败: {}", e, exc_info=True)
+            self.logger.opt(exception=True).error("标记信号为已执行失败: {}", e)
             return False
 
     async def update_signal_execution_reason(
@@ -1009,7 +1011,7 @@ class BacktestDetailedRepository:
             return False
 
         except Exception as e:
-            self.logger.error("更新信号未执行原因失败: {}", e, exc_info=True)
+            self.logger.opt(exception=True).error("更新信号未执行原因失败: {}", e)
             return False
 
     async def batch_mark_signals_as_executed(
@@ -1072,7 +1074,7 @@ class BacktestDetailedRepository:
             return updated_count
 
         except Exception as e:
-            self.logger.error("批量标记信号为已执行失败: {}", e, exc_info=True)
+            self.logger.opt(exception=True).error("批量标记信号为已执行失败: {}", e)
             return 0
 
     async def batch_update_signal_execution_reasons(
@@ -1142,7 +1144,7 @@ class BacktestDetailedRepository:
             return updated_count
 
         except Exception as e:
-            self.logger.error("批量更新信号未执行原因失败: {}", e, exc_info=True)
+            self.logger.opt(exception=True).error("批量更新信号未执行原因失败: {}", e)
             return 0
 
     # ==================== BacktestBenchmark 相关操作 ====================
@@ -1181,7 +1183,7 @@ class BacktestDetailedRepository:
             return benchmark
 
         except Exception as e:
-            self.logger.error(f"创建基准数据失败: {e}", exc_info=True)
+            self.logger.opt(exception=True).error(f"创建基准数据失败: {e}")
             return None
 
     async def get_benchmark_data(
@@ -1199,7 +1201,7 @@ class BacktestDetailedRepository:
             return cast(Optional[BacktestBenchmark], result.scalar_one_or_none())
 
         except Exception as e:
-            self.logger.error(f"获取基准数据失败: {e}", exc_info=True)
+            self.logger.opt(exception=True).error(f"获取基准数据失败: {e}")
             return None
 
     # ==================== 数据清理相关操作 ====================
@@ -1247,7 +1249,7 @@ class BacktestDetailedRepository:
             return True
 
         except Exception as e:
-            self.logger.error(f"删除任务数据失败: {e}", exc_info=True)
+            self.logger.opt(exception=True).error(f"删除任务数据失败: {e}")
             return False
 
     async def cleanup_old_data(self, days_to_keep: int = 30) -> Dict[str, int]:
@@ -1292,5 +1294,5 @@ class BacktestDetailedRepository:
             return cleanup_results
 
         except Exception as e:
-            self.logger.error(f"清理旧数据失败: {e}", exc_info=True)
+            self.logger.opt(exception=True).error(f"清理旧数据失败: {e}")
             return {}

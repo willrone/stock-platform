@@ -1,5 +1,5 @@
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { SaveStrategyConfigDialog } from '../../../components/backtest/SaveStrategyConfigDialog';
 import {
@@ -11,24 +11,74 @@ import { BacktestService } from '../../../services/backtestService';
 import { StrategyConfigService } from '../../../services/strategyConfigService';
 import { TaskService, type PredictionResult } from '../../../services/taskService';
 import { wsService } from '../../../services/websocket';
-import { useTaskStore, type Task } from '../../../stores/useTaskStore';
+import type { Task } from '../../../stores/useTaskStore';
 import type {
   BacktestDetailedResult,
   BacktestOverviewData,
   BacktestSummaryData,
 } from '../../../types/backtest';
 import { getStrategyConfig } from './taskDetailUtils';
-import type { TaskDetailPageModel } from './types';
+import type { TaskDetailPageModel, TaskDetailLoadError } from './types';
 
 void SaveStrategyConfigDialog;
+
+/**
+ * 【P1-04】把加载异常按 HTTP 状态分类。
+ *
+ * apiRequest 抛出的错误对象上带 `status`（见 services/api.ts 的 ApiError），
+ * 这里做兜底解析，避免任何失败都被误报成"任务不存在或已被删除"。
+ */
+function classifyTaskDetailError(error: unknown): TaskDetailLoadError {
+  const raw = error as {
+    status?: number;
+    response?: { status?: number };
+    message?: string;
+  } | null;
+  const status = raw?.status ?? raw?.response?.status;
+  const message = (typeof raw?.message === 'string' && raw.message.trim()) || '加载任务详情失败';
+
+  if (status === 404) {
+    return { kind: 'not_found', message: '任务不存在或已被删除', status };
+  }
+  if (status === 401 || status === 403) {
+    return {
+      kind: 'unauthorized',
+      message: '登录状态已失效，请重新登录后再查看任务详情',
+      status,
+    };
+  }
+  if (status === 429) {
+    return {
+      kind: 'rate_limited',
+      message: '请求过于频繁，请稍候重试',
+      status,
+    };
+  }
+  return { kind: 'network', message, status };
+}
 
 export function useTaskDetailPage(): TaskDetailPageModel {
   const router = useRouter();
   const params = useParams();
   const taskId = params.id as string;
 
-  const { currentTask, setCurrentTask, updateTask } = useTaskStore();
+  /**
+   * 【state P0-8】当前任务详情由本页本地持有，不放全局 store。
+   * 避免从列表页带过来的陈旧任务覆盖本页刚拉到的详情。
+   */
+  const [currentTask, setCurrentTask] = useState<Task | null>(null);
+
+  /** 局部更新当前任务（WebSocket 进度用） */
+  const updateTask = useCallback((taskId: string, patch: Partial<Task>) => {
+    setCurrentTask(prev => (prev && prev.task_id === taskId ? { ...prev, ...patch } : prev));
+  }, []);
+
   const [loading, setLoading] = useState(true);
+  /** 【P1-04】区分 404 / 401 / 429 / 网络错误，不再一律当"任务不存在" */
+  const [loadError, setLoadError] = useState<TaskDetailLoadError | null>(null);
+  /** 【P3-03】导出状态与失败原因 */
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [predictions, setPredictions] = useState<PredictionResult[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedStock, setSelectedStock] = useState('');
@@ -81,6 +131,7 @@ export function useTaskDetailPage(): TaskDetailPageModel {
   };
 
   const loadTaskDetail = async (): Promise<void> => {
+    setLoadError(null);
     try {
       const task = await TaskService.getTaskDetail(taskId);
       setCurrentTask(task);
@@ -102,8 +153,10 @@ export function useTaskDetailPage(): TaskDetailPageModel {
 
       // 同步加载配置快照
       loadConfigSnapshot();
-    } catch (_error) {
-      // noop
+    } catch (error: unknown) {
+      // 【P1-04】按 HTTP 状态分类，不能一律报"任务不存在"
+      setCurrentTask(null);
+      setLoadError(classifyTaskDetailError(error));
     } finally {
       setLoading(false);
     }
@@ -261,18 +314,41 @@ export function useTaskDetailPage(): TaskDetailPageModel {
   };
 
   const handleExport = async (): Promise<void> => {
+    // 【P3-03】导出失败必须提示，不能静默 noop
+    setExporting(true);
+    setExportError(null);
     try {
-      const blob = await TaskService.exportTaskResults(taskId, 'csv');
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `task_${taskId}_results.csv`;
-      document.body.appendChild(link);
-      link.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(link);
-    } catch (_error) {
-      // noop
+      const result = await TaskService.exportTaskResults(taskId, 'excel');
+
+      if (result.blob) {
+        const url = window.URL.createObjectURL(result.blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = result.fileName;
+        document.body.appendChild(link);
+        link.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(link);
+        return;
+      }
+
+      if (result.downloadUrl) {
+        const link = document.createElement('a');
+        link.href = result.downloadUrl;
+        link.download = result.fileName;
+        link.rel = 'noopener';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+      }
+
+      setExportError('导出接口未返回可下载内容');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : '导出失败';
+      setExportError(message);
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -316,6 +392,9 @@ export function useTaskDetailPage(): TaskDetailPageModel {
     taskId,
     currentTask,
     loading,
+    loadError,
+    exporting,
+    exportError,
     predictions,
     refreshing,
     selectedStock,

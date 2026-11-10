@@ -59,7 +59,7 @@ async def get_stock_data(
         stock_data = await data_service.get_stock_data(stock_code, start_date, end_date)
 
         if not stock_data:
-            logger.warning(
+            logger.opt(exception=True).warning(
                 f"未找到股票 {stock_code} 在指定时间范围内的数据 (start_date={start_date.isoformat()}, end_date={end_date.isoformat()})"
             )
             if type(data_service) is SimpleDataService:
@@ -110,7 +110,7 @@ async def get_stock_data(
         )
 
     except Exception as e:
-        logger.error(f"获取股票数据失败: {e}")
+        logger.opt(exception=True).error(f"获取股票数据失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取股票数据失败: {str(e)}")
 
 
@@ -180,10 +180,10 @@ async def get_technical_indicators(
         )
 
     except ValueError as e:
-        logger.error(f"技术指标计算参数错误: {e}")
+        logger.opt(exception=True).error(f"技术指标计算参数错误: {e}")
         raise HTTPException(status_code=400, detail=f"参数错误: {str(e)}")
     except Exception as e:
-        logger.error(f"计算技术指标失败: {e}")
+        logger.opt(exception=True).error(f"计算技术指标失败: {e}")
         raise HTTPException(status_code=500, detail=f"计算技术指标失败: {str(e)}")
 
 
@@ -228,7 +228,7 @@ async def get_popular_stocks(
         )
 
     except Exception as e:
-        logger.error(f"获取热门股票列表失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"获取热门股票列表失败: {e}")
         return StandardResponse(
             success=False,
             message=f"获取热门股票列表失败: {str(e)}",
@@ -294,7 +294,7 @@ async def search_stocks(
         )
 
     except Exception as e:
-        logger.error(f"搜索股票失败: {e}", exc_info=True)
+        logger.opt(exception=True).error(f"搜索股票失败: {e}")
         return StandardResponse(
             success=False,
             message=f"搜索股票失败: {str(e)}",

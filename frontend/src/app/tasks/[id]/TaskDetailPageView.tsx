@@ -121,6 +121,29 @@ export function TaskDetailPageView({ model }: TaskDetailPageViewProps): React.Re
   }
 
   if (!currentTask) {
+    // 【P1-04】按错误类型给不同文案 + 是否可重试
+    //
+    // 契约：没有 loadError 但拿不到 task，说明请求成功而任务确实不存在
+    // （或已被删除），此时必须说「不存在」，不能退化成含糊的「加载失败」。
+    const err = model.loadError;
+    const kind = err?.kind ?? 'not_found';
+    const title =
+      kind === 'not_found'
+        ? '任务不存在或已被删除'
+        : kind === 'unauthorized'
+          ? '登录状态已失效'
+          : kind === 'rate_limited'
+            ? '请求过于频繁'
+            : '任务详情加载失败';
+    const detail =
+      kind === 'not_found'
+        ? '请返回任务列表确认任务 ID 是否正确。'
+        : kind === 'unauthorized'
+          ? '请重新登录后再试。'
+          : kind === 'rate_limited'
+            ? '请稍候几秒后重试。'
+            : err?.message || '请检查网络连接后重试。';
+
     return (
       <Box
         sx={{
@@ -132,12 +155,28 @@ export function TaskDetailPageView({ model }: TaskDetailPageViewProps): React.Re
           gap: 2,
         }}
       >
-        <Typography variant="body2" color="text.secondary">
-          任务不存在或已被删除
+        <Typography variant="body1" sx={{ fontWeight: 600 }}>
+          {title}
         </Typography>
-        <Button variant="contained" color="primary" onClick={model.handleBack}>
-          返回任务列表
-        </Button>
+        <Typography variant="body2" color="text.secondary">
+          {detail}
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          {/* not_found 重试没有意义（任务确实不在了）；unauthorized 交给重新登录 */}
+          {kind !== 'not_found' && kind !== 'unauthorized' && (
+            <Button variant="contained" color="primary" onClick={model.handleRetry}>
+              重试
+            </Button>
+          )}
+          {kind === 'unauthorized' && (
+            <Button variant="contained" color="primary" onClick={model.handleBack}>
+              重新登录
+            </Button>
+          )}
+          <Button variant="outlined" onClick={model.handleBack}>
+            返回任务列表
+          </Button>
+        </Box>
       </Box>
     );
   }

@@ -611,6 +611,24 @@ class UnifiedQlibTrainingEngine:
 
         # 按时间分割数据（时间序列数据不能随机分割）
         if isinstance(dataset.index, pd.MultiIndex):
+            # ⚠️ 日期层必须是 datetime（§12.44）：
+            # 上游 provider 曾把 (datetime, instrument) 与 (instrument, datetime)
+            # 直接 concat → 日期层混进股票代码字符串 → 这里 sort_values() 直接
+            # TypeError: '<' not supported between instances of 'str' and 'Timestamp'
+            # → 整轮训练失败。宁可**明确报错**，也不要让人猜。
+            lv1 = dataset.index.get_level_values(1)
+            probe = [v for v in lv1[:50] if v is not None]
+            if probe and not all(hasattr(v, "year") for v in probe):
+                try:
+                    dataset = dataset.copy()
+                    dataset.index = dataset.index.set_levels(
+                        pd.to_datetime(dataset.index.levels[1]), level=1
+                    )
+                except Exception as conv_err:
+                    raise ValueError(
+                        "数据集日期层不是 datetime，无法按时间切分训练/验证集："
+                        f"{conv_err}（样本：{probe[:3]}）"
+                    ) from conv_err
             # 获取所有日期
             dates = dataset.index.get_level_values(1).unique().sort_values()
         else:
@@ -861,7 +879,17 @@ class UnifiedQlibTrainingEngine:
                             return getattr(self._series, name)
 
                     # 分离特征和标签
-                    all_feature_cols = [col for col in data.columns if col != "label"]
+                    # ⚠️ ① 排除所有标签列：标签混进特征 = 模型偷看答案，
+                    #    评估指标虚高，且训练/预测两侧对不齐（§12.44）
+                    # ⚠️ ② 列名去重：上游 join 会留下重复列名，pandas 按名取列
+                    #    会把它展开成多列（366 个特征名 → 实际 678 列），
+                    #    且训练/预测两次取列的展开顺序可能不同 → 特征错位
+                    if data.columns.duplicated().any():
+                        data = data.loc[:, ~data.columns.duplicated()]
+                    label_like_cols = {"label", "LABEL0", "LABEL1", "label_0"}
+                    all_feature_cols = [
+                        col for col in data.columns if col not in label_like_cols
+                    ]
                     if config and config.selected_features:
 
                         def map_feature_name(feature_name: str) -> List[str]:
@@ -1065,19 +1093,44 @@ class UnifiedQlibTrainingEngine:
                     result_base = pd.DataFrame(index=data.index)
                     feature_obj_final = None
                     label_obj_final = None
+                    feature_frame = None
 
                     if "feature" in col_set:
                         if len(feature_cols) > 0:
-                            feature_array = data[feature_cols].values
-                            feature_obj_final = FeatureSeries(feature_array, data.index)
+                            # ⚠️ 必须数值化成 float32（§12.44）：
+                            # 原写法 `data[feature_cols].values` 只要有一列是
+                            # object/string，整个矩阵就是 object dtype →
+                            # qlib 的 LGBModel.predict 会把 `x_test.values`
+                            # 直接喂给 lightgbm 的 C 层按 float64 读 → **原生段错误**
+                            # （Python 层 catch 不到，整个进程死掉）。
+                            # 训练走 lgb.Dataset(DataFrame) 能自动转换，
+                            # 预测走 numpy 没有这层保护 → 训练能过、预测必崩。
+                            feature_frame = (
+                                data[feature_cols]
+                                .apply(pd.to_numeric, errors="coerce")
+                                .astype("float32")
+                            )
+                            feature_frame.to_numpy()
+                            feature_obj_final = feature_frame
+                            # qlib 的 DatasetH 契约：`df["feature"]` 必须是**特征 DataFrame**
+                            # （qlib 的 _prepare_data 直接 `x, y = df["feature"], df["label"]`
+                            #   然后 lgb.Dataset(x)）。原来这里塞的是全 None 的占位 Series
+                            # → 训练用的是**空特征**（模型等于没训练）。
                             result_base["feature"] = pd.Series(
-                                [None] * len(data.index), index=data.index
+                                [feature_frame] * len(data.index),
+                                index=data.index,
+                                dtype=object,
                             )
                         else:
-                            empty_array = np.zeros((len(data), 0))
-                            feature_obj_final = FeatureSeries(empty_array, data.index)
+                            empty_array = np.zeros((len(data), 0), dtype="float32")
+                            feature_frame = pd.DataFrame(
+                                empty_array, index=data.index, dtype="float32"
+                            )
+                            feature_obj_final = feature_frame
                             result_base["feature"] = pd.Series(
-                                [None] * len(data.index), index=data.index
+                                [feature_frame] * len(data.index),
+                                index=data.index,
+                                dtype=object,
                             )
 
                     if "label" in col_set:
@@ -1174,10 +1227,14 @@ class UnifiedQlibTrainingEngine:
                             return super().__getitem__(key)
 
                     if original_col_set == "feature" or col_set == ["feature"]:
+                        # qlib 的 LGBModel.predict 会做 `self.model.predict(x_test.values)`
+                        # → 这里必须返回**数值型 DataFrame**（float32），
+                        # 不能是 object 数组（否则 lightgbm C 层段错误，§12.44）
                         if feature_obj_final is not None:
                             return feature_obj_final
-                        empty_array = np.zeros((len(data), 0))
-                        return FeatureSeries(empty_array, data.index)
+                        return pd.DataFrame(
+                            np.zeros((len(data), 0), dtype="float32"), index=data.index
+                        )
 
                     if original_col_set == "label" or col_set == ["label"]:
                         return label_obj_final
@@ -1383,9 +1440,7 @@ class UnifiedQlibTrainingEngine:
 
                         R.log_metrics = original_log_metrics  # type: ignore[method-assign]
                     except Exception:
-                        logger.debug(
-                            "恢复 Qlib workflow metric logging 失败", exc_info=True
-                        )
+                        logger.debug("恢复 Qlib workflow metric logging 失败")
 
             # 优先使用官方 evals_result 重建训练历史
             try:
@@ -1454,9 +1509,7 @@ class UnifiedQlibTrainingEngine:
                             f"从官方 evals_result 获取训练历史: {len(training_history)} 轮, metric={preferred_metric}"
                         )
             except Exception as e:
-                logger.debug(
-                    f"无法从官方 evals_result 获取训练历史: {e}", exc_info=True
-                )
+                logger.debug(f"无法从官方 evals_result 获取训练历史: {e}")
 
             # 读取官方模型的真实 best_iteration / early stopping 结果
             actual_best_iteration = None
@@ -1535,7 +1588,7 @@ class UnifiedQlibTrainingEngine:
             )
 
         except Exception as e:
-            logger.error(f"Qlib模型训练失败: {e}")
+            logger.opt(exception=True).error(f"Qlib模型训练失败: {e}")
             if progress_callback and model_id:
                 await progress_callback(model_id, 0.0, "failed", f"训练失败: {str(e)}")
             raise
@@ -1659,8 +1712,8 @@ class UnifiedQlibTrainingEngine:
                         test_dataset, test_pred, "测试集"
                     )
                 except Exception as e:
-                    logger.warning(
-                        f"测试集评估失败，保留默认测试指标: {e}", exc_info=True
+                    logger.opt(exception=True).warning(
+                        f"测试集评估失败，保留默认测试指标: {e}"
                     )
 
             train_samples = (
@@ -1716,7 +1769,7 @@ class UnifiedQlibTrainingEngine:
             )
 
         except Exception as e:
-            logger.error(f"模型评估失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"模型评估失败: {e}")
             # 返回默认指标
             default_metrics = self._get_default_metrics()
             default_signal_quality = {
@@ -1939,7 +1992,7 @@ class UnifiedQlibTrainingEngine:
                 "y_index": y_index,
             }
         except Exception as e:
-            logger.error(f"提取评估输入失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"提取评估输入失败: {e}")
             return None
 
     def _calculate_signal_quality(
@@ -2252,7 +2305,7 @@ class UnifiedQlibTrainingEngine:
             return {k: round(v, 4) for k, v in metrics.items()}
 
         except Exception as e:
-            logger.error(f"计算真实指标失败: {e}", exc_info=True)
+            logger.opt(exception=True).error(f"计算真实指标失败: {e}")
             return self._get_default_metrics()
 
     def _get_default_metrics(self) -> Dict[str, Any]:
@@ -2423,10 +2476,12 @@ class UnifiedQlibTrainingEngine:
     async def load_qlib_model(self, model_path: str) -> Tuple[Any, Dict[str, Any]]:
         """加载Qlib模型"""
         try:
-            import pickle
+            from app.core.model_loader import safe_pickle_load
 
-            with open(model_path, "rb") as f:
-                model_data = pickle.load(f)
+            # numpy 2.x 兼容加载：裸 pickle.load 在本机会段错误 rc=139)
+            model_data = safe_pickle_load(model_path)
+            if model_data is None:
+                raise ValueError(f"Qlib模型加载失败(numpy 兼容加载器): {model_path}")
 
             model = model_data["model"]
             config = model_data["config"]
@@ -2546,9 +2601,14 @@ class UnifiedQlibTrainingEngine:
 
                         if "feature" in col_set:
                             feature_array = (
-                                self.data[feature_cols].values
+                                # ⚠️ 数值化成 float32（§12.44）：object dtype 的矩阵
+                                # 喂给 lightgbm 的 C 层会**原生段错误**（Python 层 catch 不到）
+                                self.data[feature_cols]
+                                .apply(pd.to_numeric, errors="coerce")
+                                .astype("float32")
+                                .to_numpy()
                                 if feature_cols
-                                else np.zeros((len(self.data), 0))
+                                else np.zeros((len(self.data), 0), dtype="float32")
                             )
                             return FeatureSeries(feature_array, self.data.index)
 

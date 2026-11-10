@@ -1,0 +1,26 @@
+{
+ "research_open_fractional": {
+  "sharpe": 1.6244,
+  "vol": 0.0848,
+  "turnover": 1.8524,
+  "p18_reference": {
+   "sharpe": 1.6244,
+   "vol": 0.0848,
+   "turnover": 1.8524
+  }
+ },
+ "product_open_fractional": {
+  "sharpe": 1.6244,
+  "max_pointwise_diff_vs_research": 6.661338147750939e-16,
+  "equivalent": true
+ },
+ "product_close_boardlot": {
+  "sharpe": 1.6267,
+  "vol": 0.0849,
+  "turnover": 1.863,
+  "maxdd": -0.0824
+ },
+ "combined_research_sleeve": 1.4114,
+ "combined_product_sleeve": 1.4129,
+ "combined_product_sleeve_maxdd": -0.0798
+}
