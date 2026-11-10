@@ -213,15 +213,71 @@ def cmd_open(st: dict, when: str | None) -> dict:
     prices = {c: float(load_close(c, d).iloc[-1]) for c in codes}
     st["status"], st["opened_date"] = "opened", d
     apply_targets(st, d, prices, "建仓")
-    pv = position_value(st, prices)
+    values, costs = position_valuations(st, prices, d)
+    pv = sum(values.values())
     st["nav_daily"].append({"date": d, "nav": round(st["cash"] + pv, 2), "cash": round(st["cash"], 2),
-                            "position_value": round(pv, 2), "prices": {c: round(p, 4) for c, p in prices.items()},
-                            "weights": {c: round(h["shares"] * prices[c] / (pv + st["cash"]), 4) for c, h in st["holdings"].items()}})
+                            "position_value": round(pv, 2),
+                            "values": {c: round(v, 2) for c, v in values.items()},
+                            "costs": {c: round(v, 2) for c, v in costs.items()},
+                            "anchor_restate_adj": 0.0,
+                            "prices": {c: round(p, 4) for c, p in prices.items()},
+                            "weights": {c: round(values[c] / (pv + st["cash"]), 4) for c in values}})
     save_state(st)
     print(f"[{LINE_ID}] 建仓完成 @{d}｜投入 {pv:,.2f} 元｜现金 {st['cash']:,.2f} 元｜佣金 {st['fees_paid']:.2f} 元")
     for t in st["trades"]:
         print(f"  {t['side']:5s} {t['name']:10s} {t['code']} {t['lots']} 手 @ {t['price']} = {t['amount']:,.2f} 元（佣金 {t['commission']:.2f}）")
     return st
+
+
+def _scalar(series: pd.Series, dt: str) -> float | None:
+    v = series.loc[dt] if dt in series.index else None
+    if v is None:
+        return None
+    v = v.iloc[-1] if isinstance(v, pd.Series) else v
+    v = float(v)
+    return v if v > 0 else None
+
+
+def holding_valuation(st: dict, code: str, h: dict, price: float, series: pd.Series | None) -> tuple[float, float]:
+    """返回 (市值, 成本)。
+
+    市值 = 股数 × 平均成本 × (今日价 ÷ 买入日的价)，**分子分母取自同一次抓取**，
+    于是前复权的锚点被约掉。为什么必须这么算：腾讯前复权每次全量重拉都会重算锚点
+    （出现新的除权除息日 → 历史价整体平移），若直接用「现价 vs 建仓当时记录的价」，
+    除息当天会凭空多出一笔亏损（实测 515450 于 2026-11-10 除息 0.025 元/份 ≈ −1.7%）。
+
+    分红因此**已并入净值曲线**（总回报口径），本账户不另计现金红利。
+    """
+    shares = float(h.get("shares") or 0)
+    cost = float(h.get("entry_price") or 0.0) * shares
+    if series is None or cost <= 0:
+        return shares * price, cost
+    ref_num = ref_den = 0.0
+    for t in st["trades"]:
+        if t.get("code") != code or t.get("side") != "buy":
+            continue
+        w = float(t.get("shares") or 0)
+        pe = _scalar(series, t["date"])
+        if w <= 0 or pe is None:
+            continue
+        ref_num += w * pe
+        ref_den += w
+    if ref_den <= 0:
+        return shares * price, cost
+    return cost * (price / (ref_num / ref_den)), cost
+
+
+def position_valuations(st: dict, prices: dict[str, float], upto: str | None = None) -> tuple[dict[str, float], dict[str, float]]:
+    """逐票 (市值, 成本)。同一批 load_close 既给现价也给买入日参考价 → 锚点自动约掉。"""
+    values: dict[str, float] = {}
+    costs: dict[str, float] = {}
+    for code, h in st["holdings"].items():
+        try:
+            s = load_close(code, upto)
+        except SystemExit:
+            s = None
+        values[code], costs[code] = holding_valuation(st, code, h, prices.get(code, h.get("last_price") or 0.0), s)
+    return values, costs
 
 
 def cmd_mark(st: dict, when: str | None) -> dict:
@@ -242,13 +298,21 @@ def cmd_mark(st: dict, when: str | None) -> dict:
         apply_targets(st, d, prices, "年度再平衡")
         prices = {c: float(load_close(c, d).iloc[-1]) for c in codes}
         rebal = "｜已执行年度再平衡"
-    pv = position_value(st, prices)
+    values, costs = position_valuations(st, prices, d)     # 比值口径：锚点自动约掉
+    pv = sum(values.values())
+    naive = sum(h["shares"] * prices.get(c, 0.0) for c, h in st["holdings"].items())
+    anchor_adj = pv - naive          # 显著非 0 ⇒ 库里出现了新的除息/锚点重算
     nav = st["cash"] + pv
     st["nav_daily"].append({"date": d, "nav": round(nav, 2), "cash": round(st["cash"], 2), "position_value": round(pv, 2),
+                            "values": {c: round(v, 2) for c, v in values.items()},
+                            "costs": {c: round(v, 2) for c, v in costs.items()},
+                            "anchor_restate_adj": round(anchor_adj, 2),
                             "prices": {c: round(p, 4) for c, p in prices.items()},
-                            "weights": {c: round(h["shares"] * prices[c] / nav, 4) for c, h in st["holdings"].items()}})
+                            "weights": {c: round(values[c] / nav, 4) for c in values}})
     save_state(st)
     n = len(st["nav_daily"])
+    if pv > 0 and abs(anchor_adj) > 0.002 * pv:
+        print(f"[{LINE_ID}] ⚠ 前复权锚点重算（新除息/分红）：按比值口径避免凭空记亏 {anchor_adj:+,.2f} 元；分红已并入净值，不另发现金红利")
     print(f"[{LINE_ID}] 盯市 {d}{rebal}｜净值 {nav:,.2f} 元（{(nav/st['capital']-1)*100:+.2f}%）｜现金 {st['cash']:,.2f}{'' if n>1 else ''}")
     return st
 
@@ -260,7 +324,11 @@ def cmd_report(st: dict, asof: str | None) -> None:
     last = navs[-1]
     d = last["date"]
     prices = {c: float(load_close(c, d).iloc[-1]) for c in sorted(set(list(TARGET_WEIGHTS) + list(st["holdings"])))}
+    values, costs = position_valuations(st, prices, d)
     nav, cash, pv = last["nav"], last["cash"], last["position_value"]
+    if pv and abs(sum(values.values()) - pv) > 0.002 * pv:
+        print(f"[{LINE_ID}] ⚠ 价库自 {d} 盯市后被重锚（新的除息/分红事件）：下表市值按最新口径重算 "
+              f"{sum(values.values()):,.2f} vs 记录 {pv:,.2f}（差 {sum(values.values())-pv:+,.2f}），净值曲线仍取盯市时记录值")
     ret = nav / st["capital"] - 1
     n = len(navs)
     years = max((pd.Timestamp(d) - pd.Timestamp(st["opened_date"])).days, 1) / 365.25
@@ -276,8 +344,9 @@ def cmd_report(st: dict, asof: str | None) -> None:
     print(f"\n持仓（按 {d} 收盘）：")
     print(f"  {'标的':14s} {'代码':8s} {'手数':>5s} {'成本价':>8s} {'现价':>8s} {'市值':>11s} {'实际权重':>9s} {'目标':>7s} {'浮动盈亏':>10s}")
     for c, h in sorted(st["holdings"].items()):
-        mv = h["shares"] * prices[c]
-        pl = (prices[c] - (h["entry_price"] or prices[c])) * h["shares"]
+        mv = float(values.get(c) or (h.get("shares") or 0) * prices.get(c, 0.0))
+        cost = float(costs.get(c) or (h.get("entry_price") or 0.0) * (h.get("shares") or 0))
+        pl = mv - cost
         print(f"  {NAMES.get(c,c):14s} {c:8s} {h['shares']//LOT:5d} {h['entry_price']:8.3f} {prices[c]:8.3f} {mv:11,.2f} {mv/nav*100:8.1f}% {TARGET_WEIGHTS[c]*100:6.0f}% {pl:+10,.2f}")
     drift = {c: last["weights"].get(c, 0.0) - TARGET_WEIGHTS[c] for c in TARGET_WEIGHTS}
     print(f"  权重漂移：{', '.join(f'{NAMES.get(c,c)} {drift[c]*100:+.1f}pp' for c in TARGET_WEIGHTS)}"

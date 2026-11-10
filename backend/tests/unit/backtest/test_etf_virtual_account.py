@@ -114,3 +114,49 @@ def test_cash_shortage_is_logged_not_fabricated(tmp_path):
     held = st["holdings"]
     assert held["515450"]["shares"] % 100 == 0
     assert st["cash"] >= 0.0
+
+
+# ── 前复权锚点重算（除息日）不得凭空造出亏损 ──────────────────────────────
+def _opened_on_1106(m):
+    st = m.cmd_open(m.blank_state(), "2026-11-06")
+    assert st["holdings"]["515450"]["shares"] == 30_300 and st["holdings"]["511220"]["shares"] == 4_300
+    return st
+
+
+def test_reanchor_after_dividend_values_by_ratio_not_by_recorded_price(tmp_path):
+    """515450 于建仓后除息 0.025 元/份：腾讯前复权每次全量重拉会把 11-06 从 1.484 改成 1.459。
+    真实总回报 = 1.495/1.459 − 1 = +2.467%；若拿「现价 vs 记录成本」算，只有 +0.741%，凭空少 776 元。"""
+    panel = {c: dict(v) for c, v in P0.items()}
+    m = load_mod(tmp_path, panel)
+    st = _opened_on_1106(m)
+    cost_515450 = round(30_300 * 1.484, 2)
+    assert st["nav_daily"][-1]["position_value"] == round(cost_515450 + 4_300 * 10.450, 2)
+
+    panel["515450"].update({"2026-11-06": 1.459, "2026-11-13": 1.495})     # 重锚后
+    values, costs = m.position_valuations(st, {"515450": 1.495, "511220": 10.460}, "2026-11-13")
+    assert costs["515450"] == cost_515450                                   # 成本=真付出去的钱，不被复权改写
+    assert abs(values["515450"] - 46_074.69) < 0.05, "必须按比值口径估值（锚点自动约掉）"
+    assert abs(values["511220"] - 44_978.00) < 0.05                         # 无分红腿：比值口径 ==  naive
+    assert st["holdings"]["515450"]["entry_price"] == 1.484                # 不许偷改 entry_price 掩盖问题
+
+
+def test_mark_records_anchor_adjustment_and_keeps_nav_up(tmp_path):
+    panel = {c: dict(v) for c, v in P0.items()}
+    m = load_mod(tmp_path, panel)
+    st = _opened_on_1106(m)
+    panel["515450"].update({"2026-11-06": 1.459, "2026-11-13": 1.495})
+    st = m.cmd_mark(st, "2026-11-13")
+    rec = st["nav_daily"][-1]
+    assert rec["anchor_restate_adj"] > 700.0, "除息造成的锚点位移必须显式记账，不能静默"
+    assert abs(rec["position_value"] - (46_074.69 + 44_978.00)) < 0.05
+    assert rec["nav"] > st["nav_daily"][-2]["nav"], "市场没跌、只是除息 → 净值不许凭空下跌"
+    assert abs(rec["nav"] - (st["cash"] + 91_052.69)) < 0.05
+
+
+def test_no_anchor_adjustment_when_prices_are_not_restated(tmp_path):
+    m = load_mod(tmp_path, {c: dict(v) for c, v in P0.items()})
+    st = _opened_on_1106(m)
+    st = m.cmd_mark(st, "2026-11-13")
+    rec = st["nav_daily"][-1]
+    assert rec["anchor_restate_adj"] == 0.0
+    assert abs(rec["position_value"] - (30_300 * 1.520 + 4_300 * 10.460)) < 0.05
