@@ -509,9 +509,7 @@ class PortfolioManager:
         # 夏普比率(标准定义: 日收益 μ/σ 年化 √252; 旧实现 年化收益/波动 复利口径已修正。
         # 注意: 用日波动 returns.std() 而非已年化的 volatility, 否则 √252 被抵消成日夏普)
         sharpe_ratio = (
-            returns.mean() / returns.std() * np.sqrt(252)
-            if returns.std() > 0
-            else 0
+            returns.mean() / returns.std() * np.sqrt(252) if returns.std() > 0 else 0
         )
 
         # 最大回撤

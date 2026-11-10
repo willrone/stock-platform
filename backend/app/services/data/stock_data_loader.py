@@ -186,9 +186,7 @@ class StockDataLoader:
             #    下游特征提取器直接因"缺失值过多"报错。
             #    这些行不是交易日，必须剔除。
             if not df.empty:
-                price_cols = [
-                    c for c in ("open", "close", "volume") if c in df.columns
-                ]
+                price_cols = [c for c in ("open", "close", "volume") if c in df.columns]
                 if price_cols:
                     n_before = len(df)
                     df = df.dropna(subset=price_cols)

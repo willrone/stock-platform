@@ -2766,7 +2766,9 @@ class EnhancedQlibDataProvider:
                     # 出现大量 NaN（实测 51.9%）。这些行没有价格，不能作为
                     # 特征样本（特征提取器会因"缺失值过多"直接报错），
                     # 必须剔除。
-                    price_cols = [c for c in ("open", "close", "volume") if c in qlib_data.columns]
+                    price_cols = [
+                        c for c in ("open", "close", "volume") if c in qlib_data.columns
+                    ]
                     if price_cols:
                         before = len(qlib_data)
                         qlib_data = qlib_data.dropna(subset=price_cols)

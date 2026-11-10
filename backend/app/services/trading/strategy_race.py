@@ -197,7 +197,9 @@ def _annualize_turnover(
     }
 
 
-def _benchmark_for(strategy_key: str, baseline: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def _benchmark_for(
+    strategy_key: str, baseline: Dict[str, Any]
+) -> Optional[Dict[str, Any]]:
     """从 16 策略基线里取该策略的 vs_benchmark 对比（超额/跟踪误差/IR）。"""
     rec = (baseline.get("strategies") or {}).get(strategy_key) or {}
     vs = rec.get("vs_benchmark")
@@ -311,8 +313,7 @@ class StrategyRaceService:
             return {
                 "status": "unavailable",
                 "message": (
-                    "策略赛马数据未生成：缺少 "
-                    "data/backtest/ALL_real_lag1_v2.json。"
+                    "策略赛马数据未生成：缺少 " "data/backtest/ALL_real_lag1_v2.json。"
                 ),
                 "strategies": [],
                 "benchmark": None,

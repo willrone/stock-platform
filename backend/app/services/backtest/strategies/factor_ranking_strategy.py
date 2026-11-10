@@ -73,7 +73,9 @@ class FactorRankingStrategy(BaseStrategy):
         self.weights: Dict[str, float] = dict(
             weights or {"momentum": 1.0, "low_vol": 1.0, "low_amp": 1.0}
         )
-        logger.info(f"factor_ranking weights={self.weights} vwap_window={self.vwap_window}")
+        logger.info(
+            f"factor_ranking weights={self.weights} vwap_window={self.vwap_window}"
+        )
         if self.topk <= 0:
             raise ValueError("factor_ranking 策略要求 topk > 0")
         if self.n_drop <= 0:
@@ -155,12 +157,11 @@ class FactorRankingStrategy(BaseStrategy):
             ).mean()
             # 主力成本代理: n 日成交额加权均价; IC 为负 → 取负号, 跌破成本越深分越高
             typical = (high + low + close) / 3.0
-            vwap_n = (
-                (typical * volume)
-                .rolling(self.vwap_window, min_periods=self.vwap_window)
-                .sum()
-                / volume.rolling(self.vwap_window, min_periods=self.vwap_window).sum()
-            )
+            vwap_n = (typical * volume).rolling(
+                self.vwap_window, min_periods=self.vwap_window
+            ).sum() / volume.rolling(
+                self.vwap_window, min_periods=self.vwap_window
+            ).sum()
             vwap_below = -(close / vwap_n - 1.0)
 
         factors = {
@@ -186,7 +187,9 @@ class FactorRankingStrategy(BaseStrategy):
             # 即让该日整个截面分数全 NaN → 全市场停打分 (实测官方对照组
             # 2021-2023 零交易)。vwap_below 早在 PR#16 修为 nan-aware, 此处对齐。
             with np.errstate(invalid="ignore"):
-                mean = np.nanmean(np.where(valid, matrix, np.nan), axis=1, keepdims=True)
+                mean = np.nanmean(
+                    np.where(valid, matrix, np.nan), axis=1, keepdims=True
+                )
                 std = np.nanstd(np.where(valid, matrix, np.nan), axis=1, keepdims=True)
             with np.errstate(invalid="ignore", divide="ignore"):
                 zscore = (matrix - mean) / np.where(std > 1e-12, std, np.nan)
@@ -215,7 +218,7 @@ class FactorRankingStrategy(BaseStrategy):
             if self.lag >= n_dates:
                 raise ValueError(f"lag={self.lag} 大于日期数 {n_dates}")
             lagged = np.full_like(composite, np.nan)
-            lagged[self.lag:] = composite[: n_dates - self.lag]
+            lagged[self.lag :] = composite[: n_dates - self.lag]
             composite = lagged
 
         stored = 0

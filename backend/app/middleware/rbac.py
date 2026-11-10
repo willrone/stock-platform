@@ -102,7 +102,9 @@ async def _quota_usage(user: User, quota_type: str) -> int:
         return int((await session.execute(stmt)).scalar_one() or 0)
 
 
-def _track_quota_exhausted(user_id: str, quota_type: str, usage: int, limit: int) -> None:
+def _track_quota_exhausted(
+    user_id: str, quota_type: str, usage: int, limit: int
+) -> None:
     """配额打满是**真实付费墙**（用户想用但用不了），单独记一条漏斗事件。
 
     埋点失败绝不影响 429 的正常抛出。

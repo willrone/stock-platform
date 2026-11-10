@@ -495,7 +495,9 @@ class EnhancedMetricsCalculator:
                     benchmark_df = benchmark_df.sort_index()
 
             if benchmark_df.empty or len(benchmark_df) == 0:
-                logger.opt(exception=True).warning(f"无法获取基准数据: {benchmark_symbol}，返回空结果")
+                logger.opt(exception=True).warning(
+                    f"无法获取基准数据: {benchmark_symbol}，返回空结果"
+                )
                 return {
                     "benchmark_symbol": benchmark_symbol,
                     "benchmark_name": self._get_benchmark_name(benchmark_symbol),
@@ -515,7 +517,9 @@ class EnhancedMetricsCalculator:
             # 对齐日期
             common_dates = portfolio_returns.index.intersection(benchmark_returns.index)
             if len(common_dates) == 0:
-                logger.opt(exception=True).warning("组合和基准数据没有共同的日期，无法计算对比指标")
+                logger.opt(exception=True).warning(
+                    "组合和基准数据没有共同的日期，无法计算对比指标"
+                )
                 return {
                     "benchmark_symbol": benchmark_symbol,
                     "benchmark_name": self._get_benchmark_name(benchmark_symbol),

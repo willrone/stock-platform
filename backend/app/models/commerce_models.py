@@ -287,10 +287,10 @@ class CommercePricingRule(Base):
 class PaymentOrderStatus(str, Enum):
     """充值订单状态。"""
 
-    PENDING = "pending"        # 待支付（已下单，未确认到账）
-    PAID = "paid"              # 已到账（管理员确认或支付回调）
-    CANCELLED = "cancelled"    # 已取消
-    REFUNDED = "refunded"      # 已退款
+    PENDING = "pending"  # 待支付（已下单，未确认到账）
+    PAID = "paid"  # 已到账（管理员确认或支付回调）
+    CANCELLED = "cancelled"  # 已取消
+    REFUNDED = "refunded"  # 已退款
 
 
 class PaymentOrder(Base):

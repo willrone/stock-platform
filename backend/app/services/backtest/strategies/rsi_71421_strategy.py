@@ -28,9 +28,10 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 
+from app.services.trading.execution_rules import limit_up_mask_matrix
+
 from ..core.base_strategy import BaseStrategy
 from ..models import SignalType, TradingSignal
-from app.services.trading.execution_rules import limit_up_mask_matrix
 
 _SCORES_ATTR = "_rsi_71421_scores"
 
@@ -105,8 +106,10 @@ class Rsi71421Strategy(BaseStrategy):
         codes = [
             code
             for code, df in stock_data.items()
-            if df is not None and not df.empty
-            and "close" in df.columns and "volume" in df.columns
+            if df is not None
+            and not df.empty
+            and "close" in df.columns
+            and "volume" in df.columns
         ]
         if not codes:
             logger.warning("rsi_71421: 无可用股票数据，跳过打分")
@@ -138,10 +141,10 @@ class Rsi71421Strategy(BaseStrategy):
             vchg = vol.pct_change(fill_method=None)
             cands: Dict[str, pd.DataFrame] = {}
             for n in _RSI_PERIODS:
-                cands[f"RSI{n}"] = -_rsi(close, n)              # 低RSI=超卖=买
+                cands[f"RSI{n}"] = -_rsi(close, n)  # 低RSI=超卖=买
                 cands[f"STD{n}"] = -(close.rolling(n).std() / close)  # 低波动
                 cands[f"CORR{n}"] = -close.rolling(n).corr(vol)  # 量价相关
-                cands[f"CORD{n}"] = -ret.rolling(n).corr(vchg)   # 收益-量变相关
+                cands[f"CORD{n}"] = -ret.rolling(n).corr(vchg)  # 收益-量变相关
 
         day_ret = close.pct_change(fill_method=None).to_numpy()
         # 2026-10-25 修正：原来用统一的 self.limit_up（默认 0.095）全板通用。
@@ -170,9 +173,7 @@ class Rsi71421Strategy(BaseStrategy):
         for name in cands:
             zscore_add(cands[name].to_numpy(dtype=np.float64), 1.0, min_cross)
 
-        composite = np.where(
-            wsum > 0, acc / np.where(wsum > 0, wsum, 1.0), np.nan
-        )
+        composite = np.where(wsum > 0, acc / np.where(wsum > 0, wsum, 1.0), np.nan)
         composite[limit_up_mask] = np.nan  # 涨停掩码: 当日不可买
 
         # 调仓日掩码: 非调仓日分数全部置 NaN → 执行器无分可依, 不换仓。
@@ -185,7 +186,7 @@ class Rsi71421Strategy(BaseStrategy):
         if self.lag > 0:
             lagged = np.full_like(composite, np.nan)
             if self.lag < n_dates:
-                lagged[self.lag:] = composite[: n_dates - self.lag]
+                lagged[self.lag :] = composite[: n_dates - self.lag]
             composite = lagged
 
         stored = 0

@@ -184,7 +184,9 @@ class StrategyHyperparameterOptimizer:
                 sampler = NSGAIISampler()
             elif optimization_method == "motpe":
                 # MOTPESampler 在 optuna 4.6.0 中不存在，使用 NSGA-II 替代
-                logger.opt(exception=True).warning("MOTPESampler 不可用，使用 NSGAIISampler 替代")
+                logger.opt(exception=True).warning(
+                    "MOTPESampler 不可用，使用 NSGAIISampler 替代"
+                )
                 sampler = NSGAIISampler()
             else:
                 sampler = NSGAIISampler()  # 默认使用 NSGA-II
@@ -732,7 +734,9 @@ class StrategyHyperparameterOptimizer:
 
             except Exception as e:
                 logger.opt(exception=True).error(f"Trial {trial.number} 失败: {e}")
-                logger.opt(exception=True).error(f"Trial {trial.number} 参数: {strategy_params}")
+                logger.opt(exception=True).error(
+                    f"Trial {trial.number} 参数: {strategy_params}"
+                )
                 # 返回最差分数
                 if is_multi_objective:
                     return tuple(

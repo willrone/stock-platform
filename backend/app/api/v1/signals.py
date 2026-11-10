@@ -246,7 +246,9 @@ def _compute_latest_signal_for_stock(
         side, ts, strength, price, reason = last_event
         return side, ts, strength, price, reason or ""
     except Exception as e:
-        logger.opt(exception=True).warning(f"计算信号时发生未预期错误: {stock_code}: {e}")
+        logger.opt(exception=True).warning(
+            f"计算信号时发生未预期错误: {stock_code}: {e}"
+        )
         return "HOLD", None, 0.0, None, f"计算错误: {type(e).__name__}"
 
 
@@ -457,12 +459,16 @@ async def get_latest_signals_multi(
                     except Exception as se:
                         # 记录更详细的错误信息
                         error_msg = f"{code}@{name}: {type(se).__name__}: {str(se)}"
-                        logger.opt(exception=True).warning(f"计算最新信号失败: {error_msg}")
+                        logger.opt(exception=True).warning(
+                            f"计算最新信号失败: {error_msg}"
+                        )
                         per_strategy[name] = None
                         failures.append(error_msg)
                         # 如果失败太多，记录警告但继续处理
                         if len(failures) > 100:
-                            logger.opt(exception=True).warning(f"失败数量较多，已记录{len(failures)}个失败")
+                            logger.opt(exception=True).warning(
+                                f"失败数量较多，已记录{len(failures)}个失败"
+                            )
 
                 results.append(
                     {

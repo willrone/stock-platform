@@ -42,7 +42,9 @@ async def get_detailed_backtest_result(
         detailed_result = await repository.get_detailed_result_by_task_id(task_id)
 
         if not detailed_result:
-            logger.opt(exception=True).warning(f"[API] 未找到任务 {task_id} 的回测详细结果")
+            logger.opt(exception=True).warning(
+                f"[API] 未找到任务 {task_id} 的回测详细结果"
+            )
             raise HTTPException(status_code=404, detail="未找到回测详细结果")
 
         logger.info(f"[API] 成功获取回测详细结果: task_id={task_id}")
@@ -291,7 +293,9 @@ async def get_signal_records(
                     }
                     signals_data.append(signal_dict)
                 except Exception as e2:
-                    logger.opt(exception=True).error(f"手动构建信号记录字典也失败: {e2}")
+                    logger.opt(exception=True).error(
+                        f"手动构建信号记录字典也失败: {e2}"
+                    )
                     continue
 
         return StandardResponse(

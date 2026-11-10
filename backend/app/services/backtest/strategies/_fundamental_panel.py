@@ -11,6 +11,7 @@ npz 含 `dates` / `codes` / 每个因子一个 float32[ndates, ncodes] 矩阵。
 对引擎的每个交易日 t，取**可得日 ≤ t 的最后一个面板行**。
 （财务值从公布日当天起可用；引擎的 master 可能与面板日期不完全重合。）
 """
+
 from __future__ import annotations
 
 from typing import Dict, List
@@ -63,7 +64,7 @@ def _load_fundamental_panel(
     #    的位置，返回长度 = len(b)。这里要的是「对每个 master 日，在面板日期里
     #    找 ≤ 它的最后一个」→ 必须是 `p_dates.searchsorted(master)`。
     #    （用反了会让长度变成 len(master_dates) → 越界 IndexError。）
-    src_idx = p_dates.searchsorted(master, side="right") - 1   # (n_d,)
+    src_idx = p_dates.searchsorted(master, side="right") - 1  # (n_d,)
     ok = src_idx >= 0
     ok &= src_idx < len(p_dates)
 
@@ -77,6 +78,8 @@ def _load_fundamental_panel(
         res = np.full((n_d, n_s), np.nan, dtype=np.float64)
         if ok.any():
             rows = src_idx[ok]
-            res[np.flatnonzero(ok)[:, None], js[None, :]] = mat[rows[:, None], ps[None, :]]
+            res[np.flatnonzero(ok)[:, None], js[None, :]] = mat[
+                rows[:, None], ps[None, :]
+            ]
         out[f] = res
     return out

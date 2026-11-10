@@ -229,7 +229,9 @@ class PredictionTaskExecutor:
                         prediction_results.append(prediction_result)
 
                     except Exception as e:
-                        logger.opt(exception=True).error(f"股票预测失败: {stock_code}, 错误: {e}")
+                        logger.opt(exception=True).error(
+                            f"股票预测失败: {stock_code}, 错误: {e}"
+                        )
                         failed_stocks.append(
                             {"stock_code": stock_code, "error": str(e)}
                         )

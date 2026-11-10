@@ -11,6 +11,7 @@
   S  = sleeve_level(t) / sleeve_level(t0)
   母线 = 0.5·A + 0.5·S                  # 与定稿配置 50% A 股 + 50% 袖套一致
 """
+
 from __future__ import annotations
 
 import json
@@ -55,7 +56,9 @@ def benchmark_path_for(line: str) -> Optional[str]:
     return {"a": LEVELS_FP, "sleeve": SLEEVE_FP, "blend": LEVELS_FP}[kind]
 
 
-def load_benchmark(root: Optional[str] = None) -> Tuple[pd.DataFrame, Dict[str, float], Dict[str, Any]]:
+def load_benchmark(
+    root: Optional[str] = None,
+) -> Tuple[pd.DataFrame, Dict[str, float], Dict[str, Any]]:
     """返回 (A 电平矩阵, 袖套电平 dict, meta)。缺文件 → 抛错，不许静默降级成"没有基准"。"""
     base = root or PAPER_DIR
     levels_fp = os.path.join(base, "benchmark_levels.parquet")
@@ -64,7 +67,8 @@ def load_benchmark(root: Optional[str] = None) -> Tuple[pd.DataFrame, Dict[str, 
     for fp in (levels_fp, sleeve_fp, meta_fp):
         if not os.path.exists(fp):
             raise FileNotFoundError(
-                f"缺基准产物 {os.path.basename(fp)}（先跑 build_benchmark_index.py）")
+                f"缺基准产物 {os.path.basename(fp)}（先跑 build_benchmark_index.py）"
+            )
     levels = pd.read_parquet(levels_fp)
     with open(sleeve_fp, encoding="utf-8") as fh:
         sleeve = json.load(fh)["levels"]
@@ -77,13 +81,14 @@ def _iso(d: Any) -> str:
     return str(d)[:10]
 
 
-def compute_benchmark(kind: str,
-                      a_levels: pd.DataFrame,
-                      sleeve_levels: Dict[str, float],
-                      t0: str,
-                      dates: List[str],
-                      min_coverage: float = MIN_COVERAGE
-                      ) -> Tuple[Dict[str, Optional[float]], Dict[str, Optional[float]], List[str]]:
+def compute_benchmark(
+    kind: str,
+    a_levels: pd.DataFrame,
+    sleeve_levels: Dict[str, float],
+    t0: str,
+    dates: List[str],
+    min_coverage: float = MIN_COVERAGE,
+) -> Tuple[Dict[str, Optional[float]], Dict[str, Optional[float]], List[str]]:
     """把基准锚定到 t0。
 
     返回 (ratios, coverage, problems)：
@@ -140,7 +145,8 @@ def compute_benchmark(kind: str,
             if cov < min_coverage:
                 problems.append(
                     f"{d} 基准覆盖率 {cov:.2%} < {min_coverage:.2%}"
-                    f"（基准只在 {n_alive}/{len(base_a.index)} 只幸存者上算，不能用它谈超额）")
+                    f"（基准只在 {n_alive}/{len(base_a.index)} 只幸存者上算，不能用它谈超额）"
+                )
             a_val = float((row[alive] / base_a[alive]).mean()) if n_alive else None
 
         if need_s:
@@ -155,33 +161,39 @@ def compute_benchmark(kind: str,
             ratios[d] = None
             continue
         if kind == KIND_BLEND:
-            ratios[d] = 0.5 * a_val + 0.5 * s_val      # type: ignore[operator]
+            ratios[d] = 0.5 * a_val + 0.5 * s_val  # type: ignore[operator]
         else:
-            ratios[d] = a_val if need_a else s_val     # type: ignore[assignment]
+            ratios[d] = a_val if need_a else s_val  # type: ignore[assignment]
     return ratios, coverage, problems
 
 
-def attach_benchmark_columns(points: List[Dict[str, Any]],
-                            kind: str,
-                            a_levels: pd.DataFrame,
-                            sleeve_levels: Dict[str, float],
-                            meta: Dict[str, Any],
-                            min_coverage: float = MIN_COVERAGE
-                            ) -> Dict[str, Any]:
+def attach_benchmark_columns(
+    points: List[Dict[str, Any]],
+    kind: str,
+    a_levels: pd.DataFrame,
+    sleeve_levels: Dict[str, float],
+    meta: Dict[str, Any],
+    min_coverage: float = MIN_COVERAGE,
+) -> Dict[str, Any]:
     """就地给每个净值点加 `benchmark_return_pct` / `excess_pp` / `benchmark_coverage`。
 
     锚点 = 本条线**最早的净值点日期**（不是本次 --range 的首日），
     这样同一根线无论什么时候重跑，超额都是"从建仓那天算起"的超额。
     返回诊断字典（供门禁/打印）。
     """
-    diag: Dict[str, Any] = {"kind": kind, "problems": [], "missing_benchmark_days": 0,
-                            "coverage_low_days": 0}
+    diag: Dict[str, Any] = {
+        "kind": kind,
+        "problems": [],
+        "missing_benchmark_days": 0,
+        "coverage_low_days": 0,
+    }
     if not points:
         return diag
     t0 = _iso(points[0]["date"])
     dates = [_iso(p["date"]) for p in points]
     ratios, coverage, problems = compute_benchmark(
-        kind, a_levels, sleeve_levels, t0, dates, min_coverage)
+        kind, a_levels, sleeve_levels, t0, dates, min_coverage
+    )
     diag["anchor"] = t0
     diag["problems"] = problems
     for p in points:
@@ -195,7 +207,11 @@ def attach_benchmark_columns(points: List[Dict[str, Any]],
         else:
             p["excess_pp"] = round(float(p["return_pct"]) - (r - 1.0) * 100.0, 4)
     diag["coverage_low_days"] = sum(
-        1 for v in coverage.values() if v is not None and v < min_coverage)
-    diag["basis"] = {"a": meta.get("basis_a"), "sleeve": meta.get("basis_sleeve"),
-                     "blend": "0.5 × A 全池等权买入持有 + 0.5 × 9 只定稿 ETF 等权买入持有"}[kind]
+        1 for v in coverage.values() if v is not None and v < min_coverage
+    )
+    diag["basis"] = {
+        "a": meta.get("basis_a"),
+        "sleeve": meta.get("basis_sleeve"),
+        "blend": "0.5 × A 全池等权买入持有 + 0.5 × 9 只定稿 ETF 等权买入持有",
+    }[kind]
     return diag

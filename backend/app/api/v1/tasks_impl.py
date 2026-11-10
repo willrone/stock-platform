@@ -1591,7 +1591,9 @@ async def retry_task(task_id: str) -> Any:
 
             logger.info(f"任务已重新提交到进程池: {task_id}")
         except Exception as submit_error:
-            logger.opt(exception=True).error(f"重新提交任务到进程池失败: {submit_error}")
+            logger.opt(exception=True).error(
+                f"重新提交任务到进程池失败: {submit_error}"
+            )
             raise HTTPException(
                 status_code=500, detail=f"重新提交任务失败: {str(submit_error)}"
             )

@@ -41,17 +41,17 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 
-from ..core.base_strategy import BaseStrategy
-from ._fundamental_panel import _load_fundamental_panel
-from ..models import SignalType, TradingSignal
 from app.services.trading.execution_rules import (
     industry_ids,
-    limit_up_mask_matrix,
     limit_up_mask_matrix_at,
-    load_st_flags,
     load_industry_map,
+    load_st_flags,
     zscore_with_industry,
 )
+
+from ..core.base_strategy import BaseStrategy
+from ..models import SignalType, TradingSignal
+from ._fundamental_panel import _load_fundamental_panel
 
 _SCORES_ATTR = "_honest_composite_scores"
 
@@ -69,14 +69,24 @@ for _n in (5, 10, 20, 30, 60):
 # 42f 五格全面优于 43f/47f (2026-10-15 ic_composite_10y_expand2 对比):
 #   IMAX/IMIN/WVMA/VMA/VSTD 的 10 日窗是负贡献，VSUMP/VSUMN/VSUMD/QTLD 的 20 日窗是正贡献
 _ALPHAPANEL_FACTORS: Dict[str, float] = {
-    "VSUMP5": -1.0, "VSUMP10": -1.0, "VSUMP20": -1.0,
-    "VSUMN5": 1.0, "VSUMN10": 1.0, "VSUMN20": 1.0,
-    "VSUMD5": -1.0, "VSUMD10": -1.0, "VSUMD20": -1.0,
-    "QTLD5": 1.0, "QTLD10": 1.0, "QTLD20": 1.0,
-    "IMAX5": -1.0, "IMIN5": -1.0, "WVMA5": -1.0,
-    "VMA5": 1.0, "VSTD5": -1.0,
+    "VSUMP5": -1.0,
+    "VSUMP10": -1.0,
+    "VSUMP20": -1.0,
+    "VSUMN5": 1.0,
+    "VSUMN10": 1.0,
+    "VSUMN20": 1.0,
+    "VSUMD5": -1.0,
+    "VSUMD10": -1.0,
+    "VSUMD20": -1.0,
+    "QTLD5": 1.0,
+    "QTLD10": 1.0,
+    "QTLD20": 1.0,
+    "IMAX5": -1.0,
+    "IMIN5": -1.0,
+    "WVMA5": -1.0,
+    "VMA5": 1.0,
+    "VSTD5": -1.0,
 }
-
 
 
 #: Alpha158 面板因子的默认目录（**绝对路径**）
@@ -88,12 +98,14 @@ _ALPHAPANEL_FACTORS: Dict[str, float] = {
 # 路径：backend/app/services/backtest/strategies/xxx.py
 #   dirname 1 = strategies, 2 = backtest, 3 = services, 4 = app,
 #   5 = backend, 6 = 项目根
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-))))
-DEFAULT_PANEL_DIR = os.path.join(
-    _PROJECT_ROOT, "data", "qlib_data", "features", "day"
+_PROJECT_ROOT = os.path.dirname(
+    os.path.dirname(
+        os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        )
+    )
 )
+DEFAULT_PANEL_DIR = os.path.join(_PROJECT_ROOT, "data", "qlib_data", "features", "day")
 
 
 def _load_factor_weights(path: str, power: float, cap: float) -> Dict[str, float]:
@@ -127,6 +139,7 @@ def _load_factor_weights(path: str, power: float, cap: float) -> Dict[str, float
     if mean_w <= 0:
         return {}
     return {k: v / mean_w for k, v in raw.items()}
+
 
 class HonestCompositeStrategy(BaseStrategy):
     """25 因子等权复合横截面排名策略（TopK/Dropout 执行模式）。"""
@@ -220,8 +233,9 @@ class HonestCompositeStrategy(BaseStrategy):
         #      （同因子集 + 同引擎版本 + 同窗口切分），否则会把 42f 的乐观数字
         #      当成 25f 的结论 —— 本仓库已经踩过一次。
         self.exposure_neutral = bool(config.get("exposure_neutral", False))
-        self.neutral_exposures = list(config.get(
-            "neutral_exposures", ("size", "illiq")))
+        self.neutral_exposures = list(
+            config.get("neutral_exposures", ("size", "illiq"))
+        )
         self.neutral_window = int(config.get("neutral_window", 20))
         # 2026-10-27：**财务因子**（唯一还没试过的「新信息」路径）
         # IC 验证（5513 只，3 年，PIT 按报告期+120 天）：
@@ -239,9 +253,7 @@ class HonestCompositeStrategy(BaseStrategy):
         if isinstance(_ff, dict):
             self.fundamental_factors = {str(k): float(v) for k, v in _ff.items()}
         else:
-            self.fundamental_factors = {
-                str(t[0]): float(t[1]) for t in _ff
-            }
+            self.fundamental_factors = {str(t[0]): float(t[1]) for t in _ff}
         self.fundamental_weight = float(config.get("fundamental_weight", 1.0))
         self.factor_allowlist = config.get("factor_allowlist", None)
         if self.factor_allowlist is not None:
@@ -249,7 +261,8 @@ class HonestCompositeStrategy(BaseStrategy):
         self._factor_weights: Dict[str, float] = {}
         if self.factor_icir_file and self.factor_weight_power > 0:
             self._factor_weights = _load_factor_weights(
-                self.factor_icir_file, self.factor_weight_power,
+                self.factor_icir_file,
+                self.factor_weight_power,
                 self.factor_weight_cap,
             )
         self.score_scale = float(config.get("score_scale", 10.0))
@@ -331,8 +344,6 @@ class HonestCompositeStrategy(BaseStrategy):
 
         frame_opts = {"index": master, "dtype": np.float64}
         close = pd.DataFrame(to_matrix("close"), **frame_opts)
-        high = pd.DataFrame(to_matrix("high"), **frame_opts)
-        low = pd.DataFrame(to_matrix("low"), **frame_opts)
         vol = pd.DataFrame(to_matrix("volume"), **frame_opts)
 
         # 计算 23 个诚实因子公式
@@ -362,8 +373,7 @@ class HonestCompositeStrategy(BaseStrategy):
         # 2020-08-24 之后的窗口与原实现**逐位相同**（回归门见
         # `backend/scripts/p10_limit_pit_regression.py`）。
         limit_up_mask = limit_up_mask_matrix_at(
-            day_ret, close.columns, master,
-            is_st=load_st_flags(list(close.columns))
+            day_ret, close.columns, master, is_st=load_st_flags(list(close.columns))
         )
 
         # nan-aware 等权复合 — 23 个诚实公式 + 18 个 Alpha158 面板因子
@@ -383,8 +393,9 @@ class HonestCompositeStrategy(BaseStrategy):
                 f"只有行业分类, {_n_ind} 个行业"
             )
 
-        def zscore_add(mat: np.ndarray, sign: float, min_cross: int,
-                       weight: float = 1.0) -> None:
+        def zscore_add(
+            mat: np.ndarray, sign: float, min_cross: int, weight: float = 1.0
+        ) -> None:
             z = zscore_with_industry(
                 mat, sign, min_cross, _ind_ids, _n_ind, self.industry_neutral
             )
@@ -395,39 +406,50 @@ class HonestCompositeStrategy(BaseStrategy):
         # 23 个诚实公式（ICIR 加权时按因子名取权重）
         _n_used = 0
         for formula, sign in _HONEST_FORMULAS.items():
-            if (self.factor_allowlist is not None
-                    and formula not in self.factor_allowlist):
+            if (
+                self.factor_allowlist is not None
+                and formula not in self.factor_allowlist
+            ):
                 continue
-            zscore_add(cands[formula].to_numpy(dtype=np.float64), sign, min_cross,
-                       self._factor_weights.get(formula, 1.0))
+            zscore_add(
+                cands[formula].to_numpy(dtype=np.float64),
+                sign,
+                min_cross,
+                self._factor_weights.get(formula, 1.0),
+            )
             _n_used += 1
 
         # 18 个 Alpha158 面板因子 — 每个因子构建一次全截面矩阵
-        for factor_name, sign in (_ALPHAPANEL_FACTORS.items()
-                                  if self.use_panel else ()):
-            if (self.factor_allowlist is not None
-                    and factor_name not in self.factor_allowlist):
+        for factor_name, sign in (
+            _ALPHAPANEL_FACTORS.items() if self.use_panel else ()
+        ):
+            if (
+                self.factor_allowlist is not None
+                and factor_name not in self.factor_allowlist
+            ):
                 continue
             _pw = self._factor_weights.get(factor_name, 1.0)
             mat = np.full((n_dates, n_stocks), np.nan, dtype=np.float64)
             for j, code in enumerate(codes):
                 try:
                     pf = pd.read_parquet(
-                        os.path.join(self.panel_dir, code.replace(".", "_") + ".parquet")
+                        os.path.join(
+                            self.panel_dir, code.replace(".", "_") + ".parquet"
+                        )
                     ).reset_index()
                     pf = pf.set_index("date").sort_index()
-                    pf = pf.loc[pd.Timestamp(start_date):pd.Timestamp(end_date)]
+                    pf = pf.loc[pd.Timestamp(start_date) : pd.Timestamp(end_date)]
                     pf = pf[~pf.index.duplicated(keep="first")]
                     pos = master.get_indexer(pd.DatetimeIndex(pf.index))
                     ok = pos >= 0
-                    mat[pos[ok], j] = pd.to_numeric(pf[factor_name], errors="coerce").to_numpy(dtype=np.float64, na_value=np.nan)[ok]
+                    mat[pos[ok], j] = pd.to_numeric(
+                        pf[factor_name], errors="coerce"
+                    ).to_numpy(dtype=np.float64, na_value=np.nan)[ok]
                 except Exception:
                     continue
             zscore_add(mat, sign, min_cross, _pw)
 
-        composite = np.where(
-            wsum > 0, acc / np.where(wsum > 0, wsum, 1.0), np.nan
-        )
+        composite = np.where(wsum > 0, acc / np.where(wsum > 0, wsum, 1.0), np.nan)
 
         # ── 财务因子并入（2026-10-27）────────────────────────────
         # 方式：与价量复合分**等权平均**（两路各自 z-score 后各占 50% 权重）。
@@ -449,12 +471,15 @@ class HonestCompositeStrategy(BaseStrategy):
                 _good = np.isfinite(_z)
                 _facc[_good] += _z[_good]
                 _fwsum[_good] += 1.0
-            _fcomp = np.where(_fwsum > 0, _facc / np.where(_fwsum > 0, _fwsum, 1.0), np.nan)
+            _fcomp = np.where(
+                _fwsum > 0, _facc / np.where(_fwsum > 0, _fwsum, 1.0), np.nan
+            )
             # 与价量分等权合成（两路都有效时）
             _both = np.isfinite(composite) & np.isfinite(_fcomp)
             _merged = np.where(
-                _both, 0.5 * composite + 0.5 * _fcomp, np.where(
-                    np.isfinite(composite), composite, _fcomp)
+                _both,
+                0.5 * composite + 0.5 * _fcomp,
+                np.where(np.isfinite(composite), composite, _fcomp),
             )
             _n_fund = int(np.isfinite(_fcomp).sum())
             logger.info(
@@ -484,17 +509,27 @@ class HonestCompositeStrategy(BaseStrategy):
             _amount = close * vol * 100.0
             if "size" in self.neutral_exposures:
                 with np.errstate(divide="ignore", invalid="ignore"):
-                    _log_amt = np.log(np.where(_amount.to_numpy() > 0,
-                                              _amount.to_numpy(), np.nan))
-                _exps["size"] = pd.DataFrame(_log_amt).rolling(
-                    self.neutral_window, min_periods=5).mean().to_numpy()
+                    _log_amt = np.log(
+                        np.where(_amount.to_numpy() > 0, _amount.to_numpy(), np.nan)
+                    )
+                _exps["size"] = (
+                    pd.DataFrame(_log_amt)
+                    .rolling(self.neutral_window, min_periods=5)
+                    .mean()
+                    .to_numpy()
+                )
             if "illiq" in self.neutral_exposures:
                 with np.errstate(divide="ignore", invalid="ignore"):
                     _r = close / close.shift(1) - 1.0
                     _daily = (_r.abs() / _amount.where(_amount > 0)).to_numpy()
-                _ill = pd.DataFrame(_daily).rolling(
-                    self.neutral_window, min_periods=max(5, self.neutral_window // 2)
-                ).mean()
+                _ill = (
+                    pd.DataFrame(_daily)
+                    .rolling(
+                        self.neutral_window,
+                        min_periods=max(5, self.neutral_window // 2),
+                    )
+                    .mean()
+                )
                 with np.errstate(divide="ignore", invalid="ignore"):
                     _exps["illiq"] = np.log1p(_ill.to_numpy())
             if _exps:
@@ -524,14 +559,21 @@ class HonestCompositeStrategy(BaseStrategy):
             # 逐日横截面 z-score（nan-aware），复用同一套 min_cross 门槛
             _ok = np.isfinite(trend_raw)
             _cnt = _ok.sum(axis=1, keepdims=True)
-            _mu = np.where(_cnt > 0,
-                           np.where(_ok, trend_raw, 0.0).sum(axis=1, keepdims=True)
-                           / np.maximum(_cnt, 1), 0.0)
+            _mu = np.where(
+                _cnt > 0,
+                np.where(_ok, trend_raw, 0.0).sum(axis=1, keepdims=True)
+                / np.maximum(_cnt, 1),
+                0.0,
+            )
             _dv = trend_raw - _mu
-            _sd = np.sqrt(np.where(
-                _cnt > 1,
-                (np.where(_ok, _dv, 0.0) ** 2).sum(axis=1, keepdims=True)
-                / np.maximum(_cnt - 1, 1), 0.0))
+            _sd = np.sqrt(
+                np.where(
+                    _cnt > 1,
+                    (np.where(_ok, _dv, 0.0) ** 2).sum(axis=1, keepdims=True)
+                    / np.maximum(_cnt - 1, 1),
+                    0.0,
+                )
+            )
             _tz = np.where(_sd > 1e-12, _dv / np.where(_sd > 1e-12, _sd, 1.0), np.nan)
             _tz = np.where(_cnt >= min_cross, _tz, np.nan)
             composite = composite + self.trend_weight * _tz
@@ -560,8 +602,10 @@ class HonestCompositeStrategy(BaseStrategy):
                 bad = breadth < self.regime_threshold
             elif self.regime_filter == "ma":
                 mkt = np.nanmean(close.to_numpy(dtype=np.float64), axis=1)
-                ma = pd.Series(mkt).rolling(self.regime_ma_window, min_periods=20).mean()
-                bad = (mkt < ma.to_numpy())
+                ma = (
+                    pd.Series(mkt).rolling(self.regime_ma_window, min_periods=20).mean()
+                )
+                bad = mkt < ma.to_numpy()
             else:
                 bad = np.zeros(n_dates, dtype=bool)
 
@@ -587,7 +631,7 @@ class HonestCompositeStrategy(BaseStrategy):
         if self.lag > 0:
             lagged = np.full_like(composite, np.nan)
             if self.lag < n_dates:
-                lagged[self.lag:] = composite[: n_dates - self.lag]
+                lagged[self.lag :] = composite[: n_dates - self.lag]
             composite = lagged
 
         # 存储每股分数

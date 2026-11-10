@@ -25,9 +25,10 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 
+from app.services.trading.execution_rules import limit_up_mask_matrix
+
 from ..core.base_strategy import BaseStrategy
 from ..models import SignalType, TradingSignal
-from app.services.trading.execution_rules import limit_up_mask_matrix
 
 _SCORES_ATTR = "_gbm_voltgt_scores"
 
@@ -42,14 +43,24 @@ for _n in (5, 10, 20, 30, 60):
 
 # 17 个 Alpha158 面板因子
 _ALPHAPANEL_FACTORS: Dict[str, float] = {
-    "VSUMP5": -1.0, "VSUMP10": -1.0, "VSUMP20": -1.0,
-    "VSUMN5": 1.0, "VSUMN10": 1.0, "VSUMN20": 1.0,
-    "VSUMD5": -1.0, "VSUMD10": -1.0, "VSUMD20": -1.0,
-    "QTLD5": 1.0, "QTLD10": 1.0, "QTLD20": 1.0,
-    "IMAX5": -1.0, "IMIN5": -1.0, "WVMA5": -1.0,
-    "VMA5": 1.0, "VSTD5": -1.0,
+    "VSUMP5": -1.0,
+    "VSUMP10": -1.0,
+    "VSUMP20": -1.0,
+    "VSUMN5": 1.0,
+    "VSUMN10": 1.0,
+    "VSUMN20": 1.0,
+    "VSUMD5": -1.0,
+    "VSUMD10": -1.0,
+    "VSUMD20": -1.0,
+    "QTLD5": 1.0,
+    "QTLD10": 1.0,
+    "QTLD20": 1.0,
+    "IMAX5": -1.0,
+    "IMIN5": -1.0,
+    "WVMA5": -1.0,
+    "VMA5": 1.0,
+    "VSTD5": -1.0,
 }
-
 
 
 #: Alpha158 面板因子的默认目录（**绝对路径**）
@@ -61,12 +72,15 @@ _ALPHAPANEL_FACTORS: Dict[str, float] = {
 # 路径：backend/app/services/backtest/strategies/xxx.py
 #   dirname 1 = strategies, 2 = backtest, 3 = services, 4 = app,
 #   5 = backend, 6 = 项目根
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-))))
-DEFAULT_PANEL_DIR = os.path.join(
-    _PROJECT_ROOT, "data", "qlib_data", "features", "day"
+_PROJECT_ROOT = os.path.dirname(
+    os.path.dirname(
+        os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        )
+    )
 )
+DEFAULT_PANEL_DIR = os.path.join(_PROJECT_ROOT, "data", "qlib_data", "features", "day")
+
 
 class GbmVoltgtStrategy(BaseStrategy):
     """LightGBM 元模型 + 波动率目标仓位（TopK/Dropout 执行模式）。"""
@@ -88,7 +102,9 @@ class GbmVoltgtStrategy(BaseStrategy):
         self.rebalance_weekday = int(config.get("rebalance_weekday", 4))  # 4=周五
         self.limit_up = float(config.get("limit_up", 0.095))
         self.score_scale = float(config.get("score_scale", 10.0))
-        self.top_n_factors = int(config.get("top_n_factors", 0))  # 0=默认42因子, >0=按IC选topN
+        self.top_n_factors = int(
+            config.get("top_n_factors", 0)
+        )  # 0=默认42因子, >0=按IC选topN
         self.horizon = int(config.get("horizon", 1))  # 标签周期(天), 1=对齐日频换仓
         self.panel_dir = config.get("panel_dir", DEFAULT_PANEL_DIR)
 
@@ -154,9 +170,12 @@ class GbmVoltgtStrategy(BaseStrategy):
                 None = 保持原来的逐月滚动重训（回测口径）。
         """
         codes = [
-            code for code, df in stock_data.items()
-            if df is not None and not df.empty
-            and "close" in df.columns and "volume" in df.columns
+            code
+            for code, df in stock_data.items()
+            if df is not None
+            and not df.empty
+            and "close" in df.columns
+            and "volume" in df.columns
         ]
         if not codes:
             logger.warning("gbm_voltgt: 无可用股票数据，跳过打分")
@@ -174,7 +193,8 @@ class GbmVoltgtStrategy(BaseStrategy):
                 positions = master.get_indexer(pd.DatetimeIndex(df.index))
                 ok = positions >= 0
                 values = pd.to_numeric(df[column], errors="coerce").to_numpy(
-                    dtype=np.float64, na_value=np.nan)
+                    dtype=np.float64, na_value=np.nan
+                )
                 out[positions[ok], j] = values[ok]
             return out
 
@@ -199,7 +219,9 @@ class GbmVoltgtStrategy(BaseStrategy):
         # 9.5%~20%（并未涨停）却被误剔；ST 股触及 5% 涨停则完全没拦。
         # 改为逐票按板块判定（主板 10% / 创业板科创板 20% / 北交所 30%）。
         limit_up_mask = limit_up_mask_matrix(day_ret, close.columns)
-        fwd_ret = (close.shift(-self.horizon) / close - 1.0).to_numpy()  # 周期=horizon天
+        fwd_ret = (
+            close.shift(-self.horizon) / close - 1.0
+        ).to_numpy()  # 周期=horizon天
 
         # 面板因子矩阵
         #
@@ -227,7 +249,7 @@ class GbmVoltgtStrategy(BaseStrategy):
                     os.path.join(self.panel_dir, code.replace(".", "_") + ".parquet")
                 ).reset_index()
                 pf = pf.set_index("date").sort_index()
-                pf = pf.loc[pd.Timestamp(start_date):pd.Timestamp(end_date)]
+                pf = pf.loc[pd.Timestamp(start_date) : pd.Timestamp(end_date)]
                 pf = pf[~pf.index.duplicated(keep="first")]
             except Exception:
                 pf = None
@@ -255,25 +277,182 @@ class GbmVoltgtStrategy(BaseStrategy):
         if self.top_n_factors > 0:
             # 按 IC 排序选 topN 因子
             all_avail = list(_HONEST_FORMULAS.keys()) + [
-                "RET1","RET5","RET10","RET20","KMID","KLEN","KMID2","KUP","KUP2","KLOW","KLOW2",
-                "ROC5","ROC10","ROC20","ROC30","ROC60","MA5","MA10","MA20","MA30","MA60",
-                "STD5","STD10","STD20","STD30","STD60","BETA5","BETA10","BETA20","BETA30","BETA60",
-                "RSQR5","RSQR10","RSQR20","RSQR30","RSQR60","RESI5","RESI10","RESI20","RESI30","RESI60",
-                "MAX5","MAX10","MAX20","MAX30","MAX60","MIN5","MIN10","MIN20","MIN30","MIN60",
-                "QTLU5","QTLU10","QTLU20","QTLU30","QTLU60","QTLD5","QTLD10","QTLD20","QTLD30","QTLD60",
-                "RANK5","RANK10","RANK20","RANK30","RANK60","RSV5","RSV10","RSV20","RSV30","RSV60",
-                "IMAX5","IMAX10","IMAX20","IMAX30","IMAX60","IMIN5","IMIN10","IMIN20","IMIN30","IMIN60",
-                "IMXD5","IMXD10","IMXD20","IMXD30","IMXD60","CORR5","CORR10","CORR20","CORR30","CORR60",
-                "CORD5","CORD10","CORD20","CORD30","CORD60","CNTP5","CNTP10","CNTP20","CNTP30","CNTP60",
-                "CNTN5","CNTN10","CNTN20","CNTN30","CNTN60","CNTD5","CNTD10","CNTD20","CNTD30","CNTD60",
-                "SUMP5","SUMP10","SUMP20","SUMP30","SUMP60","SUMN5","SUMN10","SUMN20","SUMN30","SUMN60",
-                "SUMD5","SUMD10","SUMD20","SUMD30","SUMD60","VMA5","VMA10","VMA20","VMA30","VMA60",
-                "VSTD5","VSTD10","VSTD20","VSTD30","VSTD60","WVMA5","WVMA10","WVMA20","WVMA30","WVMA60",
-                "VSUMP5","VSUMP10","VSUMP20","VSUMP30","VSUMP60","VSUMN5","VSUMN10","VSUMN20","VSUMN30","VSUMN60",
-                "VSUMD5","VSUMD10","VSUMD20","VSUMD30","VSUMD60","ATR14","BOLLINGER_LOWER","BOLLINGER_MIDDLE",
-                "BOLLINGER_UPPER","KDJ_D","KDJ_K","MA50","MACD","MACD_HIST","MACD_SIGNAL","RSI14",
-                "price_change","price_change_5d","price_change_20d","volume_change","volume_ma_ratio",
-                "volatility_5d","volatility_20d","price_position"]
+                "RET1",
+                "RET5",
+                "RET10",
+                "RET20",
+                "KMID",
+                "KLEN",
+                "KMID2",
+                "KUP",
+                "KUP2",
+                "KLOW",
+                "KLOW2",
+                "ROC5",
+                "ROC10",
+                "ROC20",
+                "ROC30",
+                "ROC60",
+                "MA5",
+                "MA10",
+                "MA20",
+                "MA30",
+                "MA60",
+                "STD5",
+                "STD10",
+                "STD20",
+                "STD30",
+                "STD60",
+                "BETA5",
+                "BETA10",
+                "BETA20",
+                "BETA30",
+                "BETA60",
+                "RSQR5",
+                "RSQR10",
+                "RSQR20",
+                "RSQR30",
+                "RSQR60",
+                "RESI5",
+                "RESI10",
+                "RESI20",
+                "RESI30",
+                "RESI60",
+                "MAX5",
+                "MAX10",
+                "MAX20",
+                "MAX30",
+                "MAX60",
+                "MIN5",
+                "MIN10",
+                "MIN20",
+                "MIN30",
+                "MIN60",
+                "QTLU5",
+                "QTLU10",
+                "QTLU20",
+                "QTLU30",
+                "QTLU60",
+                "QTLD5",
+                "QTLD10",
+                "QTLD20",
+                "QTLD30",
+                "QTLD60",
+                "RANK5",
+                "RANK10",
+                "RANK20",
+                "RANK30",
+                "RANK60",
+                "RSV5",
+                "RSV10",
+                "RSV20",
+                "RSV30",
+                "RSV60",
+                "IMAX5",
+                "IMAX10",
+                "IMAX20",
+                "IMAX30",
+                "IMAX60",
+                "IMIN5",
+                "IMIN10",
+                "IMIN20",
+                "IMIN30",
+                "IMIN60",
+                "IMXD5",
+                "IMXD10",
+                "IMXD20",
+                "IMXD30",
+                "IMXD60",
+                "CORR5",
+                "CORR10",
+                "CORR20",
+                "CORR30",
+                "CORR60",
+                "CORD5",
+                "CORD10",
+                "CORD20",
+                "CORD30",
+                "CORD60",
+                "CNTP5",
+                "CNTP10",
+                "CNTP20",
+                "CNTP30",
+                "CNTP60",
+                "CNTN5",
+                "CNTN10",
+                "CNTN20",
+                "CNTN30",
+                "CNTN60",
+                "CNTD5",
+                "CNTD10",
+                "CNTD20",
+                "CNTD30",
+                "CNTD60",
+                "SUMP5",
+                "SUMP10",
+                "SUMP20",
+                "SUMP30",
+                "SUMP60",
+                "SUMN5",
+                "SUMN10",
+                "SUMN20",
+                "SUMN30",
+                "SUMN60",
+                "SUMD5",
+                "SUMD10",
+                "SUMD20",
+                "SUMD30",
+                "SUMD60",
+                "VMA5",
+                "VMA10",
+                "VMA20",
+                "VMA30",
+                "VMA60",
+                "VSTD5",
+                "VSTD10",
+                "VSTD20",
+                "VSTD30",
+                "VSTD60",
+                "WVMA5",
+                "WVMA10",
+                "WVMA20",
+                "WVMA30",
+                "WVMA60",
+                "VSUMP5",
+                "VSUMP10",
+                "VSUMP20",
+                "VSUMP30",
+                "VSUMP60",
+                "VSUMN5",
+                "VSUMN10",
+                "VSUMN20",
+                "VSUMN30",
+                "VSUMN60",
+                "VSUMD5",
+                "VSUMD10",
+                "VSUMD20",
+                "VSUMD30",
+                "VSUMD60",
+                "ATR14",
+                "BOLLINGER_LOWER",
+                "BOLLINGER_MIDDLE",
+                "BOLLINGER_UPPER",
+                "KDJ_D",
+                "KDJ_K",
+                "MA50",
+                "MACD",
+                "MACD_HIST",
+                "MACD_SIGNAL",
+                "RSI14",
+                "price_change",
+                "price_change_5d",
+                "price_change_20d",
+                "volume_change",
+                "volume_ma_ratio",
+                "volatility_5d",
+                "volatility_20d",
+                "price_position",
+            ]
             # 去重 + 只保留有数据的
             all_avail = list(dict.fromkeys(all_avail))
             fwd_arr = fwd_ret
@@ -285,12 +464,24 @@ class GbmVoltgtStrategy(BaseStrategy):
                     mat = to_panel_mat(fname)
                 ics = []
                 for t in range(n_dates - self.horizon):
-                    a = mat[t]; b = fwd_arr[t]
+                    a = mat[t]
+                    b = fwd_arr[t]
                     ok = np.isfinite(a) & np.isfinite(b)
-                    if ok.sum() < 50: continue
-                    ics.append(np.corrcoef(np.argsort(np.argsort(a[ok])), np.argsort(np.argsort(b[ok])))[0,1])
-                if ics: ic[fname] = abs(np.mean(ics))
-            top = [f for f,_ in sorted(ic.items(), key=lambda x:-x[1])[:self.top_n_factors]]
+                    if ok.sum() < 50:
+                        continue
+                    ics.append(
+                        np.corrcoef(
+                            np.argsort(np.argsort(a[ok])), np.argsort(np.argsort(b[ok]))
+                        )[0, 1]
+                    )
+                if ics:
+                    ic[fname] = abs(np.mean(ics))
+            top = [
+                f
+                for f, _ in sorted(ic.items(), key=lambda x: -x[1])[
+                    : self.top_n_factors
+                ]
+            ]
             for fname in top:
                 seen[fname] = [fname]
             logger.info(f"gbm_voltgt IC选因子: top{self.top_n_factors} = {top[:10]}...")
@@ -346,7 +537,7 @@ class GbmVoltgtStrategy(BaseStrategy):
         acc = np.zeros((n_dates, n_stocks))
         wsum = np.zeros((n_dates, n_stocks))
         for (fname, _), k in zip(list(seen.items()), range(n_fac)):
-            sign = (_HONEST_FORMULAS.get(fname, _ALPHAPANEL_FACTORS.get(fname, 1.0)))
+            sign = _HONEST_FORMULAS.get(fname, _ALPHAPANEL_FACTORS.get(fname, 1.0))
             ok = np.isfinite(raw[k])
             acc[ok] += z_all[ok, k] * sign
             wsum[ok] += 1
@@ -372,17 +563,18 @@ class GbmVoltgtStrategy(BaseStrategy):
             X = np.column_stack([z_block[valid], p_block[valid]])
             y = lab[valid]
             if len(X) < 500:
-                logger.warning(
-                    f"gbm_voltgt 单模型模式样本不足({len(X)})，退回等权复合"
-                )
+                logger.warning(f"gbm_voltgt 单模型模式样本不足({len(X)})，退回等权复合")
                 comp = comp_eq.copy()
             else:
                 mdl = lgb.LGBMRegressor(
                     n_estimators=self.n_estimators,
                     max_depth=self.max_depth,
                     learning_rate=self.learning_rate,
-                    num_leaves=15, subsample=0.8, colsample_bytree=0.8,
-                    random_state=42, verbosity=-1,
+                    num_leaves=15,
+                    subsample=0.8,
+                    colsample_bytree=0.8,
+                    random_state=42,
+                    verbosity=-1,
                 ).fit(X, y)
                 for k in range(k0, n_dates):
                     Xk = np.column_stack([z_all[k], pre_all[k]])
@@ -393,7 +585,9 @@ class GbmVoltgtStrategy(BaseStrategy):
                 )
         else:
             # 原口径：逐月滚动重训
-            for mi, (k0, ts0) in enumerate(month_starts):
+            for mi, (k0, _ts0) in enumerate(
+                month_starts
+            ):  # B007: 循环里没用 ts0，下划线明示
                 k1 = month_starts[mi + 1][0] if mi + 1 < len(month_starts) else n_dates
                 if mi < self.warmup_months:
                     comp[k0:k1] = comp_eq[k0:k1]
@@ -411,8 +605,11 @@ class GbmVoltgtStrategy(BaseStrategy):
                     n_estimators=self.n_estimators,
                     max_depth=self.max_depth,
                     learning_rate=self.learning_rate,
-                    num_leaves=15, subsample=0.8, colsample_bytree=0.8,
-                    random_state=42, verbosity=-1,
+                    num_leaves=15,
+                    subsample=0.8,
+                    colsample_bytree=0.8,
+                    random_state=42,
+                    verbosity=-1,
                 ).fit(X, y)
                 for k in range(k0, k1):
                     Xk = np.column_stack([z_all[k], pre_all[k]])
@@ -477,7 +674,8 @@ class GbmVoltgtStrategy(BaseStrategy):
         index = pd.DatetimeIndex(data.index)
         score_series = pd.Series(
             [scores.get(ts.to_pydatetime()) for ts in index],
-            index=index, dtype="float64",
+            index=index,
+            dtype="float64",
         )
         return {"price": data["close"], "score": score_series}
 

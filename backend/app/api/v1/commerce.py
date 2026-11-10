@@ -131,9 +131,7 @@ class BalanceResponse(BaseModel):
 # ──────────────────────────────────────────────────────────
 
 
-@router.post(
-    "/usage", response_model=StandardResponse, summary="记录用量并扣费"
-)
+@router.post("/usage", response_model=StandardResponse, summary="记录用量并扣费")
 async def record_usage(
     request: UsageRecordRequest,
     user_id: str = Depends(get_current_user),
@@ -294,7 +292,9 @@ async def admin_list_orders(
     limit: int = Query(100, ge=1, le=500),
 ) -> StandardResponse:
     """管理员查看全部充值订单。"""
-    orders = await PaymentService().list_orders(user_id=None, status=status, limit=limit)
+    orders = await PaymentService().list_orders(
+        user_id=None, status=status, limit=limit
+    )
     return StandardResponse(
         success=True,
         message="全部充值订单获取成功",
@@ -322,8 +322,9 @@ async def admin_confirm_order(
     # 返回用户当前套餐，管理员能直接看到「已升级到 pro」
     tier = None
     try:
-        from app.models.user_models import User
         from sqlalchemy import select
+
+        from app.models.user_models import User
 
         db = AsyncSessionLocal()
         try:
@@ -377,7 +378,9 @@ class PaymentConfigRequest(BaseModel):
 
 
 @router.post(
-    "/admin/payment/config", response_model=StandardResponse, summary="设置收款方式（管理员）"
+    "/admin/payment/config",
+    response_model=StandardResponse,
+    summary="设置收款方式（管理员）",
 )
 async def admin_update_payment_config(
     request: PaymentConfigRequest,
@@ -425,9 +428,7 @@ async def refund(
     )
 
 
-@router.get(
-    "/usage/summary", response_model=StandardResponse, summary="用量汇总"
-)
+@router.get("/usage/summary", response_model=StandardResponse, summary="用量汇总")
 async def usage_summary(
     user_id: str = Depends(get_current_user),
     month: Optional[int] = Query(None, description="月份（1-12），默认当月"),
@@ -481,7 +482,9 @@ async def get_pricing_rules(
     )
 
 
-@router.post("/pricing/seed", response_model=StandardResponse, summary="初始化默认计费规则")
+@router.post(
+    "/pricing/seed", response_model=StandardResponse, summary="初始化默认计费规则"
+)
 async def seed_pricing(
     user_id: str = Depends(get_current_user),
 ) -> StandardResponse:
@@ -502,7 +505,11 @@ async def seed_pricing(
         await db.close()
 
 
-@router.get("/check/{event_type}", response_model=StandardResponse, summary="检查是否可以执行操作")
+@router.get(
+    "/check/{event_type}",
+    response_model=StandardResponse,
+    summary="检查是否可以执行操作",
+)
 async def check_can_execute(
     event_type: str,
     user_id: str = Depends(get_current_user),

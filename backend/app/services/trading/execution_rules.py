@@ -38,7 +38,7 @@ import numpy as np
 DEFAULT_PARTICIPATION_RATE = 0.005
 
 #: 当日成交额门槛（元）。低于此值视为流动性太差，不进信号
-DEFAULT_MIN_TURNOVER = 5_000_000.0     # 500 万
+DEFAULT_MIN_TURNOVER = 5_000_000.0  # 500 万
 
 #: ST 股票涨跌停幅度
 ST_LIMIT_PCT = 0.05
@@ -114,16 +114,15 @@ def check_tradability(
             可能含**除权跳空**（实测可达 ±50%），此时涨跌停判定要用宽松阈值，
             否则会把送转除权误判成涨跌停。
     """
-    is_st_flag = bool(is_st) if is_st is not None else (
-        "ST" in (name or "").upper()
-    )
+    is_st_flag = bool(is_st) if is_st is not None else ("ST" in (name or "").upper())
     lp = limit_pct(code, is_st_flag)
 
     # ── 1. 退市整理期：名称以「退」结尾 ──
     nm = (name or "").strip()
     if nm.endswith("退"):
         return Tradability(
-            can_buy=False, can_sell=False,
+            can_buy=False,
+            can_sell=False,
             reason="退市整理期，不可交易",
             blocked_reason="退市整理期（名称带「退」）不可交易",
         )
@@ -131,19 +130,25 @@ def check_tradability(
     # ── 2. 停牌 ──
     if trade_status is not None and int(trade_status) == 0:
         return Tradability(
-            can_buy=False, can_sell=False, reason="停牌",
+            can_buy=False,
+            can_sell=False,
+            reason="停牌",
             blocked_reason="停牌",
         )
     if volume is not None and float(volume) == 0:
         return Tradability(
-            can_buy=False, can_sell=False, reason="当日无成交（停牌）",
+            can_buy=False,
+            can_sell=False,
+            reason="当日无成交（停牌）",
             blocked_reason="当日无成交",
         )
 
     # ── 3. 价格数据缺失 ──
     if close is None or not _finite(close) or float(close) <= 0:
         return Tradability(
-            can_buy=False, can_sell=False, reason="无有效收盘价",
+            can_buy=False,
+            can_sell=False,
+            reason="无有效收盘价",
             blocked_reason="缺少价格数据",
         )
 
@@ -179,7 +184,8 @@ def check_tradability(
         # 涨跌停上限 → 无法区分「真涨跌停」和「除权跳空」（实测除权可达 -50%）。
         # 此时**回避该标的**：既不买也不卖，避免记下实际不存在的成交。
         return Tradability(
-            can_buy=False, can_sell=False,
+            can_buy=False,
+            can_sell=False,
             reason=f"涨跌幅异常 {pc*100:.1f}%（疑似除权跳空），本日回避",
             max_buy_amount=max_buy,
             blocked_reason=(
@@ -200,8 +206,12 @@ def check_tradability(
     _thr = lp - 0.001
     if can_buy and pc is not None and pc >= _thr:
         if (
-            open_price is not None and high is not None and low is not None
-            and _finite(open_price) and _finite(high) and _finite(low)
+            open_price is not None
+            and high is not None
+            and low is not None
+            and _finite(open_price)
+            and _finite(high)
+            and _finite(low)
             and float(high) == float(low)
         ):
             can_buy = False
@@ -210,8 +220,12 @@ def check_tradability(
     # ── 7. 一字跌停：卖不出 ──
     if can_sell and pc is not None and pc <= -_thr:
         if (
-            open_price is not None and high is not None and low is not None
-            and _finite(open_price) and _finite(high) and _finite(low)
+            open_price is not None
+            and high is not None
+            and low is not None
+            and _finite(open_price)
+            and _finite(high)
+            and _finite(low)
             and float(high) == float(low)
         ):
             can_sell = False
@@ -221,8 +235,7 @@ def check_tradability(
     if low_turnover:
         _blocked = (
             f"成交额 {float(amount)/1e4:.0f} 万，低于流动性门槛 "
-            f"{min_turnover/1e4:.0f} 万"
-            + (f"；{blocked}" if blocked else "")
+            f"{min_turnover/1e4:.0f} 万" + (f"；{blocked}" if blocked else "")
         )
     return Tradability(
         can_buy=can_buy,
@@ -238,22 +251,22 @@ def _finite(v) -> bool:
         f = float(v)
     except (TypeError, ValueError):
         return False
-    return f == f and abs(f) != float("inf")   # NaN / inf 判定
+    return f == f and abs(f) != float("inf")  # NaN / inf 判定
 
 
 # ── 向量化：逐票涨停掩码（回测引擎用）──────────────────────────────
 
 #: 各代码前缀的涨跌停幅度
 _LIMIT_BY_PREFIX = (
-    ("30", 0.20),   # 创业板
-    ("68", 0.20),   # 科创板
-    ("92", 0.30),   # 北交所
+    ("30", 0.20),  # 创业板
+    ("68", 0.20),  # 科创板
+    ("92", 0.30),  # 北交所
     ("83", 0.30),
     ("87", 0.30),
     ("43", 0.30),
     ("82", 0.30),
-    ("60", 0.10),   # 沪主板
-    ("00", 0.10),   # 深主板
+    ("60", 0.10),  # 沪主板
+    ("00", 0.10),  # 深主板
 )
 
 
@@ -331,7 +344,7 @@ def limit_up_mask_matrix_at(
     if chinext.any():
         for i, d in enumerate(dates):
             ds = str(d)[:10]
-            limits[i, chinext] = (0.20 if ds >= CHINEXT_20PCT_FROM else 0.10)
+            limits[i, chinext] = 0.20 if ds >= CHINEXT_20PCT_FROM else 0.10
     if st is not None:
         limits = np.where(st > 0, ST_LIMIT_PCT, limits)
     return day_ret >= limits
@@ -389,9 +402,14 @@ def limit_up_mask_matrix(
 # backend/app/services/trading/execution_rules.py → 上溯 5 层到项目根
 # （trading → services → app → backend → <项目根>）
 INDUSTRY_MAP_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.abspath(__file__)))))),
-    "data", "industry", "industry_map.json",
+    os.path.dirname(
+        os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        )
+    ),
+    "data",
+    "industry",
+    "industry_map.json",
 )
 
 
@@ -495,9 +513,14 @@ def zscore_with_industry(
 # 94 只退市整理）。qlib 官方的 instruments/all.txt 只有 symbol/start/end
 # 三列没有名称，判不了 ST。
 _ST_NAMES_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.abspath(__file__)))))),
-    "data", "stocks", "st_names.json",
+    os.path.dirname(
+        os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        )
+    ),
+    "data",
+    "stocks",
+    "st_names.json",
 )
 
 _ST_CACHE: Optional[dict] = None

@@ -1140,7 +1140,9 @@ async def run_backtest(
                             f"Laya 信号增强: {decision.action} (conf={decision.confidence:.2f})"
                         )
             except Exception as laya_err:
-                logger.opt(exception=True).warning(f"Laya 信号增强失败（非关键）: {laya_err}")
+                logger.opt(exception=True).warning(
+                    f"Laya 信号增强失败（非关键）: {laya_err}"
+                )
         # ────────────────────────────────────────────────
 
         return StandardResponse(success=True, message="回测执行成功", data=result)

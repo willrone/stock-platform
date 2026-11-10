@@ -56,14 +56,15 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 
-from ..core.base_strategy import BaseStrategy
-from ..models import SignalType, TradingSignal
 from app.services.trading.execution_rules import (
+    industry_ids,
     limit_up_mask_matrix,
     load_industry_map,
     load_st_flags,
-    industry_ids,
 )
+
+from ..core.base_strategy import BaseStrategy
+from ..models import SignalType, TradingSignal
 
 _SCORES_ATTR = "_gbm_lab_scores"
 
@@ -78,55 +79,217 @@ for _n in (5, 10, 20, 30, 60):
 
 #: 17 个 Alpha158 面板因子（与 gbm_voltgt / honest_composite 同口径）
 _ALPHAPANEL_FACTORS: Dict[str, float] = {
-    "VSUMP5": -1.0, "VSUMP10": -1.0, "VSUMP20": -1.0,
-    "VSUMN5": 1.0, "VSUMN10": 1.0, "VSUMN20": 1.0,
-    "VSUMD5": -1.0, "VSUMD10": -1.0, "VSUMD20": -1.0,
-    "QTLD5": 1.0, "QTLD10": 1.0, "QTLD20": 1.0,
-    "IMAX5": -1.0, "IMIN5": 1.0, "WVMA5": -1.0,
-    "VMA5": 1.0, "VSTD5": -1.0,
+    "VSUMP5": -1.0,
+    "VSUMP10": -1.0,
+    "VSUMP20": -1.0,
+    "VSUMN5": 1.0,
+    "VSUMN10": 1.0,
+    "VSUMN20": 1.0,
+    "VSUMD5": -1.0,
+    "VSUMD10": -1.0,
+    "VSUMD20": -1.0,
+    "QTLD5": 1.0,
+    "QTLD10": 1.0,
+    "QTLD20": 1.0,
+    "IMAX5": -1.0,
+    "IMIN5": 1.0,
+    "WVMA5": -1.0,
+    "VMA5": 1.0,
+    "VSTD5": -1.0,
 }
 
 #: features_full 里可用的 Alpha158 全集（162 列，不含 LABEL0 / ts_code）
 _ALPHA158_FULL: List[str] = [
-    "RET1", "RET5", "RET10", "RET20", "KMID", "KLEN", "KMID2", "KUP", "KUP2",
-    "KLOW", "KLOW2", "KSFT", "KSFT2", "OPEN0", "HIGH0", "LOW0", "VWAP0",
-    "ROC5", "ROC10", "ROC20", "ROC30", "ROC60",
-    "MA5", "MA10", "MA20", "MA30", "MA60",
-    "STD5", "STD10", "STD20", "STD30", "STD60",
-    "BETA5", "BETA10", "BETA20", "BETA30", "BETA60",
-    "RSQR5", "RSQR10", "RSQR20", "RSQR30", "RSQR60",
-    "RESI5", "RESI10", "RESI20", "RESI30", "RESI60",
-    "MAX5", "MAX10", "MAX20", "MAX30", "MAX60",
-    "MIN5", "MIN10", "MIN20", "MIN30", "MIN60",
-    "QTLU5", "QTLU10", "QTLU20", "QTLU30", "QTLU60",
-    "QTLD5", "QTLD10", "QTLD20", "QTLD30", "QTLD60",
-    "RANK5", "RANK10", "RANK20", "RANK30", "RANK60",
-    "RSV5", "RSV10", "RSV20", "RSV30", "RSV60",
-    "IMAX5", "IMAX10", "IMAX20", "IMAX30", "IMAX60",
-    "IMIN5", "IMIN10", "IMIN20", "IMIN30", "IMIN60",
-    "IMXD5", "IMXD10", "IMXD20", "IMXD30", "IMXD60",
-    "CORR5", "CORR10", "CORR20", "CORR30", "CORR60",
-    "CORD5", "CORD10", "CORD20", "CORD30", "CORD60",
-    "CNTP5", "CNTP10", "CNTP20", "CNTP30", "CNTP60",
-    "CNTN5", "CNTN10", "CNTN20", "CNTN30", "CNTN60",
-    "CNTD5", "CNTD10", "CNTD20", "CNTD30", "CNTD60",
-    "SUMP5", "SUMP10", "SUMP20", "SUMP30", "SUMP60",
-    "SUMN5", "SUMN10", "SUMN20", "SUMN30", "SUMN60",
-    "SUMD5", "SUMD10", "SUMD20", "SUMD30", "SUMD60",
-    "VMA5", "VMA10", "VMA20", "VMA30", "VMA60",
-    "VSTD5", "VSTD10", "VSTD20", "VSTD30", "VSTD60",
-    "WVMA5", "WVMA10", "WVMA20", "WVMA30", "WVMA60",
-    "VSUMP5", "VSUMP10", "VSUMP20", "VSUMP30", "VSUMP60",
-    "VSUMN5", "VSUMN10", "VSUMN20", "VSUMN30", "VSUMN60",
-    "VSUMD5", "VSUMD10", "VSUMD20", "VSUMD30", "VSUMD60",
-    "ATR14", "BOLLINGER_LOWER", "BOLLINGER_MIDDLE", "BOLLINGER_UPPER",
-    "KDJ_D", "KDJ_K", "MA50", "MACD", "MACD_HIST", "MACD_SIGNAL", "RSI14",
-    "price_change", "price_change_5d", "price_change_20d", "volume_change",
-    "volume_ma_ratio", "volatility_5d", "volatility_20d", "price_position",
+    "RET1",
+    "RET5",
+    "RET10",
+    "RET20",
+    "KMID",
+    "KLEN",
+    "KMID2",
+    "KUP",
+    "KUP2",
+    "KLOW",
+    "KLOW2",
+    "KSFT",
+    "KSFT2",
+    "OPEN0",
+    "HIGH0",
+    "LOW0",
+    "VWAP0",
+    "ROC5",
+    "ROC10",
+    "ROC20",
+    "ROC30",
+    "ROC60",
+    "MA5",
+    "MA10",
+    "MA20",
+    "MA30",
+    "MA60",
+    "STD5",
+    "STD10",
+    "STD20",
+    "STD30",
+    "STD60",
+    "BETA5",
+    "BETA10",
+    "BETA20",
+    "BETA30",
+    "BETA60",
+    "RSQR5",
+    "RSQR10",
+    "RSQR20",
+    "RSQR30",
+    "RSQR60",
+    "RESI5",
+    "RESI10",
+    "RESI20",
+    "RESI30",
+    "RESI60",
+    "MAX5",
+    "MAX10",
+    "MAX20",
+    "MAX30",
+    "MAX60",
+    "MIN5",
+    "MIN10",
+    "MIN20",
+    "MIN30",
+    "MIN60",
+    "QTLU5",
+    "QTLU10",
+    "QTLU20",
+    "QTLU30",
+    "QTLU60",
+    "QTLD5",
+    "QTLD10",
+    "QTLD20",
+    "QTLD30",
+    "QTLD60",
+    "RANK5",
+    "RANK10",
+    "RANK20",
+    "RANK30",
+    "RANK60",
+    "RSV5",
+    "RSV10",
+    "RSV20",
+    "RSV30",
+    "RSV60",
+    "IMAX5",
+    "IMAX10",
+    "IMAX20",
+    "IMAX30",
+    "IMAX60",
+    "IMIN5",
+    "IMIN10",
+    "IMIN20",
+    "IMIN30",
+    "IMIN60",
+    "IMXD5",
+    "IMXD10",
+    "IMXD20",
+    "IMXD30",
+    "IMXD60",
+    "CORR5",
+    "CORR10",
+    "CORR20",
+    "CORR30",
+    "CORR60",
+    "CORD5",
+    "CORD10",
+    "CORD20",
+    "CORD30",
+    "CORD60",
+    "CNTP5",
+    "CNTP10",
+    "CNTP20",
+    "CNTP30",
+    "CNTP60",
+    "CNTN5",
+    "CNTN10",
+    "CNTN20",
+    "CNTN30",
+    "CNTN60",
+    "CNTD5",
+    "CNTD10",
+    "CNTD20",
+    "CNTD30",
+    "CNTD60",
+    "SUMP5",
+    "SUMP10",
+    "SUMP20",
+    "SUMP30",
+    "SUMP60",
+    "SUMN5",
+    "SUMN10",
+    "SUMN20",
+    "SUMN30",
+    "SUMN60",
+    "SUMD5",
+    "SUMD10",
+    "SUMD20",
+    "SUMD30",
+    "SUMD60",
+    "VMA5",
+    "VMA10",
+    "VMA20",
+    "VMA30",
+    "VMA60",
+    "VSTD5",
+    "VSTD10",
+    "VSTD20",
+    "VSTD30",
+    "VSTD60",
+    "WVMA5",
+    "WVMA10",
+    "WVMA20",
+    "WVMA30",
+    "WVMA60",
+    "VSUMP5",
+    "VSUMP10",
+    "VSUMP20",
+    "VSUMP30",
+    "VSUMP60",
+    "VSUMN5",
+    "VSUMN10",
+    "VSUMN20",
+    "VSUMN30",
+    "VSUMN60",
+    "VSUMD5",
+    "VSUMD10",
+    "VSUMD20",
+    "VSUMD30",
+    "VSUMD60",
+    "ATR14",
+    "BOLLINGER_LOWER",
+    "BOLLINGER_MIDDLE",
+    "BOLLINGER_UPPER",
+    "KDJ_D",
+    "KDJ_K",
+    "MA50",
+    "MACD",
+    "MACD_HIST",
+    "MACD_SIGNAL",
+    "RSI14",
+    "price_change",
+    "price_change_5d",
+    "price_change_20d",
+    "volume_change",
+    "volume_ma_ratio",
+    "volatility_5d",
+    "volatility_20d",
+    "price_position",
 ]
 
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))))
+_PROJECT_ROOT = os.path.dirname(
+    os.path.dirname(
+        os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        )
+    )
+)
 
 #: 面板因子目录（绝对路径）。默认用 features_full（干净、无重复日期、PIT 正确）
 DEFAULT_PANEL_DIR = os.path.join(_PROJECT_ROOT, "data", "qlib_data", "features_full")
@@ -267,7 +430,8 @@ class GbmLabStrategy(BaseStrategy):
                 positions = master.get_indexer(pd.DatetimeIndex(df.index))
                 ok = positions >= 0
                 values = pd.to_numeric(df[column], errors="coerce").to_numpy(
-                    dtype=np.float64, na_value=np.nan)
+                    dtype=np.float64, na_value=np.nan
+                )
                 out[positions[ok], j] = values[ok]
             return out
 
@@ -304,8 +468,11 @@ class GbmLabStrategy(BaseStrategy):
                 signs.append(_ALPHAPANEL_FACTORS.get(fname, 1.0))
 
         return {
-            "raw": raw, "names": names, "signs": signs,
-            "close": close, "vol": vol,
+            "raw": raw,
+            "names": names,
+            "signs": signs,
+            "close": close,
+            "vol": vol,
         }
 
     def _load_panel_stack(
@@ -334,7 +501,7 @@ class GbmLabStrategy(BaseStrategy):
                     continue
                 pf["date"] = pd.to_datetime(pf["date"])
                 pf = pf.set_index("date").sort_index()
-                pf = pf.loc[pd.Timestamp(start):pd.Timestamp(end)]
+                pf = pf.loc[pd.Timestamp(start) : pd.Timestamp(end)]
                 pf = pf[~pf.index.duplicated(keep="first")]
                 missing = [c for c in panel_cols if c not in pf.columns]
                 if missing:
@@ -369,7 +536,9 @@ class GbmLabStrategy(BaseStrategy):
             return fwd
         df = pd.DataFrame(fwd, index=close.index, columns=close.columns)
         if self.target == "rank":
-            return df.rank(axis=1, pct=True, na_option="keep").to_numpy(dtype=np.float64)
+            return df.rank(axis=1, pct=True, na_option="keep").to_numpy(
+                dtype=np.float64
+            )
         if self.target == "cs_z":
             mu = df.mean(axis=1)
             sd = df.std(axis=1)
@@ -387,7 +556,11 @@ class GbmLabStrategy(BaseStrategy):
                     out[:, cols] -= np.nanmean(fwd[:, cols], axis=1, keepdims=True)
             return out
         if self.target == "vol_std":
-            v = vol.rolling(self.vt_window, min_periods=5).std().to_numpy(dtype=np.float64)
+            v = (
+                vol.rolling(self.vt_window, min_periods=5)
+                .std()
+                .to_numpy(dtype=np.float64)
+            )
             with np.errstate(divide="ignore", invalid="ignore"):
                 out = fwd / np.where(v > 1e-12, v, np.nan)
             return out
@@ -398,19 +571,22 @@ class GbmLabStrategy(BaseStrategy):
         """训练模型并返回已 fit 的模型对象。"""
         if self.model in ("ridge", "elasticnet"):
             from sklearn.linear_model import ElasticNet, Ridge
+
             if self.model == "ridge":
-                mdl = Ridge(alpha=float(self.reg_alpha or 1.0),
-                            random_state=self.seed)
+                mdl = Ridge(alpha=float(self.reg_alpha or 1.0), random_state=self.seed)
             else:
                 mdl = ElasticNet(
                     alpha=float(self.reg_alpha or 0.01),
                     l1_ratio=float(self.reg_lambda or 0.5),
-                    max_iter=200, random_state=self.seed, n_jobs=self.n_jobs,
+                    max_iter=200,
+                    random_state=self.seed,
+                    n_jobs=self.n_jobs,
                 )
             mdl.fit(X, y)
             return mdl
         if self.model == "xgb":
             import xgboost as xgb
+
             mdl = xgb.XGBRegressor(
                 n_estimators=self.n_estimators,
                 max_depth=self.max_depth,
@@ -427,6 +603,7 @@ class GbmLabStrategy(BaseStrategy):
             mdl.fit(X, y)
             return mdl
         import lightgbm as lgb
+
         mdl = lgb.LGBMRegressor(
             n_estimators=self.n_estimators,
             max_depth=self.max_depth,
@@ -434,7 +611,7 @@ class GbmLabStrategy(BaseStrategy):
             num_leaves=self.num_leaves,
             min_child_samples=self.min_child_samples,
             subsample=self.subsample,
-            subsample_freq=self.subsample_freq,   # D3
+            subsample_freq=self.subsample_freq,  # D3
             colsample_bytree=self.colsample_bytree,
             reg_alpha=self.reg_alpha,
             reg_lambda=self.reg_lambda,
@@ -482,9 +659,12 @@ class GbmLabStrategy(BaseStrategy):
         self._end = end_date
 
         codes = [
-            code for code, df in stock_data.items()
-            if df is not None and not df.empty
-            and "close" in df.columns and "volume" in df.columns
+            code
+            for code, df in stock_data.items()
+            if df is not None
+            and not df.empty
+            and "close" in df.columns
+            and "volume" in df.columns
         ]
         if not codes:
             logger.warning("gbm_lab: 无可用股票数据，跳过打分")
@@ -507,11 +687,12 @@ class GbmLabStrategy(BaseStrategy):
         with np.errstate(divide="ignore", invalid="ignore"):
             if anchor > 0:
                 fwd = (
-                    close.shift(-(anchor + self.horizon))
-                    / close.shift(-anchor) - 1.0
+                    close.shift(-(anchor + self.horizon)) / close.shift(-anchor) - 1.0
                 ).to_numpy(dtype=np.float64)
             else:
-                fwd = (close.shift(-self.horizon) / close - 1.0).to_numpy(dtype=np.float64)
+                fwd = (close.shift(-self.horizon) / close - 1.0).to_numpy(
+                    dtype=np.float64
+                )
         target = self._make_target(close, fwd, vol)
 
         # ── 特征集选择（ic_topN）────────────────────────────────────
@@ -561,9 +742,7 @@ class GbmLabStrategy(BaseStrategy):
             # 复现 gbm_voltgt / honest_composite 的 bug：close.columns 是
             # RangeIndex(0..n-1) 的整数 → limit_pct_array 按 str(code)[:2]
             # 匹配板块前缀全部落 10%，ST 标记也全漏。
-            limit_mask = limit_up_mask_matrix(
-                day_ret, list(range(n_stocks))
-            )
+            limit_mask = limit_up_mask_matrix(day_ret, list(range(n_stocks)))
         else:
             limit_mask = limit_up_mask_matrix(
                 day_ret, codes, is_st=load_st_flags(codes)
@@ -589,9 +768,7 @@ class GbmLabStrategy(BaseStrategy):
                 if mi < self.warmup_months:
                     comp[k0:k1] = comp_eq[k0:k1]
                     continue
-                self._train_and_score(
-                    z_all, pres_all, target, k0, k1, comp, master, mi
-                )
+                self._train_and_score(z_all, pres_all, target, k0, k1, comp, master, mi)
 
         # ── 与等权因子分集成（维度 9）────────────────────────────────
         if self.blend < 1.0:
@@ -618,7 +795,7 @@ class GbmLabStrategy(BaseStrategy):
         if self.lag > 0:
             lagged = np.full_like(comp, np.nan)
             if self.lag < n_dates:
-                lagged[self.lag:] = comp[: n_dates - self.lag]
+                lagged[self.lag :] = comp[: n_dates - self.lag]
             comp = lagged
 
         # ── 波动率目标仓位（gbm_voltgt 口径：高分保留 topk*scale 只）──
@@ -682,7 +859,7 @@ class GbmLabStrategy(BaseStrategy):
                 ac = ac - ac.sum(axis=1, keepdims=True) / np.maximum(cnt, 1)[:, None]
                 bc = bc - bc.sum(axis=1, keepdims=True) / np.maximum(cnt, 1)[:, None]
                 num = (ac * bc).sum(axis=1)
-                den = np.sqrt((ac ** 2).sum(axis=1) * (bc ** 2).sum(axis=1))
+                den = np.sqrt((ac**2).sum(axis=1) * (bc**2).sum(axis=1))
                 ic = np.where(den > 1e-12, num / den, np.nan)
             good = np.isfinite(ic) & (cnt >= 50)
             if good.sum() == 0:
@@ -729,8 +906,8 @@ class GbmLabStrategy(BaseStrategy):
         if self.use_presence and pres_all is not None:
             p_blk = pres_all[lo:train_end]
             X = np.concatenate(
-                [z_blk.reshape(-1, z_blk.shape[2]),
-                 p_blk.reshape(-1, p_blk.shape[2])], axis=1
+                [z_blk.reshape(-1, z_blk.shape[2]), p_blk.reshape(-1, p_blk.shape[2])],
+                axis=1,
             ).astype(np.float32, copy=False)
         else:
             X = z_blk.reshape(-1, z_blk.shape[2]).astype(np.float32, copy=False)
@@ -757,8 +934,11 @@ class GbmLabStrategy(BaseStrategy):
         if self.use_presence and pres_all is not None:
             p_pred = pres_all[k0:k1]
             Xp = np.concatenate(
-                [z_pred.reshape(-1, z_pred.shape[2]),
-                 p_pred.reshape(-1, p_pred.shape[2])], axis=1
+                [
+                    z_pred.reshape(-1, z_pred.shape[2]),
+                    p_pred.reshape(-1, p_pred.shape[2]),
+                ],
+                axis=1,
             ).astype(np.float32, copy=False)
         else:
             Xp = z_pred.reshape(-1, z_pred.shape[2]).astype(np.float32, copy=False)
@@ -778,7 +958,8 @@ class GbmLabStrategy(BaseStrategy):
         index = pd.DatetimeIndex(data.index)
         score_series = pd.Series(
             [scores.get(ts.to_pydatetime()) for ts in index],
-            index=index, dtype="float64",
+            index=index,
+            dtype="float64",
         )
         return {"price": data["close"], "score": score_series}
 

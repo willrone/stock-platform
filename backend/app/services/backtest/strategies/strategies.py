@@ -24,10 +24,10 @@ except ImportError:
     logger.warning("TA-Lib未安装，将使用pandas实现技术指标")
 
 from app.core.error_handler import ErrorSeverity, TaskError
+from app.services.trading.execution_rules import limit_up_mask_matrix
 
 from ..core.base_strategy import BaseStrategy
 from ..models import SignalType, TradingSignal
-from app.services.trading.execution_rules import limit_up_mask_matrix
 
 # 因子策略横截面打分缓存键（低波动/多因子）
 _LV_SCORES_ATTR = "_low_volatility_scores"
@@ -1669,9 +1669,12 @@ class LowVolatilityStrategy(FactorStrategy):
     ) -> None:
         """全市场横截面打分（低波动 + 低风险调整收益波动 → z-score）。"""
         codes = [
-            c for c, df in stock_data.items()
-            if df is not None and not df.empty
-            and "close" in df.columns and "volume" in df.columns
+            c
+            for c, df in stock_data.items()
+            if df is not None
+            and not df.empty
+            and "close" in df.columns
+            and "volume" in df.columns
         ]
         if not codes:
             logger.warning("low_volatility: 无可用股票数据，跳过打分")
@@ -1700,9 +1703,8 @@ class LowVolatilityStrategy(FactorStrategy):
         with np.errstate(divide="ignore", invalid="ignore"):
             ret = close.pct_change(fill_method=None)
             vol = ret.rolling(self.volatility_window).std() * np.sqrt(252)
-            rar = (
-                ret.rolling(self.volatility_period).mean()
-                / (ret.rolling(self.volatility_period).std() + 1e-8)
+            rar = ret.rolling(self.volatility_period).mean() / (
+                ret.rolling(self.volatility_period).std() + 1e-8
             )
 
         day_ret = close.pct_change(fill_method=None).to_numpy()
@@ -1733,9 +1735,7 @@ class LowVolatilityStrategy(FactorStrategy):
         zscore_add(vol.to_numpy(dtype=np.float64), -1.0)
         zscore_add(rar.to_numpy(dtype=np.float64), -1.0)
 
-        composite = np.where(
-            wsum > 0, acc / np.where(wsum > 0, wsum, 1.0), np.nan
-        )
+        composite = np.where(wsum > 0, acc / np.where(wsum > 0, wsum, 1.0), np.nan)
         composite[limit_up_mask] = np.nan
 
         # 调仓日掩码: 非调仓日分数全部置 NaN → 执行器无分可依, 不换仓。
@@ -1747,7 +1747,7 @@ class LowVolatilityStrategy(FactorStrategy):
         if self.lag > 0:
             lagged = np.full_like(composite, np.nan)
             if self.lag < n_dates:
-                lagged[self.lag:] = composite[: n_dates - self.lag]
+                lagged[self.lag :] = composite[: n_dates - self.lag]
             composite = lagged
 
         stored = 0
@@ -1874,9 +1874,12 @@ class MultiFactorStrategy(FactorStrategy):
     ) -> None:
         """全市场横截面打分（value / momentum / low_volatility 等权 z-score）。"""
         codes = [
-            c for c, df in stock_data.items()
-            if df is not None and not df.empty
-            and "close" in df.columns and "volume" in df.columns
+            c
+            for c, df in stock_data.items()
+            if df is not None
+            and not df.empty
+            and "close" in df.columns
+            and "volume" in df.columns
         ]
         if not codes:
             logger.warning("multi_factor: 无可用股票数据，跳过打分")
@@ -1908,7 +1911,9 @@ class MultiFactorStrategy(FactorStrategy):
             momentum_1m = close / close.shift(21) - 1
             momentum_3m = close / close.shift(63) - 1
             momentum_6m = close / close.shift(126) - 1
-            momentum_combined = momentum_1m * 0.2 + momentum_3m * 0.3 + momentum_6m * 0.5
+            momentum_combined = (
+                momentum_1m * 0.2 + momentum_3m * 0.3 + momentum_6m * 0.5
+            )
             price_to_ma20 = close / close.rolling(20).mean() - 1
             price_to_ma60 = close / close.rolling(60).mean() - 1
 
@@ -1954,9 +1959,7 @@ class MultiFactorStrategy(FactorStrategy):
                 continue
             zscore_add(np.asarray(mat, dtype=np.float64), 1.0, weights.get(fname, 0.33))
 
-        composite = np.where(
-            wsum > 0, acc / np.where(wsum > 0, wsum, 1.0), np.nan
-        )
+        composite = np.where(wsum > 0, acc / np.where(wsum > 0, wsum, 1.0), np.nan)
         composite[limit_up_mask] = np.nan
 
         # 调仓日掩码: 非调仓日分数全部置 NaN → 执行器无分可依, 不换仓。
@@ -1968,7 +1971,7 @@ class MultiFactorStrategy(FactorStrategy):
         if self.lag > 0:
             lagged = np.full_like(composite, np.nan)
             if self.lag < n_dates:
-                lagged[self.lag:] = composite[: n_dates - self.lag]
+                lagged[self.lag :] = composite[: n_dates - self.lag]
             composite = lagged
 
         stored = 0

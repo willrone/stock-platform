@@ -25,7 +25,6 @@ panel，其在 ≤asof 各点的输出必须与用完整 panel 计算逐位相�
 from __future__ import annotations
 
 import math
-from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional
 
 import numpy as np
@@ -53,8 +52,10 @@ def _iso(d) -> str:
 # 分层等权指数
 # ──────────────────────────────────────────────────────────────────────
 
-def daily_free_float_cap(amount: pd.Series, turn: Optional[pd.Series],
-                         close: Optional[pd.Series] = None) -> pd.Series:
+
+def daily_free_float_cap(
+    amount: pd.Series, turn: Optional[pd.Series], close: Optional[pd.Series] = None
+) -> pd.Series:
     """单日自由流通市值估算（元）：amount / (turn/100)；turn 无效退化为 amount/0.02。
 
     与 cap_estimate.py 同源：cap_estimate 取窗口中位数做静态分层，
@@ -72,9 +73,14 @@ def daily_free_float_cap(amount: pd.Series, turn: Optional[pd.Series],
     return out
 
 
-def build_tier_index(close: pd.DataFrame, cap_daily: pd.DataFrame,
-                     hist_window: int = 250, min_periods: int = 60,
-                     low_q: float = TIER_LOW_Q, high_q: float = TIER_HIGH_Q) -> Dict[str, Any]:
+def build_tier_index(
+    close: pd.DataFrame,
+    cap_daily: pd.DataFrame,
+    hist_window: int = 250,
+    min_periods: int = 60,
+    low_q: float = TIER_LOW_Q,
+    high_q: float = TIER_HIGH_Q,
+) -> Dict[str, Any]:
     """低盘/高盘等权日收益指数（无前视）。
 
     Args:
@@ -138,17 +144,28 @@ def build_tier_index(close: pd.DataFrame, cap_daily: pd.DataFrame,
         "high_ret_valid_days": int(high_ret.notna().sum()),
         "assign_uses_data_through": "t-1（层籍只用截至 t-1 的市值滚动均值）",
     }
-    return {"low_ret": low_ret, "high_ret": high_ret,
-            "low_n": low_n, "high_n": high_n, "meta": meta}
+    return {
+        "low_ret": low_ret,
+        "high_ret": high_ret,
+        "low_n": low_n,
+        "high_n": high_n,
+        "meta": meta,
+    }
 
 
 # ──────────────────────────────────────────────────────────────────────
 # spread z 分数（J1）
 # ──────────────────────────────────────────────────────────────────────
 
-def size_spread_z(low_ret: pd.Series, high_ret: pd.Series, asof,
-                  lookback: int = 20, hist_window: int = 250,
-                  min_samples: int = 120) -> Optional[float]:
+
+def size_spread_z(
+    low_ret: pd.Series,
+    high_ret: pd.Series,
+    asof,
+    lookback: int = 20,
+    hist_window: int = 250,
+    min_samples: int = 120,
+) -> Optional[float]:
     """asof 日的大小盘相对强弱 z 分数（只用 asof 当日及以前的数据）。
 
     spread_t = Σ_{k=t-lookback+1..t} (low_ret_k − high_ret_k)
@@ -190,6 +207,7 @@ def size_spread_z(low_ret: pd.Series, high_ret: pd.Series, asof,
 # 影子净值（J2）
 # ──────────────────────────────────────────────────────────────────────
 
+
 class ShadowNav:
     """策略自己记账的影子净值：只按过去的收盘价复现「上一期目标篮子」的实现收益。
 
@@ -214,8 +232,13 @@ class ShadowNav:
     def last_date(self) -> Optional[pd.Timestamp]:
         return self.dates[-1] if self.dates else None
 
-    def update(self, prev_weights: Optional[Dict[str, float]], prev_date, asof,
-               closes: pd.DataFrame) -> float:
+    def update(
+        self,
+        prev_weights: Optional[Dict[str, float]],
+        prev_date,
+        asof,
+        closes: pd.DataFrame,
+    ) -> float:
         """用 prev_date→asof 两点收盘价更新一期影子净值，返回本期收益。
 
         prev_weights: {code: weight}（等权篮子 1/topk；防御篮子 defense_weight，
@@ -223,7 +246,9 @@ class ShadowNav:
         """
         prev_ts, asof_ts = pd.Timestamp(prev_date), pd.Timestamp(asof)
         if self.last_date is not None and asof_ts < self.last_date:
-            raise ValueError(f"ShadowNav.update 时间倒退: asof={asof_ts} < {self.last_date}")
+            raise ValueError(
+                f"ShadowNav.update 时间倒退: asof={asof_ts} < {self.last_date}"
+            )
         if self.last_date is not None and asof_ts == self.last_date:
             raise ValueError(f"ShadowNav.update 重复日期: {asof_ts}")
 
@@ -261,7 +286,7 @@ class ShadowNav:
         """最近 window 个交易日影子净值日收益的年化夏普（年化 √annualize）。"""
         if len(self.navs) < self.window + 1:
             return None
-        navs = np.asarray(self.navs[-(self.window + 1):], dtype="float64")
+        navs = np.asarray(self.navs[-(self.window + 1) :], dtype="float64")
         rets = navs[1:] / navs[:-1] - 1.0
         rets = rets[np.isfinite(rets)]
         if len(rets) < max(2, self.window):
@@ -279,9 +304,16 @@ class ShadowNav:
 # 确认制状态机（进/出防御都要连续确认）
 # ──────────────────────────────────────────────────────────────────────
 
-def run_switch_machine(dates: List, enter_flags: List[bool], exit_flags: List[bool],
-                       confirm_off: int, confirm_on: int,
-                       max_switches: int, initial_state: str = "ON") -> Dict[str, Any]:
+
+def run_switch_machine(
+    dates: List,
+    enter_flags: List[bool],
+    exit_flags: List[bool],
+    confirm_off: int,
+    confirm_on: int,
+    max_switches: int,
+    initial_state: str = "ON",
+) -> Dict[str, Any]:
     """把逐判据日的 (enter_flag, exit_flag) 序列转成状态序列。
 
     规则：
@@ -327,19 +359,21 @@ def run_switch_machine(dates: List, enter_flags: List[bool], exit_flags: List[bo
                     switch_count += 1
                     enter_streak = 0
                     exit_streak = 0
-        steps.append({
-            "date": _iso(d),
-            "state_before": before,
-            "state": state,
-            "enter_flag": bool(e),
-            "exit_flag": bool(x),
-            "enter_streak": enter_streak,
-            "exit_streak": exit_streak,
-            "switched": switched,
-            "switch_count": switch_count,
-            "frozen": frozen,
-            "frozen_attempt": frozen_attempt,
-        })
+        steps.append(
+            {
+                "date": _iso(d),
+                "state_before": before,
+                "state": state,
+                "enter_flag": bool(e),
+                "exit_flag": bool(x),
+                "enter_streak": enter_streak,
+                "exit_streak": exit_streak,
+                "switched": switched,
+                "switch_count": switch_count,
+                "frozen": frozen,
+                "frozen_attempt": frozen_attempt,
+            }
+        )
     meta = {
         "switch_count": switch_count,
         "frozen_at_max_switches": frozen,
@@ -352,8 +386,13 @@ def run_switch_machine(dates: List, enter_flags: List[bool], exit_flags: List[bo
     return {"steps": steps, "meta": meta}
 
 
-def random_switch_schedule(decision_dates: List, target_switches: int,
-                           seed: int, min_block: int = 2, max_block: int = 6) -> Dict[str, Any]:
+def random_switch_schedule(
+    decision_dates: List,
+    target_switches: int,
+    seed: int,
+    min_block: int = 2,
+    max_block: int = 6,
+) -> Dict[str, Any]:
     """随机开关对照：切换次数与目标一致、OFF 区间由 seed 决定。
 
     target_switches 偶数 → 若干个互不重叠的 OFF 区块（每块 进+出 各 1 次）；
@@ -389,7 +428,9 @@ def random_switch_schedule(decision_dates: List, target_switches: int,
     off_idx = set()
     for s, e in blocks:
         off_idx.update(range(s, e))
-    switches = 2 * sum(1 for s, e in blocks if e < n) + sum(1 for s, e in blocks if e == n)
+    switches = 2 * sum(1 for s, e in blocks if e < n) + sum(
+        1 for s, e in blocks if e == n
+    )
     return {
         "off_dates": [dates[i] for i in sorted(off_idx)],
         "blocks": [[_iso(dates[s]), _iso(dates[min(e, n) - 1])] for s, e in blocks],

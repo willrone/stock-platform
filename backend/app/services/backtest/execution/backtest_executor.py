@@ -349,9 +349,7 @@ class BacktestExecutor:
             # 按输入 stock_codes 顺序重建（与串行路径一致），使任意加载路径
             # 顺序固定可复现。
             if stock_data:
-                stock_data = {
-                    c: stock_data[c] for c in stock_codes if c in stock_data
-                }
+                stock_data = {c: stock_data[c] for c in stock_codes if c in stock_data}
 
             if self.enable_performance_profiling:
                 self._profiler().end_stage(
@@ -396,6 +394,7 @@ class BacktestExecutor:
                     from app.services.backtest.execution.tradability import (
                         build_tradability,
                     )
+
                     # 窗口前一日收盘价：stock_data 按窗口裁剪 → 窗口首日
                     # 的涨跌幅是 NaN，会让首日的涨停股漏拦（实测 24 只分歧
                     # 全部集中在窗口首日）。这里单独取前 10 个日历日补上。
@@ -776,12 +775,12 @@ class BacktestExecutor:
             pre_end = start_date - timedelta(days=1)
             for code in stock_codes:
                 try:
-                    df = await self.data_loader.load_stock_data_async(
-                        code, pre_start, pre_end
-                    ) if hasattr(
-                        self.data_loader, "load_stock_data_async"
-                    ) else self.data_loader.load_stock_data(
-                        code, pre_start, pre_end
+                    df = (
+                        await self.data_loader.load_stock_data_async(
+                            code, pre_start, pre_end
+                        )
+                        if hasattr(self.data_loader, "load_stock_data_async")
+                        else self.data_loader.load_stock_data(code, pre_start, pre_end)
                     )
                 except Exception:
                     continue

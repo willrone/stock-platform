@@ -20,6 +20,7 @@ P17 的结论支持这个动作（类间定期再平衡在两个窗口都同向�
 本模块只负责**袖套腿**。A 股腿复用 `paper_portfolio.run_line` 的既有实现
 （同一套撮合逻辑只能有一份实现 —— 见 skill「撮合器与基线门」）。
 """
+
 from __future__ import annotations
 
 import os
@@ -30,9 +31,7 @@ import pandas as pd
 
 # backend/app/services/trading/multi_asset_service.py → 上溯 4 层到项目根
 # （trading → services → app → backend → <项目根>）
-ROOT = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")
-)
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 #: **实时** ETF 行情目录（实盘/产品用；实盘周任务会全量重拉更新）
 ETF_PARQUET = os.path.join(ROOT, "data", "etf", "parquet")
 #: **冻结快照**（研究侧用）—— 前复权序列在分红时会整体重锚，
@@ -182,13 +181,14 @@ def missing_codes(codes: List[str], base_dir: Optional[str] = None) -> List[str]
     """返回没有本地数据的代码（调用方必须硬失败，不要静默降级）。"""
     base_dir = base_dir or ETF_PARQUET
     return [
-        c for c in codes
-        if not os.path.exists(os.path.join(base_dir, f"{c}.parquet"))
+        c for c in codes if not os.path.exists(os.path.join(base_dir, f"{c}.parquet"))
     ]
 
 
 # ── 目标权重 ────────────────────────────────────────────────────────────
-def sleeve_target_weights(held: Optional[Dict[str, List[str]]] = None) -> Dict[str, float]:
+def sleeve_target_weights(
+    held: Optional[Dict[str, List[str]]] = None,
+) -> Dict[str, float]:
     """袖套目标权重：三类各 1/3，类内等权。
 
     `held` 默认用定稿持仓集；传入自定义持仓集时（研究实验用）按同样规则展开。
@@ -205,14 +205,12 @@ def sleeve_target_weights(held: Optional[Dict[str, List[str]]] = None) -> Dict[s
     return w
 
 
-def sleeve_class_weights(held: Optional[Dict[str, List[str]]] = None) -> Dict[str, float]:
+def sleeve_class_weights(
+    held: Optional[Dict[str, List[str]]] = None,
+) -> Dict[str, float]:
     """三类各自的目标权重（用于展示「类间等权」是否达成）。"""
     held = held or SLEEVE_HELD
-    return {
-        cls: 1.0 / len(SLEEVE_CLASSES)
-        for cls in SLEEVE_CLASSES
-        if held.get(cls)
-    }
+    return {cls: 1.0 / len(SLEEVE_CLASSES) for cls in SLEEVE_CLASSES if held.get(cls)}
 
 
 def is_rebalance_day(index: int, anchor: int = 0) -> bool:
@@ -232,6 +230,7 @@ def is_rebalance_day(index: int, anchor: int = 0) -> bool:
 
 # ── 调仓 ────────────────────────────────────────────────────────────────
 
+
 def _record_buy(
     positions: Dict[str, Dict[str, Any]],
     buys: List[Dict[str, Any]],
@@ -248,10 +247,7 @@ def _record_buy(
     prev_shares = float(prev.get("shares", 0))
     prev_cost = float(prev.get("cost", 0) or 0)
     new_shares = prev_shares + shares
-    new_cost = (
-        (prev_cost * prev_shares + amount) / new_shares
-        if new_shares > 0 else p
-    )
+    new_cost = (prev_cost * prev_shares + amount) / new_shares if new_shares > 0 else p
     positions[code] = {
         "shares": new_shares,
         "cost": round(new_cost, 6),
@@ -259,17 +255,19 @@ def _record_buy(
         "last_buy_date": str(date.date()),
         "is_etf": True,
     }
-    buys.append({
-        "code": code,
-        "price": round(p, 4),
-        "shares": int(shares // ETF_BOARD_LOT * ETF_BOARD_LOT) or int(shares),
-        "amount": round(amount, 2),
-        "commission": round(cost, 2),
-        "stamp_tax": 0.0,
-        "slippage": round(amount * ETF_SLIPPAGE / (1 + ETF_SLIPPAGE), 2),
-        "net": round(amount + cost, 2),
-        "reason": "袖套调仓：补足目标权重",
-    })
+    buys.append(
+        {
+            "code": code,
+            "price": round(p, 4),
+            "shares": int(shares // ETF_BOARD_LOT * ETF_BOARD_LOT) or int(shares),
+            "amount": round(amount, 2),
+            "commission": round(cost, 2),
+            "stamp_tax": 0.0,
+            "slippage": round(amount * ETF_SLIPPAGE / (1 + ETF_SLIPPAGE), 2),
+            "net": round(amount + cost, 2),
+            "reason": "袖套调仓：补足目标权重",
+        }
+    )
 
 
 def _plan_sleeve_lots(
@@ -373,7 +371,6 @@ def _iter_product(per_code: List[List[Any]]) -> Any:
             yield [item] + tail
 
 
-
 def rebalance_sleeve(
     positions: Dict[str, Dict[str, Any]],
     cash: float,
@@ -384,7 +381,9 @@ def rebalance_sleeve(
     board_lot: int = ETF_BOARD_LOT,
     charge_sell_commission: bool = True,
     require_exact_date: bool = False,
-) -> Tuple[Dict[str, Dict[str, Any]], float, List[Dict[str, Any]], List[Dict[str, Any]]]:
+) -> Tuple[
+    Dict[str, Dict[str, Any]], float, List[Dict[str, Any]], List[Dict[str, Any]]
+]:
     """把袖套调仓到目标权重。
 
     撮合语义与研究侧 `L3.simulate` **逐步对齐**（同一套逻辑只能有一份实现）：
@@ -439,7 +438,9 @@ def rebalance_sleeve(
     # 见函数 docstring 的 `require_exact_date` 说明：容忍 3 个自然日会放过
     # 「周五 → 周一」的缺口 → ETF 数据晚到时拿上周五的收盘价成交（假成交）。
     if require_exact_date:
-        not_exact = [c for c in target if bars.get(c, date, price_field, exact=True) is None]
+        not_exact = [
+            c for c in target if bars.get(c, date, price_field, exact=True) is None
+        ]
         if not_exact:
             raise SleeveError(
                 f"袖套调仓失败：目标标的 {not_exact} 在 {date.date()} **没有当天的行情**"
@@ -448,9 +449,7 @@ def rebalance_sleeve(
             )
 
     value = cash + sum(
-        float(positions[c].get("shares", 0)) * px[c]
-        for c in positions
-        if c in px
+        float(positions[c].get("shares", 0)) * px[c] for c in positions if c in px
     )
 
     # ── 1) 卖出不在目标里的 ────────────────────────────────────────────
@@ -470,19 +469,21 @@ def rebalance_sleeve(
         cost_amt = float(positions[code].get("cost", 0) or 0) * shares
         cash += proceeds - (commission if charge_sell_commission else 0.0)
         realized = proceeds - commission - cost_amt
-        sells.append({
-            "code": code,
-            "price": round(p, 4),
-            "shares": int(shares),
-            "amount": round(proceeds, 2),
-            "cost_amount": round(cost_amt, 2),
-            "realized_pnl": round(realized, 2),
-            "commission": round(commission, 2),
-            "stamp_tax": 0.0,
-            "slippage": round(proceeds * ETF_SLIPPAGE / (1 - ETF_SLIPPAGE), 2),
-            "net": round(proceeds - commission, 2),
-            "reason": "袖套调仓：目标持仓集变更",
-        })
+        sells.append(
+            {
+                "code": code,
+                "price": round(p, 4),
+                "shares": int(shares),
+                "amount": round(proceeds, 2),
+                "cost_amount": round(cost_amt, 2),
+                "realized_pnl": round(realized, 2),
+                "commission": round(commission, 2),
+                "stamp_tax": 0.0,
+                "slippage": round(proceeds * ETF_SLIPPAGE / (1 - ETF_SLIPPAGE), 2),
+                "net": round(proceeds - commission, 2),
+                "reason": "袖套调仓：目标持仓集变更",
+            }
+        )
         del positions[code]
 
     # ── 2) 买（只买不足的部分，pro-rata 缩放）────────────────────────
@@ -525,7 +526,9 @@ def rebalance_sleeve(
                 shares = amount / buy_px
                 cash -= amount + cost
                 bought_codes.add(code)
-                _record_buy(positions, buys, code, p, buy_px, shares, amount, cost, date)
+                _record_buy(
+                    positions, buys, code, p, buy_px, shares, amount, cost, date
+                )
         else:
             # ── 第一遍：按整手向下取整，记下每只的"零头" ────────────────
             #   整手约束：ETF 最小交易单位 100 股（货币 ETF 例外，本袖套不含）。
@@ -538,22 +541,34 @@ def rebalance_sleeve(
             #   "类间等权"名存实亡。
             held_value = {
                 c: float(positions.get(c, {}).get("shares", 0)) * px[c]
-                for c in positions if c in px
+                for c in positions
+                if c in px
             }
             scaled_wants = {c: a * scale for c, a in wants.items() if a > 0}
             lots_plan = _plan_sleeve_lots(
-                target, value, px, scaled_wants, held_value, cash, board_lot,
+                target,
+                value,
+                px,
+                scaled_wants,
+                held_value,
+                cash,
+                board_lot,
             )
             plan: List[Dict[str, Any]] = []
             if lots_plan:
                 # 按类分组求出的最优整手方案（类间权重偏离最小）
                 for code, lots in lots_plan.items():
                     p = px[code]
-                    plan.append({
-                        "code": code, "px": p,
-                        "buy_px": p * (1 + ETF_SLIPPAGE),
-                        "lots": lots, "remainder": 0.0, "remainder_value": 0.0,
-                    })
+                    plan.append(
+                        {
+                            "code": code,
+                            "px": p,
+                            "buy_px": p * (1 + ETF_SLIPPAGE),
+                            "lots": lots,
+                            "remainder": 0.0,
+                            "remainder_value": 0.0,
+                        }
+                    )
             else:
                 # 兜底：逐只向下取整（现金不够买任何候选组合时）
                 for code, amount in scaled_wants.items():
@@ -562,11 +577,16 @@ def rebalance_sleeve(
                     raw_shares = amount / buy_px
                     lots = int(raw_shares // board_lot)
                     remainder = raw_shares - lots * board_lot
-                    plan.append({
-                        "code": code, "px": p, "buy_px": buy_px,
-                        "lots": lots, "remainder": remainder,
-                        "remainder_value": remainder * buy_px,
-                    })
+                    plan.append(
+                        {
+                            "code": code,
+                            "px": p,
+                            "buy_px": buy_px,
+                            "lots": lots,
+                            "remainder": remainder,
+                            "remainder_value": remainder * buy_px,
+                        }
+                    )
 
             # ── 第二遍：兜底的零头分配（只在类分组方案不可用时）────────
             #   正常路径下 `_plan_sleeve_lots` 已经给出按类分组的最优整手方案，
@@ -578,6 +598,7 @@ def rebalance_sleeve(
             #      从 cash 里扣一遍，双扣会让现金变成负数（实测 −4.3 万）。
             #      正确做法：这里只算「可分配的闲钱」free，执行时统一扣。
             if not lots_plan:
+
                 def _plan_cost() -> float:
                     return sum(
                         it["lots"] * board_lot * it["buy_px"] * (1 + ETF_COMMISSION)
@@ -621,7 +642,9 @@ def rebalance_sleeve(
                 cost = amount * ETF_COMMISSION
                 cash -= amount + cost
                 bought_codes.add(code)
-                _record_buy(positions, buys, code, p, buy_px, shares, amount, cost, date)
+                _record_buy(
+                    positions, buys, code, p, buy_px, shares, amount, cost, date
+                )
 
     # ── 3) 卖出超配 ────────────────────────────────────────────────────
     #   ⚠️ 只卖**买之前就超配**的标的（研究侧 L3.simulate 第 4 步的语义：
@@ -646,8 +669,11 @@ def rebalance_sleeve(
         sell_px = p * (1 - ETF_SLIPPAGE)
         excess_shares = (cur - want) / sell_px
         # 整手卖出：零股不可交易
-        sell_shares = (float(int(excess_shares // board_lot) * board_lot)
-                       if (board_lot and board_lot > 0) else excess_shares)
+        sell_shares = (
+            float(int(excess_shares // board_lot) * board_lot)
+            if (board_lot and board_lot > 0)
+            else excess_shares
+        )
         if sell_shares <= 0:
             continue
         proceeds = sell_shares * sell_px
@@ -659,19 +685,21 @@ def rebalance_sleeve(
         cost_amt = float(positions[code].get("cost", 0) or 0) * sell_shares
         realized = proceeds - commission - cost_amt
         positions[code]["shares"] = shares - sell_shares
-        sells.append({
-            "code": code,
-            "price": round(p, 4),
-            "shares": int(sell_shares),
-            "amount": round(proceeds, 2),
-            "cost_amount": round(cost_amt, 2),
-            "realized_pnl": round(realized, 2),
-            "commission": round(commission, 2),
-            "stamp_tax": 0.0,
-            "slippage": round(proceeds * ETF_SLIPPAGE / (1 - ETF_SLIPPAGE), 2),
-            "net": round(proceeds - commission, 2),
-            "reason": "袖套调仓：削减超配",
-        })
+        sells.append(
+            {
+                "code": code,
+                "price": round(p, 4),
+                "shares": int(sell_shares),
+                "amount": round(proceeds, 2),
+                "cost_amount": round(cost_amt, 2),
+                "realized_pnl": round(realized, 2),
+                "commission": round(commission, 2),
+                "stamp_tax": 0.0,
+                "slippage": round(proceeds * ETF_SLIPPAGE / (1 - ETF_SLIPPAGE), 2),
+                "net": round(proceeds - commission, 2),
+                "reason": "袖套调仓：削减超配",
+            }
+        )
 
     # 清掉被卖光的
     for code in list(positions.keys()):
@@ -716,7 +744,9 @@ def sleeve_class_weights_now(
         bar = bars.get(code, date)
         if bar is None:
             continue
-        vals[cls] = vals.get(cls, 0.0) + float(pos.get("shares", 0)) * float(bar["price"])
+        vals[cls] = vals.get(cls, 0.0) + float(pos.get("shares", 0)) * float(
+            bar["price"]
+        )
     total = sum(vals.values())
     if total <= 0:
         return {c: 0.0 for c in SLEEVE_CLASSES}

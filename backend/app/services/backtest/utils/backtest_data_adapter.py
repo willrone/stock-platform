@@ -211,7 +211,9 @@ class BacktestDataAdapter:
             returns = returns.dropna()
 
             if len(returns) == 0:
-                logger.opt(exception=True).warning("收益率序列为空，无法计算扩展风险指标")
+                logger.opt(exception=True).warning(
+                    "收益率序列为空，无法计算扩展风险指标"
+                )
                 return None
 
             # 计算扩展指标
@@ -484,7 +486,9 @@ class BacktestDataAdapter:
             #   - max_dd_value 会是 NaN → 进 JSON 就是**非法字面量**。
             # 这里显式判掉：无可用回撤数据时返回全 0 的分析，绝不让 NaN 外泄。
             if len(drawdown) == 0 or drawdown.notna().sum() == 0:
-                logger.opt(exception=True).warning("回撤序列全为 NaN（组合历史含缺失值），返回空回撤分析")
+                logger.opt(exception=True).warning(
+                    "回撤序列全为 NaN（组合历史含缺失值），返回空回撤分析"
+                )
                 return DrawdownAnalysis(
                     max_drawdown=0.0,
                     max_drawdown_date=None,

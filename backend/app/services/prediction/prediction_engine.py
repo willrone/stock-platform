@@ -3,7 +3,6 @@
 """
 
 import json
-import pickle
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -21,12 +20,12 @@ from app.core.error_handler import (
     PredictionError,
     RecoveryAction,
 )
-from app.models.task_models import RiskMetrics
-from app.repositories.task_repository import ModelInfoRepository
 from app.core.model_loader import (
     safe_joblib_load,
     safe_pickle_load,
 )
+from app.models.task_models import RiskMetrics
+from app.repositories.task_repository import ModelInfoRepository
 
 from .feature_extractor import FeatureConfig, FeatureExtractor
 

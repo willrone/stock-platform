@@ -43,20 +43,20 @@ config 提供 topk / n_drop / hold_thresh / max_position_size。
 
 from __future__ import annotations
 
-import os
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 from loguru import logger
 
-from ..core.base_strategy import BaseStrategy
-from ..models import SignalType, TradingSignal
 from app.services.trading.execution_rules import (
     limit_up_mask_matrix,
     load_st_flags,
 )
+
+from ..core.base_strategy import BaseStrategy
+from ..models import SignalType, TradingSignal
 
 _SCORES_ATTR = "_ensemble_scores"
 
@@ -73,15 +73,25 @@ _LEG_DEFS: Dict[str, Dict[str, Any]] = {
         "module": "app.services.backtest.strategies.honest_composite_strategy",
         "cls": "HonestCompositeStrategy",
         "attr": "_honest_composite_scores",
-        "cfg": {"topk": 60, "n_drop": 5, "rebalance_days": "daily", "lag": 0,
-                "use_panel": False},
+        "cfg": {
+            "topk": 60,
+            "n_drop": 5,
+            "rebalance_days": "daily",
+            "lag": 0,
+            "use_panel": False,
+        },
     },
     "42f42": {
         "module": "app.services.backtest.strategies.honest_composite_strategy",
         "cls": "HonestCompositeStrategy",
         "attr": "_honest_composite_scores",
-        "cfg": {"topk": 60, "n_drop": 5, "rebalance_days": "daily", "lag": 0,
-                "use_panel": True},
+        "cfg": {
+            "topk": 60,
+            "n_drop": 5,
+            "rebalance_days": "daily",
+            "lag": 0,
+            "use_panel": True,
+        },
     },
     "rsi": {
         "module": "app.services.backtest.strategies.rsi_71421_strategy",
@@ -99,9 +109,18 @@ _LEG_DEFS: Dict[str, Dict[str, Any]] = {
         "module": "app.services.backtest.strategies.gbm_voltgt_strategy",
         "cls": "GbmVoltgtStrategy",
         "attr": "_gbm_voltgt_scores",
-        "cfg": {"topk": 60, "n_drop": 5, "rebalance_days": "daily", "lag": 0,
-                "n_estimators": 100, "max_depth": 3, "learning_rate": 0.05,
-                "warmup_months": 2, "target_vol": 0.20, "vt_window": 20},
+        "cfg": {
+            "topk": 60,
+            "n_drop": 5,
+            "rebalance_days": "daily",
+            "lag": 0,
+            "n_estimators": 100,
+            "max_depth": 3,
+            "learning_rate": 0.05,
+            "warmup_months": 2,
+            "target_vol": 0.20,
+            "vt_window": 20,
+        },
     },
     "mf": {
         "module": "app.services.backtest.strategies.strategies",
@@ -140,8 +159,7 @@ def cs_rank(mat: np.ndarray, min_cross: int = 30) -> np.ndarray:
     return out
 
 
-def cs_winsor_z(mat: np.ndarray, min_cross: int = 30,
-                clip: float = 3.0) -> np.ndarray:
+def cs_winsor_z(mat: np.ndarray, min_cross: int = 30, clip: float = 3.0) -> np.ndarray:
     z = cs_zscore(mat, min_cross)
     return np.where(np.isfinite(z), np.clip(z, -clip, clip), np.nan)
 
@@ -179,9 +197,9 @@ class EnsembleStrategy(BaseStrategy):
         self.min_cross = int(config.get("min_cross", 30))
         self.residualize = bool(config.get("residualize", False))
         self.leg_weights: Dict[str, float] = {
-            k: float(v) for k, v in (config.get("weights") or {}).items()}
-        self.legs: List[str] = list(
-            config.get("legs") or ["42f", "rsi", "fr", "gbm"])
+            k: float(v) for k, v in (config.get("weights") or {}).items()
+        }
+        self.legs: List[str] = list(config.get("legs") or ["42f", "rsi", "fr", "gbm"])
         unknown = [x for x in self.legs if x not in _LEG_DEFS]
         if unknown:
             raise ValueError(f"ensemble: 未知腿 {unknown}，可用 {list(_LEG_DEFS)}")
@@ -190,7 +208,8 @@ class EnsembleStrategy(BaseStrategy):
 
         cash_reserve = float(config.get("cash_reserve_ratio", 0.05))
         self.max_position_size = float(
-            config.get("max_position_size", (1.0 - cash_reserve) / self.topk))
+            config.get("max_position_size", (1.0 - cash_reserve) / self.topk)
+        )
 
         logger.info(
             f"ensemble legs={self.legs} weights={self.leg_weights or '等权'} "
@@ -221,7 +240,8 @@ class EnsembleStrategy(BaseStrategy):
         end_date: datetime,
     ) -> None:
         codes = [
-            c for c, df in stock_data.items()
+            c
+            for c, df in stock_data.items()
             if df is not None and not df.empty and "close" in df.columns
         ]
         if not codes:
@@ -229,8 +249,11 @@ class EnsembleStrategy(BaseStrategy):
             return
 
         indexes = [pd.DatetimeIndex(stock_data[c].index) for c in codes]
-        master = indexes[0].append(indexes[1:]).unique().sort_values() \
-            if len(indexes) > 1 else indexes[0]
+        master = (
+            indexes[0].append(indexes[1:]).unique().sort_values()
+            if len(indexes) > 1
+            else indexes[0]
+        )
         master = pd.DatetimeIndex(master)
         n_dates, n_stocks = len(master), len(codes)
         pos_of = {d: i for i, d in enumerate(master)}
@@ -238,13 +261,17 @@ class EnsembleStrategy(BaseStrategy):
         # ---- 0. close 矩阵（IC 标签 + 涨停掩码都要用）----
         close_early = pd.DataFrame(
             np.full((n_dates, n_stocks), np.nan),
-            index=master, columns=codes, dtype="float64")
+            index=master,
+            columns=codes,
+            dtype="float64",
+        )
         for j, c in enumerate(codes):
             df = stock_data[c]
             pos = master.get_indexer(pd.DatetimeIndex(df.index))
             ok = pos >= 0
             vals = pd.to_numeric(df["close"], errors="coerce").to_numpy(
-                dtype=np.float64, na_value=np.nan)
+                dtype=np.float64, na_value=np.nan
+            )
             close_early.iloc[pos[ok], j] = vals[ok]
 
         # ---- 1. 逐条腿调用其策略类打分，取回分数矩阵 ----
@@ -308,13 +335,15 @@ class EnsembleStrategy(BaseStrategy):
             total = contrib if total is None else total + contrib
             wsum = cnt if wsum is None else wsum + cnt
         with np.errstate(invalid="ignore", divide="ignore"):
-            composite = np.where(wsum > 0, total / np.where(wsum > 0, wsum, 1.0),
-                                 np.nan)
+            composite = np.where(
+                wsum > 0, total / np.where(wsum > 0, wsum, 1.0), np.nan
+            )
 
         # ---- 4. 涨停掩码（合成后再做一次，保证合成分也遵守）----
         day_ret = close_early.pct_change(fill_method=None).to_numpy()
-        composite[limit_up_mask_matrix(
-            day_ret, codes, is_st=load_st_flags(list(codes)))] = np.nan
+        composite[
+            limit_up_mask_matrix(day_ret, codes, is_st=load_st_flags(list(codes)))
+        ] = np.nan
 
         # ---- 5. 调仓日掩码 ----
         if self.rebalance_days == "weekly":
@@ -326,7 +355,7 @@ class EnsembleStrategy(BaseStrategy):
         if self.lag > 0:
             lagged = np.full_like(composite, np.nan)
             if self.lag < n_dates:
-                lagged[self.lag:] = composite[: n_dates - self.lag]
+                lagged[self.lag :] = composite[: n_dates - self.lag]
             composite = lagged
 
         # ---- 7. 存分数 ----
@@ -340,10 +369,10 @@ class EnsembleStrategy(BaseStrategy):
                     score_map[master[k].to_pydatetime()] = float(v)
                     stored += 1
             stock_data[c].attrs[_SCORES_ATTR] = score_map
+        weight_repr = {k: round(float(v), 4) for k, v in weights.items()}
         logger.info(
             f"ensemble 合成完成: 股票={n_stocks}, 日期={n_dates}, "
-            f"有效分数={stored}, 权重="
-            f"{ {k: round(float(v), 4) for k, v in weights.items()} }"
+            f"有效分数={stored}, 权重={weight_repr}"
         )
 
     # ── 权重计算 ─────────────────────────────────────────────────────
@@ -371,8 +400,11 @@ class EnsembleStrategy(BaseStrategy):
             out: Dict[str, float] = {}
             for k in leg_scores:
                 others = [j for j in leg_scores if j != k]
-                r = float(np.mean([rho.get((k, j), 0.0) for j in others])) \
-                    if others else 0.0
+                r = (
+                    float(np.mean([rho.get((k, j), 0.0) for j in others]))
+                    if others
+                    else 0.0
+                )
                 out[k] = max(ir.get(k, 0.0), 0.0) / (1.0 + max(r, 0.0))
             s = sum(out.values())
             if s <= 0:
@@ -406,7 +438,7 @@ class EnsembleStrategy(BaseStrategy):
         rho: Dict[Tuple[str, str], float] = {}
         names = list(leg_scores)
         for i, a in enumerate(names):
-            for b in names[i + 1:]:
+            for b in names[i + 1 :]:
                 m = np.isfinite(ranks[a]) & np.isfinite(ranks[b])
                 if m.sum() < 30:
                     rho[(a, b)] = rho[(b, a)] = 0.0
@@ -452,21 +484,19 @@ class EnsembleStrategy(BaseStrategy):
         IC 用**对 fwd1 收益**的横截面 RankIC；第 t 日的权重只用 [t-window, t-1]
         的历史 IC（.shift(1)）→ 无前视。ICIR 序列再做一次时序平滑。
         """
-        n_d = next(iter(leg_scores.values())).shape[0]
+        next(iter(leg_scores.values())).shape[0]
         fwd = self._fwd1(close)
         out: Dict[str, np.ndarray] = {}
         for name, sc in leg_scores.items():
             ics = self._rank_ic_rows(sc, fwd)
             s = pd.Series(ics)
-            m = s.rolling(self.icir_window,
-                          min_periods=self.icir_min_periods).mean()
-            sd = s.rolling(self.icir_window,
-                           min_periods=self.icir_min_periods).std()
+            m = s.rolling(self.icir_window, min_periods=self.icir_min_periods).mean()
+            sd = s.rolling(self.icir_window, min_periods=self.icir_min_periods).std()
             icir = (m / sd.replace(0.0, np.nan)).shift(1)
             if self.icir_smooth > 1:
-                icir = icir.rolling(self.icir_smooth,
-                                    min_periods=max(3, self.icir_smooth // 3)
-                                    ).mean()
+                icir = icir.rolling(
+                    self.icir_smooth, min_periods=max(3, self.icir_smooth // 3)
+                ).mean()
             out[name] = icir.fillna(0.0).to_numpy()
         return out
 
@@ -494,12 +524,15 @@ class EnsembleStrategy(BaseStrategy):
         index = pd.DatetimeIndex(data.index)
         score_series = pd.Series(
             [scores.get(ts.to_pydatetime()) for ts in index],
-            index=index, dtype="float64",
+            index=index,
+            dtype="float64",
         )
         return {"price": data["close"], "score": score_series}
 
     def generate_signals(
-        self, data: pd.DataFrame, current_date: datetime,
+        self,
+        data: pd.DataFrame,
+        current_date: datetime,
     ) -> List[TradingSignal]:
         scores = data.attrs.get(_SCORES_ATTR)
         if not scores:

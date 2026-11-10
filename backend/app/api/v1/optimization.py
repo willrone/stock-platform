@@ -77,7 +77,9 @@ async def create_optimization_task(
 
             logger.info(f"超参优化任务已提交到进程池: {task.task_id}")
         except Exception as submit_error:
-            logger.opt(exception=True).error(f"将任务提交到进程池时出错: {submit_error}")
+            logger.opt(exception=True).error(
+                f"将任务提交到进程池时出错: {submit_error}"
+            )
             await task_repository.update_task_status(
                 task_id=cast(str, task.task_id),
                 status=TaskStatus.FAILED,

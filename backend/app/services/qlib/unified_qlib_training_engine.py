@@ -1110,7 +1110,7 @@ class UnifiedQlibTrainingEngine:
                                 .apply(pd.to_numeric, errors="coerce")
                                 .astype("float32")
                             )
-                            feature_array = feature_frame.to_numpy()
+                            feature_frame.to_numpy()
                             feature_obj_final = feature_frame
                             # qlib 的 DatasetH 契约：`df["feature"]` 必须是**特征 DataFrame**
                             # （qlib 的 _prepare_data 直接 `x, y = df["feature"], df["label"]`
@@ -1440,9 +1440,7 @@ class UnifiedQlibTrainingEngine:
 
                         R.log_metrics = original_log_metrics  # type: ignore[method-assign]
                     except Exception:
-                        logger.debug(
-                            "恢复 Qlib workflow metric logging 失败"
-                        )
+                        logger.debug("恢复 Qlib workflow metric logging 失败")
 
             # 优先使用官方 evals_result 重建训练历史
             try:
@@ -1511,9 +1509,7 @@ class UnifiedQlibTrainingEngine:
                             f"从官方 evals_result 获取训练历史: {len(training_history)} 轮, metric={preferred_metric}"
                         )
             except Exception as e:
-                logger.debug(
-                    f"无法从官方 evals_result 获取训练历史: {e}"
-                )
+                logger.debug(f"无法从官方 evals_result 获取训练历史: {e}")
 
             # 读取官方模型的真实 best_iteration / early stopping 结果
             actual_best_iteration = None

@@ -12,10 +12,9 @@
 
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, Query, status
 from loguru import logger
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
 
 from app.api.v1.dependencies import require_admin_user
 from app.core.database import SessionLocal
@@ -53,7 +52,9 @@ def _optional_user_id(authorization: Optional[str]) -> Optional[str]:
 
 
 @public_router.post("/track", status_code=status.HTTP_202_ACCEPTED)
-def track(req: TrackRequest, authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
+def track(
+    req: TrackRequest, authorization: Optional[str] = Header(None)
+) -> Dict[str, Any]:
     """写入一条埋点事件。始终返回 202；未知事件名返回 ok=false。"""
     if req.event not in funnel_service.ALLOWED_EVENTS:
         return {"ok": False, "reason": "unknown_event"}

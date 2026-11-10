@@ -50,6 +50,7 @@
 （研究脚本 `backend/scripts/verify_methods_engine.py` 用
 `StrategyFactory.register_strategy()` 在运行时注册，**不碰注册表文件**。）
 """
+
 from __future__ import annotations
 
 import os
@@ -59,22 +60,23 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 
-from ..core.base_strategy import BaseStrategy
-from ..models import SignalType, TradingSignal
 from app.services.trading.execution_rules import (
     industry_ids,
     limit_up_mask_matrix,
-    load_st_flags,
     load_industry_map,
+    load_st_flags,
     zscore_with_industry,
 )
+
+from ..core.base_strategy import BaseStrategy
+from ..models import SignalType, TradingSignal
 
 # 复用 honest_composite 的因子表与常量（只读导入，不修改对方）
 from .honest_composite_strategy import (  # noqa: F401
     _ALPHAPANEL_FACTORS,
     _HONEST_FORMULAS,
-    DEFAULT_PANEL_DIR,
     _SCORES_ATTR,
+    DEFAULT_PANEL_DIR,
 )
 
 _SCORES_ATTR_M = "_methods_composite_scores"
@@ -112,8 +114,7 @@ def _amihud_illiq(
         ret = np.vstack([np.full((1, close.shape[1]), np.nan), ret])
         amt = close * volume
         daily = np.abs(ret) / np.where(amt > 0, amt, np.nan)
-    m = pd.DataFrame(daily).rolling(
-        window, min_periods=max(5, window // 2)).mean()
+    m = pd.DataFrame(daily).rolling(window, min_periods=max(5, window // 2)).mean()
     with np.errstate(divide="ignore", invalid="ignore"):
         return np.log1p(m.to_numpy())
 
@@ -164,12 +165,12 @@ class MethodsCompositeStrategy(BaseStrategy):
         self.panel_dir = config.get("panel_dir", DEFAULT_PANEL_DIR)
 
         # ── 新增：暴露中性化 ────────────────────────────────────────
-        self.exposure_neutral = str(
-            config.get("exposure_neutral", "none")).lower()
+        self.exposure_neutral = str(config.get("exposure_neutral", "none")).lower()
         if self.exposure_neutral not in _NEUTRAL_SETS:
             raise ValueError(
                 f"exposure_neutral 必须是 {list(_NEUTRAL_SETS)} 之一，"
-                f"收到 {self.exposure_neutral!r}")
+                f"收到 {self.exposure_neutral!r}"
+            )
         self.neutral_exposures = _NEUTRAL_SETS[self.exposure_neutral]
         # ── 新增：低换手率因子混合权重 ──────────────────────────────
         self.turnover_blend = float(config.get("turnover_blend", 0.0))
@@ -208,10 +209,14 @@ class MethodsCompositeStrategy(BaseStrategy):
         end_date,
     ) -> None:
         codes = [
-            code for code, df in stock_data.items()
-            if df is not None and not df.empty
-            and "close" in df.columns and "high" in df.columns
-            and "low" in df.columns and "volume" in df.columns
+            code
+            for code, df in stock_data.items()
+            if df is not None
+            and not df.empty
+            and "close" in df.columns
+            and "high" in df.columns
+            and "low" in df.columns
+            and "volume" in df.columns
         ]
         if not codes:
             logger.warning("methods_composite: 无可用股票数据，跳过打分")
@@ -229,14 +234,13 @@ class MethodsCompositeStrategy(BaseStrategy):
                 positions = master.get_indexer(pd.DatetimeIndex(df.index))
                 ok = positions >= 0
                 values = pd.to_numeric(df[column], errors="coerce").to_numpy(
-                    dtype=np.float64, na_value=np.nan)
+                    dtype=np.float64, na_value=np.nan
+                )
                 out[positions[ok], j] = values[ok]
             return out
 
         frame_opts = {"index": master, "dtype": np.float64}
         close = pd.DataFrame(to_matrix("close"), **frame_opts)
-        high = pd.DataFrame(to_matrix("high"), **frame_opts)
-        low = pd.DataFrame(to_matrix("low"), **frame_opts)
         vol = pd.DataFrame(to_matrix("volume"), **frame_opts)
 
         # ── 因子（与 honest_composite 完全一致）────────────────────
@@ -269,7 +273,8 @@ class MethodsCompositeStrategy(BaseStrategy):
 
         def zscore_add(mat: np.ndarray, sign: float) -> None:
             z = zscore_with_industry(
-                mat, sign, min_cross, _ind_ids, _n_ind, self.industry_neutral)
+                mat, sign, min_cross, _ind_ids, _n_ind, self.industry_neutral
+            )
             good = np.isfinite(z)
             acc[good] += np.nan_to_num(z)[good]
             wsum[good] += 1
@@ -282,23 +287,23 @@ class MethodsCompositeStrategy(BaseStrategy):
             for j, code in enumerate(codes):
                 try:
                     pf = pd.read_parquet(
-                        os.path.join(self.panel_dir,
-                                     code.replace(".", "_") + ".parquet")
+                        os.path.join(
+                            self.panel_dir, code.replace(".", "_") + ".parquet"
+                        )
                     ).reset_index()
                     pf = pf.set_index("date").sort_index()
-                    pf = pf.loc[pd.Timestamp(start_date):pd.Timestamp(end_date)]
+                    pf = pf.loc[pd.Timestamp(start_date) : pd.Timestamp(end_date)]
                     pf = pf[~pf.index.duplicated(keep="first")]
                     pos = master.get_indexer(pd.DatetimeIndex(pf.index))
                     ok = pos >= 0
                     mat[pos[ok], j] = pd.to_numeric(
-                        pf[factor_name], errors="coerce").to_numpy(
-                        dtype=np.float64, na_value=np.nan)[ok]
+                        pf[factor_name], errors="coerce"
+                    ).to_numpy(dtype=np.float64, na_value=np.nan)[ok]
                 except Exception:
                     continue
             zscore_add(mat, sign)
 
-        composite = np.where(
-            wsum > 0, acc / np.where(wsum > 0, wsum, 1.0), np.nan)
+        composite = np.where(wsum > 0, acc / np.where(wsum > 0, wsum, 1.0), np.nan)
 
         # ── 新增：低换手率因子（负的 20 日 log 成交额均值 z）─────────
         # ⚠️ 顺序很重要：这个因子与下面的 `size` 暴露**完全共线**
@@ -309,8 +314,7 @@ class MethodsCompositeStrategy(BaseStrategy):
             amount = close.to_numpy() * vol.to_numpy()
             with np.errstate(divide="ignore", invalid="ignore"):
                 log_amt = np.log(np.where(amount > 0, amount, np.nan))
-            to_mean = pd.DataFrame(log_amt).rolling(
-                20, min_periods=5).mean().to_numpy()
+            to_mean = pd.DataFrame(log_amt).rolling(20, min_periods=5).mean().to_numpy()
             z_to = _cs_zscore(-to_mean, 30)
         else:
             z_to = None
@@ -324,19 +328,20 @@ class MethodsCompositeStrategy(BaseStrategy):
                 amount = cn * vn
                 with np.errstate(divide="ignore", invalid="ignore"):
                     log_amt = np.log(np.where(amount > 0, amount, np.nan))
-                exposures["size"] = pd.DataFrame(log_amt).rolling(
-                    20, min_periods=5).mean().to_numpy()
+                exposures["size"] = (
+                    pd.DataFrame(log_amt).rolling(20, min_periods=5).mean().to_numpy()
+                )
             if "illiq" in self.neutral_exposures:
                 exposures["illiq"] = _amihud_illiq(cn, vn, 20)
             if "vol60" in self.neutral_exposures:
                 with np.errstate(divide="ignore", invalid="ignore"):
                     r = cn[1:] / cn[:-1] - 1.0
                     r = np.vstack([np.full((1, cn.shape[1]), np.nan), r])
-                exposures["vol60"] = pd.DataFrame(r).rolling(
-                    60, min_periods=20).std().to_numpy()
+                exposures["vol60"] = (
+                    pd.DataFrame(r).rolling(60, min_periods=20).std().to_numpy()
+                )
             composite = _neutralize(composite, exposures, min_cross=50)
-            logger.info(
-                f"methods_composite 暴露中性化: {self.neutral_exposures}")
+            logger.info(f"methods_composite 暴露中性化: {self.neutral_exposures}")
 
         # ── 低换手率因子混合（必须在中性化**之后**）────────────────
         if z_to is not None:
@@ -356,7 +361,7 @@ class MethodsCompositeStrategy(BaseStrategy):
         if self.lag > 0:
             lagged = np.full_like(composite, np.nan)
             if self.lag < n_dates:
-                lagged[self.lag:] = composite[: n_dates - self.lag]
+                lagged[self.lag :] = composite[: n_dates - self.lag]
             composite = lagged
 
         stored = 0
@@ -371,7 +376,8 @@ class MethodsCompositeStrategy(BaseStrategy):
             stored += len(score_map)
         logger.info(
             f"methods_composite 横截面打分完成: 股票={n_stocks}, "
-            f"日期={n_dates}, 有效分数={stored}, lag={self.lag}")
+            f"日期={n_dates}, 有效分数={stored}, lag={self.lag}"
+        )
 
     def precompute_all_signals(self, data: pd.DataFrame) -> Optional[pd.Series]:
         return None
@@ -381,12 +387,12 @@ class MethodsCompositeStrategy(BaseStrategy):
         index = pd.DatetimeIndex(data.index)
         score_series = pd.Series(
             [scores.get(ts.to_pydatetime()) for ts in index],
-            index=index, dtype="float64")
+            index=index,
+            dtype="float64",
+        )
         return {"price": data["close"], "score": score_series}
 
-    def generate_signals(
-        self, data: pd.DataFrame, current_date
-    ) -> List[TradingSignal]:
+    def generate_signals(self, data: pd.DataFrame, current_date) -> List[TradingSignal]:
         scores = data.attrs.get(_SCORES_ATTR_M)
         if not scores:
             return []

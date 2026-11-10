@@ -148,7 +148,9 @@ class CacheCleanupService:
             if success:
                 self.logger.info(f"成功清理任务数据: task_id={task_id}")
             else:
-                self.logger.opt(exception=True).warning(f"清理任务数据部分失败: task_id={task_id}")
+                self.logger.opt(exception=True).warning(
+                    f"清理任务数据部分失败: task_id={task_id}"
+                )
 
             return success
 

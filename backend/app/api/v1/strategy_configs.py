@@ -237,7 +237,9 @@ async def create_strategy_config(
                     or "table" in error_str
                     and "does not exist" in error_str
                 ):
-                    logger.opt(exception=True).error("策略配置表不存在，请运行数据库迁移")
+                    logger.opt(exception=True).error(
+                        "策略配置表不存在，请运行数据库迁移"
+                    )
                     raise HTTPException(
                         status_code=500,
                         detail="数据库表不存在，请联系管理员运行数据库迁移",

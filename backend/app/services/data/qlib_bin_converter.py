@@ -77,7 +77,9 @@ class QlibBinConverter:
                 if c not in col_map
             ]
             if missing:
-                logger.opt(exception=True).warning(f"转换bin失败 {stock_code}: 缺少列 {missing}")
+                logger.opt(exception=True).warning(
+                    f"转换bin失败 {stock_code}: 缺少列 {missing}"
+                )
                 return None
             data = data[
                 [col_map[c] for c in ["open", "high", "low", "close", "volume"]]

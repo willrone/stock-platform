@@ -131,7 +131,9 @@ class BacktestDetailedRepository:
             detailed_result = result.scalar_one_or_none()
 
             if not detailed_result:
-                self.logger.opt(exception=True).warning(f"未找到回测详细结果: task_id={task_id}")
+                self.logger.opt(exception=True).warning(
+                    f"未找到回测详细结果: task_id={task_id}"
+                )
                 return False
 
             result_row = cast(Any, detailed_result)

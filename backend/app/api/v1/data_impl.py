@@ -832,7 +832,9 @@ async def get_local_stock_list() -> Any:
                     try:
                         df = pd.read_parquet(file_path, engine="fastparquet")
                     except Exception as e2:
-                        logger.opt(exception=True).error(f"使用 fastparquet 引擎也失败: {e2}")
+                        logger.opt(exception=True).error(
+                            f"使用 fastparquet 引擎也失败: {e2}"
+                        )
                         raise
                 if df.empty:
                     logger.debug(f"文件为空: {file_path}")
@@ -908,7 +910,9 @@ async def get_local_stock_list() -> Any:
 
             except Exception as e:
                 error_count += 1
-                logger.opt(exception=True).warning(f"读取parquet文件失败 {file_path}: {e}")
+                logger.opt(exception=True).warning(
+                    f"读取parquet文件失败 {file_path}: {e}"
+                )
                 continue
 
         logger.info(
@@ -972,7 +976,9 @@ async def get_local_stock_list() -> Any:
 
                     total_days = (end_dt - start_dt).days + 1
                 except Exception as e:
-                    logger.opt(exception=True).warning(f"计算总天数失败 {stock_code}: {e}")
+                    logger.opt(exception=True).warning(
+                        f"计算总天数失败 {stock_code}: {e}"
+                    )
                     total_days = 0
 
                 stock_info["data_range"] = {
@@ -1043,7 +1049,9 @@ async def get_local_stock_list_simple() -> Any:
                     break
 
             if resolved_stock_data_path is None:
-                logger.opt(exception=True).warning(f"未找到stock_data目录，尝试的路径: {possible_paths}")
+                logger.opt(exception=True).warning(
+                    f"未找到stock_data目录，尝试的路径: {possible_paths}"
+                )
                 return StandardResponse(
                     success=False,
                     message="未找到parquet数据目录",

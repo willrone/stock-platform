@@ -59,7 +59,7 @@ import threading
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence
 
 # backend/app/services/trading/ledger.py → parents[3] == backend/
 BACKEND_ROOT = Path(__file__).resolve().parents[3]
@@ -179,7 +179,7 @@ class Position:
     code: str
     name: str = ""
     shares: int = 0
-    cost_amount: float = 0.0        # 含买入费用的摊薄成本金额
+    cost_amount: float = 0.0  # 含买入费用的摊薄成本金额
     last_price: Optional[float] = None
     buy_date: str = ""
 
@@ -370,9 +370,7 @@ def _turnover(state: LedgerState) -> Dict[str, Any]:
             "年化换手率不可靠，不外推"
         )
         return out
-    navs = [
-        float(n["nav"]) for n in state.nav_series if n.get("nav") is not None
-    ]
+    navs = [float(n["nav"]) for n in state.nav_series if n.get("nav") is not None]
     if len(navs) < 2:
         return out
     avg_nav = sum(navs) / len(navs)
@@ -415,9 +413,8 @@ def summarize(strategy: str) -> Dict[str, Any]:
             for n in state.nav_series
         ],
         "positions": [
-            p.to_dict() for p in sorted(
-                state.positions.values(), key=lambda x: -x.market_value
-            )
+            p.to_dict()
+            for p in sorted(state.positions.values(), key=lambda x: -x.market_value)
         ],
         "first_date": state.first_date,
         "last_date": state.last_date,

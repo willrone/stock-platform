@@ -34,11 +34,11 @@ from app.api.v1 import (
     predictions,
     qlib,
     signals,
-    trading,
     stocks,
     strategy_configs,
     system,
     tasks,
+    trading,
     training_progress,
 )
 from app.api.v1.dependencies import get_current_user

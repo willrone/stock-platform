@@ -13,11 +13,10 @@
 前端只负责展示升级入口。
 """
 
+from dataclasses import replace
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-
-from dataclasses import replace
 
 from app.api.v1.dependencies import require_current_user
 from app.api.v1.schemas import StandardResponse
@@ -86,9 +85,7 @@ def _ent_for(user: Any, tier: str) -> SignalEntitlement:
     )
 
 
-@router.get(
-    "/strategies", response_model=StandardResponse, summary="可用信号策略列表"
-)
+@router.get("/strategies", response_model=StandardResponse, summary="可用信号策略列表")
 async def list_signal_strategies(
     user: Any = Depends(require_current_user),
 ) -> StandardResponse:
@@ -133,9 +130,7 @@ async def list_signal_strategies(
 
 @router.get("/signal", response_model=StandardResponse, summary="今日可执行信号")
 async def get_daily_signal(
-    strategy: str = Query(
-        "honest_42f", description="策略 key，见 /trading/strategies"
-    ),
+    strategy: str = Query("honest_42f", description="策略 key，见 /trading/strategies"),
     user: Any = Depends(require_current_user),
 ) -> StandardResponse:
     """返回某策略今天的买卖清单。
@@ -185,7 +180,9 @@ async def get_daily_signal(
 
 
 @router.get(
-    "/signal-quality", response_model=StandardResponse, summary="信号质量（胜率与超额收益）"
+    "/signal-quality",
+    response_model=StandardResponse,
+    summary="信号质量（胜率与超额收益）",
 )
 async def get_signal_quality(
     strategy: str = Query("honest_42f", description="策略 key"),
@@ -273,7 +270,9 @@ async def get_strategy_race(
 
 
 @router.get(
-    "/performance", response_model=StandardResponse, summary="纸面业绩（真实 track record）"
+    "/performance",
+    response_model=StandardResponse,
+    summary="纸面业绩（真实 track record）",
 )
 async def get_performance(
     strategy: str = Query("honest_42f", description="策略 key"),
@@ -326,6 +325,7 @@ async def get_performance(
 
 # ── 内部工具 ──────────────────────────────────────────────────────────
 
+
 def _apply_delay(payload: Dict[str, Any], delay_days: int) -> Dict[str, Any]:
     """延迟 N 个交易日 —— 返回上一次调仓的信号。
 
@@ -375,7 +375,14 @@ def _strip_execution_detail(payload: Dict[str, Any]) -> Dict[str, Any]:
         rows = []
         for r in out.get(key) or []:
             r = dict(r)
-            for f in ("shares", "amount", "commission", "stamp_tax", "slippage", "total_cost"):
+            for f in (
+                "shares",
+                "amount",
+                "commission",
+                "stamp_tax",
+                "slippage",
+                "total_cost",
+            ):
                 r.pop(f, None)
             rows.append(r)
         out[key] = rows

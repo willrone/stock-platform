@@ -4,11 +4,10 @@
 定义所有策略必须实现的接口
 """
 
+import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple, cast
-
-import logging
 
 import pandas as pd
 

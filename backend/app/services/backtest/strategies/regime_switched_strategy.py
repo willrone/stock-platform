@@ -49,9 +49,9 @@ from ..regime import (
 )
 from .honest_composite_strategy import _SCORES_ATTR
 
-OFF_STOCK_SCORE = -1000.0    # OFF 日给所有股票的哨兵分（让持仓成为卖出候选）
-OFF_ETF_SCORE = 1000.0       # OFF 日给防御 ETF 的最高分（买它、不买股票）
-EXIT_ETF_SCORE = -1e9        # 离开防御第一天给 ETF 的最低分（先卖掉它）
+OFF_STOCK_SCORE = -1000.0  # OFF 日给所有股票的哨兵分（让持仓成为卖出候选）
+OFF_ETF_SCORE = 1000.0  # OFF 日给防御 ETF 的最高分（买它、不买股票）
+EXIT_ETF_SCORE = -1e9  # 离开防御第一天给 ETF 的最低分（先卖掉它）
 
 
 DEFAULT_PARAMS: Dict[str, Any] = {
@@ -68,8 +68,11 @@ DEFAULT_PARAMS: Dict[str, Any] = {
 }
 
 
-def make_regime_switched_strategy(cfg: Dict[str, Any], base_factory: Callable[[Dict[str, Any]], BaseStrategy],
-                                  params: Dict[str, Any]) -> "RegimeSwitchedStrategy":
+def make_regime_switched_strategy(
+    cfg: Dict[str, Any],
+    base_factory: Callable[[Dict[str, Any]], BaseStrategy],
+    params: Dict[str, Any],
+) -> "RegimeSwitchedStrategy":
     """构造开关策略。
 
     Args:
@@ -91,9 +94,12 @@ def make_regime_switched_strategy(cfg: Dict[str, Any], base_factory: Callable[[D
 
 
 class RegimeSwitchedStrategy(BaseStrategy):
-    def __init__(self, cfg: Dict[str, Any],
-                 base_factory: Callable[[Dict[str, Any]], BaseStrategy],
-                 params: Dict[str, Any]):
+    def __init__(
+        self,
+        cfg: Dict[str, Any],
+        base_factory: Callable[[Dict[str, Any]], BaseStrategy],
+        params: Dict[str, Any],
+    ):
         super().__init__("RegimeSwitched", cfg)
         self.topk_base = int(cfg.get("topk_base", 20))
         self.n_drop_base = int(cfg.get("n_drop_base", 3))
@@ -106,10 +112,10 @@ class RegimeSwitchedStrategy(BaseStrategy):
         self.defense_code = str(self.p["defense_code"])
 
         self._base = base_factory(cfg.get("base_config") or {})
-        self._off_dates: set = set()          # OFF 执行日（datetime）
-        self._exit_etf_days: set = set()      # 离开防御第一天（卖 ETF）
-        self._day_role: Dict[datetime, str] = {}   # exec 日 → "off"/"exit_on"/"on"
-        self._seen_dt: Optional[datetime] = None   # generate_signals 观察到的最近日期
+        self._off_dates: set = set()  # OFF 执行日（datetime）
+        self._exit_etf_days: set = set()  # 离开防御第一天（卖 ETF）
+        self._day_role: Dict[datetime, str] = {}  # exec 日 → "off"/"exit_on"/"on"
+        self._seen_dt: Optional[datetime] = None  # generate_signals 观察到的最近日期
         self._switch_log: List[Dict[str, Any]] = p.get("switch_log")
         if self._switch_log is None:
             self._switch_log = []
@@ -123,12 +129,18 @@ class RegimeSwitchedStrategy(BaseStrategy):
             str(k)[:10]: (None if v is None else float(v))
             for k, v in (p.get("z_by_date") or {}).items()
         }
-        self._cal: List[pd.Timestamp] = [pd.Timestamp(x) for x in (p.get("calendar") or [])]
+        self._cal: List[pd.Timestamp] = [
+            pd.Timestamp(x) for x in (p.get("calendar") or [])
+        ]
         self._random_off: set = {str(x)[:10] for x in (p.get("random_off_dates") or [])}
 
     # ── 预热：基线打分 + 判据状态机 + 把 OFF/ON 日程写进 attrs ────────────
-    async def prepare_backtest_data(self, stock_data: Dict[str, pd.DataFrame],
-                                    start_date: datetime, end_date: datetime) -> None:
+    async def prepare_backtest_data(
+        self,
+        stock_data: Dict[str, pd.DataFrame],
+        start_date: datetime,
+        end_date: datetime,
+    ) -> None:
         codes = [c for c in stock_data.keys() if c != self.defense_code]
         base_frames = {c: stock_data[c] for c in codes}
         await self._base.prepare_backtest_data(base_frames, start_date, end_date)
@@ -148,7 +160,9 @@ class RegimeSwitchedStrategy(BaseStrategy):
                 f"防御代码 {self.defense_code} 不在引擎加载的数据里 —— "
                 "OFF 状态将无法建仓（检查 data/qlib_data/features/day 下的 ETF 文件）"
             )
-        etf_close = pd.to_numeric(stock_data[self.defense_code]["close"], errors="coerce")
+        etf_close = pd.to_numeric(
+            stock_data[self.defense_code]["close"], errors="coerce"
+        )
         closes[self.defense_code] = np.nan
         for ts, v in zip(etf_close.index, etf_close.to_numpy(dtype="float64")):
             closes.loc[ts, self.defense_code] = v
@@ -166,8 +180,10 @@ class RegimeSwitchedStrategy(BaseStrategy):
         window_days = [d for d in cal if closes.index[0] <= d <= closes.index[-1]]
         if not window_days:
             window_days = list(closes.index)
-        shadow = ShadowNav(window=int(self.p["shadow_window"]),
-                           annualize=int(self.p["shadow_annualize"]))
+        shadow = ShadowNav(
+            window=int(self.p["shadow_window"]),
+            annualize=int(self.p["shadow_annualize"]),
+        )
         shadow.seed(window_days[0], 1.0)
         basket: Optional[Dict[str, float]] = None
         exec_set = {pd.Timestamp(d) for d in exec_dates}
@@ -192,10 +208,10 @@ class RegimeSwitchedStrategy(BaseStrategy):
                 z = self._zmap.get(x.date().isoformat()) if x is not None else None
                 if z is None:
                     insufficient_z_days += 1
-                dd = shadow.drawdown()          # 只含 ≤D-1 的净值
-                sh = shadow.rolling_sharpe()    # 只含 ≤D-1 的净值
+                dd = shadow.drawdown()  # 只含 ≤D-1 的净值
+                sh = shadow.rolling_sharpe()  # 只含 ≤D-1 的净值
                 j1_bad = z is not None and z < z_threshold
-                j1_good = not j1_bad            # z 样本不足 → 默认不防御 → 视作好
+                j1_good = not j1_bad  # z 样本不足 → 默认不防御 → 视作好
                 j2_bad = (dd < -dd_limit) or (sh is not None and sh < sharpe_limit)
                 j2_good = (dd >= -dd_limit) and (sh is None or sh >= sharpe_limit)
                 before = state
@@ -208,8 +224,8 @@ class RegimeSwitchedStrategy(BaseStrategy):
                         switch_count += 1
                     enter_flag = exit_flag = None
                 else:
-                    enter_flag = bool(j1_bad and j2_bad)     # AND 才防御
-                    exit_flag = bool(j1_good and j2_good)    # 两判据都好才退出
+                    enter_flag = bool(j1_bad and j2_bad)  # AND 才防御
+                    exit_flag = bool(j1_good and j2_good)  # 两判据都好才退出
                     enter_streak = enter_streak + 1 if enter_flag else 0
                     exit_streak = exit_streak + 1 if exit_flag else 0
                     if not frozen:
@@ -222,7 +238,9 @@ class RegimeSwitchedStrategy(BaseStrategy):
                                 switched = True
                                 switch_count += 1
                                 enter_streak = exit_streak = 0
-                        elif state == "OFF" and exit_streak >= int(self.p["confirm_on"]):
+                        elif state == "OFF" and exit_streak >= int(
+                            self.p["confirm_on"]
+                        ):
                             if switch_count >= max_switches:
                                 frozen = True
                                 frozen_attempt = True
@@ -231,14 +249,24 @@ class RegimeSwitchedStrategy(BaseStrategy):
                                 switched = True
                                 switch_count += 1
                                 enter_streak = exit_streak = 0
-                steps.append({
-                    "date": d.date().isoformat(), "state_before": before, "state": state,
-                    "enter_flag": enter_flag, "exit_flag": exit_flag,
-                    "enter_streak": enter_streak, "exit_streak": exit_streak,
-                    "switched": switched, "switch_count": switch_count,
-                    "frozen": frozen, "frozen_attempt": frozen_attempt,
-                    "z": z, "shadow_dd": dd, "shadow_sharpe": sh,
-                })
+                steps.append(
+                    {
+                        "date": d.date().isoformat(),
+                        "state_before": before,
+                        "state": state,
+                        "enter_flag": enter_flag,
+                        "exit_flag": exit_flag,
+                        "enter_streak": enter_streak,
+                        "exit_streak": exit_streak,
+                        "switched": switched,
+                        "switch_count": switch_count,
+                        "frozen": frozen,
+                        "frozen_attempt": frozen_attempt,
+                        "z": z,
+                        "shadow_dd": dd,
+                        "shadow_sharpe": sh,
+                    }
+                )
                 if state == "OFF":
                     self._off_dates.add(dt)
                 if state == "ON" and before == "OFF":
@@ -274,12 +302,19 @@ class RegimeSwitchedStrategy(BaseStrategy):
                 [pd.Timestamp(s["date"]) for s in steps],
                 [bool(s["enter_flag"]) for s in steps],
                 [bool(s["exit_flag"]) for s in steps],
-                confirm_off=int(self.p["confirm_off"]), confirm_on=int(self.p["confirm_on"]),
-                max_switches=max_switches)
-            mismatch = [ (a["date"], a["state"], b["state"]) for a, b in zip(steps, check["steps"])
-                         if a["state"] != b["state"] ]
+                confirm_off=int(self.p["confirm_off"]),
+                confirm_on=int(self.p["confirm_on"]),
+                max_switches=max_switches,
+            )
+            mismatch = [
+                (a["date"], a["state"], b["state"])
+                for a, b in zip(steps, check["steps"])
+                if a["state"] != b["state"]
+            ]
             if mismatch:
-                raise RuntimeError(f"内联状态机与 run_switch_machine 不一致: {mismatch[:5]}")
+                raise RuntimeError(
+                    f"内联状态机与 run_switch_machine 不一致: {mismatch[:5]}"
+                )
             machine_meta["pure_machine_check"] = "identical"
 
         prev_state = "ON"
@@ -319,8 +354,9 @@ class RegimeSwitchedStrategy(BaseStrategy):
             f"冻结={machine_meta.get('frozen_at_max_switches')}"
         )
 
-    def _basket_after(self, d: pd.Timestamp, state: str,
-                      scores: Dict[str, Dict[datetime, float]]) -> Optional[Dict[str, float]]:
+    def _basket_after(
+        self, d: pd.Timestamp, state: str, scores: Dict[str, Dict[datetime, float]]
+    ) -> Optional[Dict[str, float]]:
         """D 收盘决策后的影子篮子：ON=基线 top 分数的 topk 等权；OFF=ETF×defense_weight。"""
         if state == "OFF":
             return {self.defense_code: float(self.p["defense_weight"])}
@@ -339,7 +375,9 @@ class RegimeSwitchedStrategy(BaseStrategy):
         return {c: w for c in top}
 
     # 引擎接线
-    def generate_signals(self, data: pd.DataFrame, current_date: datetime) -> List[TradingSignal]:
+    def generate_signals(
+        self, data: pd.DataFrame, current_date: datetime
+    ) -> List[TradingSignal]:
         if self._seen_dt is None or current_date > self._seen_dt:
             self._seen_dt = current_date
         return self._base.generate_signals(data, current_date)
@@ -358,19 +396,31 @@ class RegimeSwitchedStrategy(BaseStrategy):
         role = self._day_role.get(d) if d is not None else None
         if role == "off":
             # 一天清完股票（n_drop=topk_base）并只买 1 个仓位（topk=1）的 ETF
-            return {"topk": 1, "n_drop": self.topk_base, "hold_thresh": 0,
-                    "deal_price": "close"}
+            return {
+                "topk": 1,
+                "n_drop": self.topk_base,
+                "hold_thresh": 0,
+                "deal_price": "close",
+            }
         if role == "exit_on":
             # 离开防御第一天：卖掉 ETF 并买入最高分 1 只
             return {"topk": 1, "n_drop": 1, "hold_thresh": 0, "deal_price": "close"}
-        return {"topk": self.topk_base, "n_drop": self.n_drop_base, "hold_thresh": 0,
-                "deal_price": "close"}
+        return {
+            "topk": self.topk_base,
+            "n_drop": self.n_drop_base,
+            "hold_thresh": 0,
+            "deal_price": "close",
+        }
 
     def get_position_size_hint(self) -> Optional[float]:
         return self.on_max_size
 
-    def validate_signal(self, signal: TradingSignal, portfolio_value: float,
-                        current_positions: Dict[str, Any]):
+    def validate_signal(
+        self,
+        signal: TradingSignal,
+        portfolio_value: float,
+        current_positions: Dict[str, Any],
+    ):
         # 引擎每笔执行前都会调这里，且信号带 timestamp → 按当日角色切单仓上限。
         # 只动调用方自己创建的 BacktestConfig 实例，不动引擎代码。
         if self._bt_config is not None:
@@ -391,7 +441,9 @@ class FixedDefenseStrategy(BaseStrategy):
         self.weight = float(cfg.get("defense_weight", 0.95))
         self._bought = False
 
-    def generate_signals(self, data: pd.DataFrame, current_date: datetime) -> List[TradingSignal]:
+    def generate_signals(
+        self, data: pd.DataFrame, current_date: datetime
+    ) -> List[TradingSignal]:
         code = data.attrs.get("stock_code", "")
         if code != self.code or self._bought:
             return []
@@ -403,9 +455,17 @@ class FixedDefenseStrategy(BaseStrategy):
             return []
         self._bought = True
         from ..models import SignalType
-        return [TradingSignal(timestamp=current_date, stock_code=code,
-                              signal_type=SignalType.BUY, strength=1.0, price=price,
-                              reason="纯防御臂：整窗持有国债ETF")]
+
+        return [
+            TradingSignal(
+                timestamp=current_date,
+                stock_code=code,
+                signal_type=SignalType.BUY,
+                strength=1.0,
+                price=price,
+                reason="纯防御臂：整窗持有国债ETF",
+            )
+        ]
 
     def calculate_indicators(self, data: pd.DataFrame) -> Dict[str, pd.Series]:
         return {"price": data["close"]}
@@ -417,8 +477,9 @@ class FixedDefenseStrategy(BaseStrategy):
         return self.weight
 
 
-def build_random_schedule_from_log(decision_dates: List[datetime], switch_log: List[Dict[str, Any]],
-                                   seed: int) -> Dict[str, Any]:
+def build_random_schedule_from_log(
+    decision_dates: List[datetime], switch_log: List[Dict[str, Any]], seed: int
+) -> Dict[str, Any]:
     """随机开关对照日程：切换次数取开关版实际切换次数，OFF 区间由 seed 决定。"""
     n = sum(1 for s in switch_log if s.get("switched"))
     return random_switch_schedule(decision_dates, target_switches=n, seed=seed)

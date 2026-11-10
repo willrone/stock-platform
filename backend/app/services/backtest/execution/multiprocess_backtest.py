@@ -90,7 +90,9 @@ def _worker_backtest(
                     cache = data.attrs.setdefault("_precomputed_signals", {})
                     cache[id(strategy)] = signals
             except Exception as e:
-                logger.opt(exception=True).warning(f"Worker {worker_id}: 预计算信号失败 {code}: {e}")
+                logger.opt(exception=True).warning(
+                    f"Worker {worker_id}: 预计算信号失败 {code}: {e}"
+                )
 
         precompute_time = time.perf_counter() - precompute_start
         logger.info(f"Worker {worker_id}: 预计算完成，耗时 {precompute_time:.2f}秒")
@@ -148,7 +150,9 @@ def _worker_backtest(
                             )
                             all_signals.append(signal)
                 except Exception as e:
-                    logger.opt(exception=True).warning(f"Worker {worker_id}: 生成信号失败 {code}: {e}")
+                    logger.opt(exception=True).warning(
+                        f"Worker {worker_id}: 生成信号失败 {code}: {e}"
+                    )
 
             total_signals += len(all_signals)
 
@@ -373,7 +377,9 @@ def run_multiprocess_backtest(
     if errors:
         logger.opt(exception=True).error(f"❌ {len(errors)} 个进程执行失败:")
         for err in errors:
-            logger.opt(exception=True).error(f"  Worker {err['worker_id']}: {err['error']}")
+            logger.opt(exception=True).error(
+                f"  Worker {err['worker_id']}: {err['error']}"
+            )
 
     # 合并成功的结果
     successful_results = [r for r in results if "error" not in r]
@@ -426,9 +432,7 @@ def run_multiprocess_backtest(
         # 夏普比率(标准定义: 日收益 μ/σ 年化 √252; 旧实现 年化收益/波动 复利口径已修正。
         # 用日波动 returns.std() 而非已年化的 volatility, 否则 √252 被抵消成日夏普)
         sharpe_ratio = (
-            returns.mean() / returns.std() * np.sqrt(252)
-            if returns.std() > 0
-            else 0
+            returns.mean() / returns.std() * np.sqrt(252) if returns.std() > 0 else 0
         )
 
         cumulative_returns = (1 + returns).cumprod()

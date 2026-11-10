@@ -9,7 +9,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
 
-import joblib
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
@@ -36,7 +35,9 @@ class LightGBMPredictionStrategy(BaseModelPredictionStrategy):
         self.lgb_model_path = cast(str, config.get("lgb_model_path", ""))
         if not self.lgb_model_path:
             # 默认路径（MODEL_STORAGE_PATH 是 str，必须先转 Path 再用 / 拼接）
-            self.lgb_model_path = str(Path(settings.MODEL_STORAGE_PATH) / "lgb_model.txt")
+            self.lgb_model_path = str(
+                Path(settings.MODEL_STORAGE_PATH) / "lgb_model.txt"
+            )
 
         # 策略参数
         self.top_k = int(config.get("top_k", 5))
@@ -66,7 +67,9 @@ class LightGBMPredictionStrategy(BaseModelPredictionStrategy):
             from app.core.model_loader import safe_joblib_load
 
             meta = safe_joblib_load(str(meta_path)) or {}
-            self._feature_cols = meta.get("features", []) if isinstance(meta, dict) else []
+            self._feature_cols = (
+                meta.get("features", []) if isinstance(meta, dict) else []
+            )
 
         if not self._feature_cols:
             self._feature_cols = [f for f in _DEFAULT_FEATURES]

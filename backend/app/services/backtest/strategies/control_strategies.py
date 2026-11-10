@@ -16,13 +16,13 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 import numpy as np
 import pandas as pd
 from loguru import logger
 
-from .factor_ranking_strategy import FactorRankingStrategy, _SCORES_ATTR
+from .factor_ranking_strategy import _SCORES_ATTR, FactorRankingStrategy
 
 
 class RandomTopKControlStrategy(FactorRankingStrategy):
@@ -72,7 +72,7 @@ class RandomTopKControlStrategy(FactorRankingStrategy):
             if self.lag >= n_dates:
                 raise ValueError(f"lag={self.lag} 大于日期数 {n_dates}")
             lagged = np.full_like(composite, np.nan)
-            lagged[self.lag:] = composite[: n_dates - self.lag]
+            lagged[self.lag :] = composite[: n_dates - self.lag]
             composite = lagged
 
         stored = 0

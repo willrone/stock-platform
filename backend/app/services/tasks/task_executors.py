@@ -204,7 +204,9 @@ def execute_prediction_task_simple(task_id: str) -> Any:
                 success_count += 1
 
             except Exception as e:
-                task_logger.opt(exception=True).error(f"预测股票 {stock_code} 失败: {e}")
+                task_logger.opt(exception=True).error(
+                    f"预测股票 {stock_code} 失败: {e}"
+                )
                 failures.append(f"{stock_code}: {type(e).__name__} {e}")
                 continue
 
@@ -308,11 +310,15 @@ def execute_backtest_task_simple(task_id: str) -> Any:  # noqa: C901
         for field in system_fields:
             if field in config:
                 found_system_fields.append(field)
-                task_logger.opt(exception=True).error(f"配置中发现系统字段 '{field}': {config[field]}")
+                task_logger.opt(exception=True).error(
+                    f"配置中发现系统字段 '{field}': {config[field]}"
+                )
                 raise ValueError(f"配置中发现意外的系统字段 '{field}': {config[field]}")
 
         if found_system_fields:
-            task_logger.opt(exception=True).warning(f"配置中发现系统字段: {found_system_fields}")
+            task_logger.opt(exception=True).warning(
+                f"配置中发现系统字段: {found_system_fields}"
+            )
 
         stock_codes = config.get("stock_codes", [])
         start_date_str = config.get("start_date")
@@ -324,10 +330,14 @@ def execute_backtest_task_simple(task_id: str) -> Any:  # noqa: C901
         for key in ["status", "progress", "result", "completed_at", "error_message"]:
             if key in config:
                 unexpected_keys.append(key)
-                task_logger.opt(exception=True).warning(f"配置中包含意外的'{key}'字段: {config[key]}")
+                task_logger.opt(exception=True).warning(
+                    f"配置中包含意外的'{key}'字段: {config[key]}"
+                )
 
         if unexpected_keys:
-            task_logger.opt(exception=True).warning(f"配置中包含意外字段: {unexpected_keys}")
+            task_logger.opt(exception=True).warning(
+                f"配置中包含意外字段: {unexpected_keys}"
+            )
 
         # 记录所有配置字段
         task_logger.info(f"完整配置字段: {list(config.keys())}")
@@ -391,7 +401,9 @@ def execute_backtest_task_simple(task_id: str) -> Any:  # noqa: C901
                 if message:
                     task_logger.info(f"回测进度: {progress:.1f}% - {message}")
             except Exception as progress_error:
-                task_logger.opt(exception=True).warning(f"更新回测进度失败: {progress_error}")
+                task_logger.opt(exception=True).warning(
+                    f"更新回测进度失败: {progress_error}"
+                )
 
         executor = BacktestExecutor(
             data_dir=str(settings.DATA_ROOT_PATH),
@@ -905,9 +917,13 @@ def execute_backtest_task_simple(task_id: str) -> Any:  # noqa: C901
                         error_message=f"回测执行失败: {str(backtest_error)}",
                     )
                 else:
-                    task_logger.opt(exception=True).warning(f"任务不存在，无法更新状态: {task_id}")
+                    task_logger.opt(exception=True).warning(
+                        f"任务不存在，无法更新状态: {task_id}"
+                    )
             except Exception as update_error:
-                task_logger.opt(exception=True).warning(f"更新任务状态失败: {update_error}")
+                task_logger.opt(exception=True).warning(
+                    f"更新任务状态失败: {update_error}"
+                )
             raise backtest_error
 
     except KeyError as ke:

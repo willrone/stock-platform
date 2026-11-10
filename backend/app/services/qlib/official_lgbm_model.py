@@ -24,12 +24,12 @@ from typing import Any, Optional, Text, Union
 
 import numpy as np
 import pandas as pd
+from loguru import logger
 from qlib.data.dataset import DatasetH
 from qlib.data.dataset.handler import DataHandlerLP
 from qlib.data.dataset.weight import Reweighter
 from qlib.model.base import ModelFT
 from qlib.model.interpret.base import LightGBMFInt
-from loguru import logger
 
 
 class StockPlatformLGBModel(ModelFT, LightGBMFInt):
@@ -115,7 +115,9 @@ class StockPlatformLGBModel(ModelFT, LightGBMFInt):
             if key == "train":
                 self._train_y = np.asarray(y_values, dtype="float64")
                 self._n_train_rows = int(x_values.shape[0])
-            self._train_feature_names = list(x.columns) if hasattr(x, "columns") else None
+            self._train_feature_names = (
+                list(x.columns) if hasattr(x, "columns") else None
+            )
             ds_l.append((train_data, key))
         return ds_l
 
@@ -200,9 +202,7 @@ class StockPlatformLGBModel(ModelFT, LightGBMFInt):
 
         values = np.ascontiguousarray(x_test.values, dtype=np.float64)
         if not np.isfinite(values).all():
-            raise ValueError(
-                f"预测特征含 NaN/Inf（segment={segment!r}），拒绝预测"
-            )
+            raise ValueError(f"预测特征含 NaN/Inf（segment={segment!r}），拒绝预测")
         n_train = getattr(self, "_train_feature_count", None)
         if n_train is not None and values.shape[1] != n_train:
             raise ValueError(

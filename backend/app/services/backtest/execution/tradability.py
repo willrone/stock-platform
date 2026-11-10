@@ -33,6 +33,7 @@
 本模块接受**已经在内存里的 DataFrame**，列名兼容两种写法
 （`$close` / `close`）。
 """
+
 from __future__ import annotations
 
 import os
@@ -75,10 +76,10 @@ class TradabilityMatrix:
 
     dates: List[pd.Timestamp]
     codes: List[str]
-    can_buy: np.ndarray            # (n_dates, n_stocks) bool
-    can_sell: np.ndarray           # (n_dates, n_stocks) bool
-    max_buy_amount: np.ndarray     # (n_dates, n_stocks) float，nan = 不限
-    reason_buy: Optional[np.ndarray] = None   # (n_dates, n_stocks) object
+    can_buy: np.ndarray  # (n_dates, n_stocks) bool
+    can_sell: np.ndarray  # (n_dates, n_stocks) bool
+    max_buy_amount: np.ndarray  # (n_dates, n_stocks) float，nan = 不限
+    reason_buy: Optional[np.ndarray] = None  # (n_dates, n_stocks) object
     reason_sell: Optional[np.ndarray] = None
 
     def _row_of(self, date) -> int:
@@ -90,9 +91,7 @@ class TradabilityMatrix:
         self._date_index: Dict[pd.Timestamp, int] = {
             pd.Timestamp(d).normalize(): i for i, d in enumerate(self.dates)
         }
-        self._code_index: Dict[str, int] = {
-            str(c): i for i, c in enumerate(self.codes)
-        }
+        self._code_index: Dict[str, int] = {str(c): i for i, c in enumerate(self.codes)}
 
     def check(self, code: str, date) -> tuple:
         """返回 (can_buy, can_sell, max_buy_amount, reason)"""
@@ -139,9 +138,7 @@ def load_st_codes(stock_codes: Optional[Sequence[str]] = None) -> Dict[str, bool
     if out:
         return out
     # 兜底：qlib 官方 instruments（若某天补了 name 列也能用）
-    path2 = os.path.join(
-        root, "data", "qlib_official_data", "instruments", "all.txt"
-    )
+    path2 = os.path.join(root, "data", "qlib_official_data", "instruments", "all.txt")
     if not os.path.exists(path2):
         return out
     try:
@@ -268,17 +265,21 @@ def build_tradability(
             if r >= thr:
                 can_buy[row, j] = False
                 msg = f"涨停 {r*100:.1f}%（上限 {lp*100:.0f}%）"
-                if (open_ is not None and high is not None and low is not None):
-                    o = open_.iloc[t]; h = high.iloc[t]; l = low.iloc[t]
-                    if all(np.isfinite(x) for x in (o, h, l)) and h == l:
+                if open_ is not None and high is not None and low is not None:
+                    o = open_.iloc[t]
+                    h = high.iloc[t]
+                    lo = low.iloc[t]
+                    if all(np.isfinite(x) for x in (o, h, lo)) and h == lo:
                         msg = "一字涨停，全天封死"
                 r_buy[row][j] = msg
             elif r <= -thr:
                 can_sell[row, j] = False
                 msg = f"跌停 {r*100:.1f}%，卖不出"
-                if (open_ is not None and high is not None and low is not None):
-                    o = open_.iloc[t]; h = high.iloc[t]; l = low.iloc[t]
-                    if all(np.isfinite(x) for x in (o, h, l)) and h == l:
+                if open_ is not None and high is not None and low is not None:
+                    o = open_.iloc[t]
+                    h = high.iloc[t]
+                    lo = low.iloc[t]
+                    if all(np.isfinite(x) for x in (o, h, lo)) and h == lo:
                         msg = "一字跌停，卖不出"
                 r_sell[row][j] = msg
             # 流动性

@@ -17,8 +17,9 @@ from ..models import BacktestConfig, Position, SignalType, Trade, TradingSignal
 class PortfolioManagerArray:
     """组合管理器 - 数组优化版本"""
 
-    def __init__(self, config: BacktestConfig, stock_codes: List[str],
-                 tradability=None):
+    def __init__(
+        self, config: BacktestConfig, stock_codes: List[str], tradability=None
+    ):
         """
         初始化组合管理器
 
@@ -84,6 +85,7 @@ class PortfolioManagerArray:
         # None = 不启用（保持旧行为）；启用后涨停买不进、跌停卖不出、
         # 停牌不可交易。口径与纸面盘/对外信号共用 execution_rules。
         self.tradability = tradability
+
     def _valuation_price(
         self, stock_code: str, current_prices: Dict[str, float]
     ) -> float:
@@ -442,9 +444,7 @@ class PortfolioManagerArray:
             else:
                 exec_price = price * (1 - self.config.slippage_rate)
             slip = price * self.config.slippage_rate
-            trade, reason = self._execute_sell(
-                idx, code, exec_price, price, slip, sig
-            )
+            trade, reason = self._execute_sell(idx, code, exec_price, price, slip, sig)
             if trade is not None:
                 trades.append(trade)
             else:
@@ -651,9 +651,7 @@ class PortfolioManagerArray:
         # 夏普比率(标准定义: 日收益 μ/σ 年化 √252; 旧实现 年化收益/波动 复利口径已修正。
         # 用日波动 returns.std() 而非已年化的 volatility, 否则 √252 被抵消成日夏普)
         sharpe_ratio = (
-            returns.mean() / returns.std() * np.sqrt(252)
-            if returns.std() > 0
-            else 0
+            returns.mean() / returns.std() * np.sqrt(252) if returns.std() > 0 else 0
         )
 
         # 最大回撤

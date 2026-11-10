@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Protocol
-import logging
-
-logger = logging.getLogger(__name__)
 
 from ..core.base_strategy import BaseStrategy
 from ..core.portfolio_manager import PortfolioManager
 from ..models import SignalType, TradingSignal
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -242,9 +242,7 @@ class TopkDropoutTradeModeExecutor:
         _tp = float(getattr(_bt, "take_profit_pct", 0) or 0) if _bt else 0.0
         if _sl > 0 or _tp > 0:
             _pm = context.portfolio_manager
-            _positions = (
-                _pm.positions if hasattr(_pm, "positions") else {}
-            )
+            _positions = _pm.positions if hasattr(_pm, "positions") else {}
             _hits = []
             for _code in list(_positions.keys()):
                 _pos = _positions.get(_code)

@@ -58,7 +58,9 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-BACKEND_ROOT = "/Users/rone/Projects/stock-platform/backend"
+# 必须从 __file__ 解析：写死本机路径会让 CI（ubuntu runner，仓库在 /home/runner/...）在 import 期就炸
+# —— paper_portfolio 在模块顶层 _load daily_signal/weekly_signal，CI 里 pytest 收集阶段直接 FileNotFoundError。
+BACKEND_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROOT = os.path.dirname(BACKEND_ROOT)
 sys.path.insert(0, BACKEND_ROOT)
 

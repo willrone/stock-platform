@@ -37,8 +37,16 @@ ETF_DIR = os.path.join(ROOT, "data", "etf", "parquet")
 BOARD_LOT = 100
 
 _BAR_COLUMNS = (
-    "date", "open", "high", "low", "close",
-    "volume", "amount", "pct_chg", "is_st", "trade_status",
+    "date",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "amount",
+    "pct_chg",
+    "is_st",
+    "trade_status",
 )
 _ETF_BAR_COLUMNS = ("date", "open", "high", "low", "close", "volume")
 
@@ -128,15 +136,29 @@ def load_latest_bar(
     """
     code = str(code).strip()
     bare = code.split(".")[0]
-    is_etf_shape = "." not in code and len(bare) == 6 and bare[:2] in ("15", "51", "56", "58")
+    is_etf_shape = (
+        "." not in code and len(bare) == 6 and bare[:2] in ("15", "51", "56", "58")
+    )
 
     bars: List[Optional[Dict[str, Any]]] = []
     if is_etf_shape:
-        bars.append(_read_last_bar(os.path.join(etf_dir, f"{bare}.parquet"), _ETF_BAR_COLUMNS, "etf"))
-        bars.append(_read_last_bar(bar_file(code, daily_dir), _BAR_COLUMNS, "baostock_daily"))
+        bars.append(
+            _read_last_bar(
+                os.path.join(etf_dir, f"{bare}.parquet"), _ETF_BAR_COLUMNS, "etf"
+            )
+        )
+        bars.append(
+            _read_last_bar(bar_file(code, daily_dir), _BAR_COLUMNS, "baostock_daily")
+        )
     else:
-        bars.append(_read_last_bar(bar_file(code, daily_dir), _BAR_COLUMNS, "baostock_daily"))
-        bars.append(_read_last_bar(os.path.join(etf_dir, f"{bare}.parquet"), _ETF_BAR_COLUMNS, "etf"))
+        bars.append(
+            _read_last_bar(bar_file(code, daily_dir), _BAR_COLUMNS, "baostock_daily")
+        )
+        bars.append(
+            _read_last_bar(
+                os.path.join(etf_dir, f"{bare}.parquet"), _ETF_BAR_COLUMNS, "etf"
+            )
+        )
 
     bar = next((b for b in bars if b), None)
     if bar is None:
@@ -247,13 +269,14 @@ def enrich_order_row(
     out["signal_amount"] = signal_amount
     latest_price = out.get("latest_price")
     out["ref_amount_latest"] = (
-        round(shares * latest_price, 2)
-        if (latest_price and shares) else None
+        round(shares * latest_price, 2) if (latest_price and shares) else None
     )
     # 目标权重：用**信号日**成交额 / 信号日组合净值（不是最新市值口径，
     # 后者会把「这笔单占组合多少」变成「这只票今天值多少」，两件事）
     if portfolio_value and signal_amount:
-        out["target_weight_pct"] = round(signal_amount / float(portfolio_value) * 100.0, 2)
+        out["target_weight_pct"] = round(
+            signal_amount / float(portfolio_value) * 100.0, 2
+        )
     else:
         out["target_weight_pct"] = None
     return out
@@ -268,12 +291,26 @@ def enrich_orders(
     etf_dir: str = ETF_DIR,
 ) -> Dict[str, Any]:
     """批量补字段 + 汇总：价格 as-of、不可成交笔数、缺行情笔数。"""
-    eb = [enrich_order_row(r, "buy", portfolio_value=portfolio_value,
-                           daily_dir=daily_dir, etf_dir=etf_dir)
-          for r in buys]
-    es = [enrich_order_row(r, "sell", portfolio_value=portfolio_value,
-                           daily_dir=daily_dir, etf_dir=etf_dir)
-          for r in sells]
+    eb = [
+        enrich_order_row(
+            r,
+            "buy",
+            portfolio_value=portfolio_value,
+            daily_dir=daily_dir,
+            etf_dir=etf_dir,
+        )
+        for r in buys
+    ]
+    es = [
+        enrich_order_row(
+            r,
+            "sell",
+            portfolio_value=portfolio_value,
+            daily_dir=daily_dir,
+            etf_dir=etf_dir,
+        )
+        for r in sells
+    ]
     dates = [str(r["price_as_of"]) for r in (eb + es) if r.get("price_as_of")]
     all_rows: List[Dict[str, Any]] = eb + es
     # `price_as_of` 取**最旧**的一根 bar：整批清单能不能照着下单，取决于最陈旧的那一行。

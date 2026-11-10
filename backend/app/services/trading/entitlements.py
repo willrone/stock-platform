@@ -60,7 +60,7 @@ ENTITLEMENTS: Dict[str, SignalEntitlement] = {
     "pro": SignalEntitlement(
         tier="pro",
         label="信号版",
-        strategies=None,          # 全部
+        strategies=None,  # 全部
         delay_days=0,
         include_execution_detail=True,
         include_full_ledger=True,
@@ -113,9 +113,7 @@ def upgrade_required(tier: Optional[str], strategy: str) -> Optional[str]:
     if can_access_strategy(tier, strategy):
         return None
     ent = entitlement_for(tier)
-    return (
-        f"「{strategy}」是信号版功能。{ent.upgrade_hint}"
-    )
+    return f"「{strategy}」是信号版功能。{ent.upgrade_hint}"
 
 
 def effective_delay_days(tier: Optional[str]) -> int:

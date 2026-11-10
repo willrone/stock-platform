@@ -59,8 +59,10 @@ class GateReport:
         by_reason: dict[str, int] = {}
         for d in self.dropped:
             by_reason[d["reason"]] = by_reason.get(d["reason"], 0) + 1
-        return (f"宇宙 {self.universe_size} 只 → 保留 {len(self.kept)} 只，"
-                f"剔除 {len(self.dropped)} 只（{self.dropped_share*100:.1f}%）；原因分布 {by_reason}")
+        return (
+            f"宇宙 {self.universe_size} 只 → 保留 {len(self.kept)} 只，"
+            f"剔除 {len(self.dropped)} 只（{self.dropped_share*100:.1f}%）；原因分布 {by_reason}"
+        )
 
     def to_json(self) -> dict:
         return {
@@ -75,7 +77,9 @@ class GateReport:
         }
 
 
-def _days_in_window(path: str, lo_ns: int, hi_ns: int, date_column: str | None) -> set[int]:
+def _days_in_window(
+    path: str, lo_ns: int, hi_ns: int, date_column: str | None
+) -> set[int]:
     """读一个 parquet，返回窗内出现过的交易日（ns 整数）。date_column=None 表示日期在索引上。
 
     qlib 的 `features/day` 索引是 MultiIndex(stock_code, date)，且同一个文件里 stock_code 可能有
@@ -119,8 +123,13 @@ def _days_in_window(path: str, lo_ns: int, hi_ns: int, date_column: str | None) 
     return {d for d in days if lo_ns <= d <= hi_ns}
 
 
-def build_gate_report(universe: list[str], start: datetime | str, end: datetime | str,
-                      data_root: str, min_ratio: float = MIN_SCREEN_RATIO) -> GateReport:
+def build_gate_report(
+    universe: list[str],
+    start: datetime | str,
+    end: datetime | str,
+    data_root: str,
+    min_ratio: float = MIN_SCREEN_RATIO,
+) -> GateReport:
     qlib_dir = os.path.join(data_root, "qlib_data", "features", "day")
     bs_dir = os.path.join(data_root, "parquet", "baostock_daily")
     lo = int(pd.Timestamp(start).normalize().value)
@@ -138,17 +147,45 @@ def build_gate_report(universe: list[str], start: datetime | str, end: datetime 
             continue
         inter = sorted(p & s)
         blind = sorted(p - s)
-        dropped.append(dict(
-            code=code, screen_ratio=round(ratio, 4),
-            price_days=len(p), screen_days=len(s),
-            reason=("无价格数据" if not p else ("风控库完全无窗内数据" if not s else "风控覆盖不足")),
-            blind_span=[pd.Timestamp(blind[0]).date().isoformat(),
-                        pd.Timestamp(blind[-1]).date().isoformat()] if blind else None,
-            screened_span=[pd.Timestamp(inter[0]).date().isoformat(),
-                           pd.Timestamp(inter[-1]).date().isoformat()] if inter else None,
-        ))
-    return GateReport(window=(pd.Timestamp(start).date().isoformat(), pd.Timestamp(end).date().isoformat()),
-                      min_ratio=min_ratio, universe_size=len(universe), kept=kept, dropped=dropped)
+        dropped.append(
+            dict(
+                code=code,
+                screen_ratio=round(ratio, 4),
+                price_days=len(p),
+                screen_days=len(s),
+                reason=(
+                    "无价格数据"
+                    if not p
+                    else ("风控库完全无窗内数据" if not s else "风控覆盖不足")
+                ),
+                blind_span=(
+                    [
+                        pd.Timestamp(blind[0]).date().isoformat(),
+                        pd.Timestamp(blind[-1]).date().isoformat(),
+                    ]
+                    if blind
+                    else None
+                ),
+                screened_span=(
+                    [
+                        pd.Timestamp(inter[0]).date().isoformat(),
+                        pd.Timestamp(inter[-1]).date().isoformat(),
+                    ]
+                    if inter
+                    else None
+                ),
+            )
+        )
+    return GateReport(
+        window=(
+            pd.Timestamp(start).date().isoformat(),
+            pd.Timestamp(end).date().isoformat(),
+        ),
+        min_ratio=min_ratio,
+        universe_size=len(universe),
+        kept=kept,
+        dropped=dropped,
+    )
 
 
 def gate_report_path(data_root: str) -> str:
@@ -158,32 +195,66 @@ def gate_report_path(data_root: str) -> str:
 def raw_universe(data_root: str) -> list[str]:
     """引擎的价格源目录 = 宇宙来源（和 data_loader 读的是同一个库）。"""
     import glob
-    files = glob.glob(os.path.join(data_root, "qlib_data", "features", "day", "*.parquet"))
-    return sorted(os.path.basename(f)[: -len(".parquet")].replace("_", ".") for f in files)
+
+    files = glob.glob(
+        os.path.join(data_root, "qlib_data", "features", "day", "*.parquet")
+    )
+    return sorted(
+        os.path.basename(f)[: -len(".parquet")].replace("_", ".") for f in files
+    )
 
 
-def gated_universe(data_root: str, start, end, min_ratio: float = MIN_SCREEN_RATIO,
-                   enabled: bool = True, force: bool = False) -> tuple[list[str], "GateReport | None"]:
+def gated_universe(
+    data_root: str,
+    start,
+    end,
+    min_ratio: float = MIN_SCREEN_RATIO,
+    enabled: bool = True,
+    force: bool = False,
+) -> tuple[list[str], "GateReport | None"]:
     """实验脚本统一入口：enabled=False 只做复现旧数字用，正常实验一律带闸门。"""
     if not enabled:
         return raw_universe(data_root), None
-    rep = load_or_build_report(raw_universe(data_root), start, end, data_root,
-                               gate_report_path(data_root), min_ratio=min_ratio, force=force)
+    rep = load_or_build_report(
+        raw_universe(data_root),
+        start,
+        end,
+        data_root,
+        gate_report_path(data_root),
+        min_ratio=min_ratio,
+        force=force,
+    )
     return rep.kept, rep
 
 
-def load_or_build_report(universe: list[str], start, end, data_root: str,
-                         report_path: str, min_ratio: float = MIN_SCREEN_RATIO,
-                         force: bool = False) -> GateReport:
+def load_or_build_report(
+    universe: list[str],
+    start,
+    end,
+    data_root: str,
+    report_path: str,
+    min_ratio: float = MIN_SCREEN_RATIO,
+    force: bool = False,
+) -> GateReport:
     """产物缓存：同窗口/同宇宙/同阈值直接读 JSON，避免每次跑实验都重扫 5513 个文件。"""
     if os.path.exists(report_path) and not force:
         raw = json.load(open(report_path))
-        if (raw.get("window") == [pd.Timestamp(start).date().isoformat(), pd.Timestamp(end).date().isoformat()]
-                and raw.get("min_screen_ratio") == min_ratio
-                and raw.get("universe_size") == len(universe)):
-            return GateReport(window=tuple(raw["window"]), min_ratio=min_ratio,
-                              universe_size=raw["universe_size"], kept=list(raw["kept_codes"]),
-                              dropped=list(raw["dropped"]))
+        if (
+            raw.get("window")
+            == [
+                pd.Timestamp(start).date().isoformat(),
+                pd.Timestamp(end).date().isoformat(),
+            ]
+            and raw.get("min_screen_ratio") == min_ratio
+            and raw.get("universe_size") == len(universe)
+        ):
+            return GateReport(
+                window=tuple(raw["window"]),
+                min_ratio=min_ratio,
+                universe_size=raw["universe_size"],
+                kept=list(raw["kept_codes"]),
+                dropped=list(raw["dropped"]),
+            )
     rep = build_gate_report(universe, start, end, data_root, min_ratio)
     os.makedirs(os.path.dirname(report_path), exist_ok=True)
     with open(report_path, "w") as fh:
@@ -198,7 +269,9 @@ def main() -> None:
     ap.add_argument("--start", default="2023-05-12")
     ap.add_argument("--end", default="2026-05-08")
     ap.add_argument("--min-ratio", type=float, default=MIN_SCREEN_RATIO)
-    ap.add_argument("--out", default="data/strategy_baseline/universe_gate_2026-11-06.json")
+    ap.add_argument(
+        "--out", default="data/strategy_baseline/universe_gate_2026-11-06.json"
+    )
     ap.add_argument("--data-root", default=None)
     ap.add_argument("--force", action="store_true")
     args = ap.parse_args()
@@ -206,16 +279,30 @@ def main() -> None:
     data_root = args.data_root
     if data_root is None:
         from app.core.config import settings
+
         data_root = str(settings.DATA_ROOT_PATH)
     universe = raw_universe(data_root)
-    rep = load_or_build_report(universe, args.start, args.end, data_root, args.out,
-                               min_ratio=args.min_ratio, force=args.force)
+    rep = load_or_build_report(
+        universe,
+        args.start,
+        args.end,
+        data_root,
+        args.out,
+        min_ratio=args.min_ratio,
+        force=args.force,
+    )
     print(rep.summary(), flush=True)
     bj = [d for d in rep.dropped if d["code"].endswith(".BJ")]
-    print(f"其中北交所 {len(bj)} 只；非北交所被剔除 {len(rep.dropped) - len(bj)} 只", flush=True)
+    print(
+        f"其中北交所 {len(bj)} 只；非北交所被剔除 {len(rep.dropped) - len(bj)} 只",
+        flush=True,
+    )
     for d in rep.dropped[:12]:
-        print(f"  {d['code']:12s} ratio={d['screen_ratio']:.3f} 价格{d['price_days']:4d}天 "
-              f"风控{d['screen_days']:4d}天 盲区{d['blind_span']} {d['reason']}", flush=True)
+        print(
+            f"  {d['code']:12s} ratio={d['screen_ratio']:.3f} 价格{d['price_days']:4d}天 "
+            f"风控{d['screen_days']:4d}天 盲区{d['blind_span']} {d['reason']}",
+            flush=True,
+        )
     print("saved ->", args.out, flush=True)
 
 

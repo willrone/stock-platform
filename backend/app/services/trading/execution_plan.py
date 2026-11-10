@@ -86,8 +86,8 @@ from __future__ import annotations
 import json
 import math
 import os
-from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Tuple
 
 # ── 成本模型（可配置）──────────────────────────────────────────────
 #: 佣金费率（默认万 2.5 = 0.025%）
@@ -396,13 +396,13 @@ class Order:
 
     code: str
     name: str
-    side: str                    # buy / sell
+    side: str  # buy / sell
     shares: int
     price: float
     amount: float
     fees: FeeBreakdown
-    total_cost: float            # 买入 = 金额 + 费用；卖出 = 金额 - 费用（净收入）
-    cost_price: float            # 含费摊薄成本价
+    total_cost: float  # 买入 = 金额 + 费用；卖出 = 金额 - 费用（净收入）
+    cost_price: float  # 含费摊薄成本价
     reason: str = ""
     score: Optional[float] = None
     realized_pnl: Optional[float] = None
@@ -499,15 +499,15 @@ class ExecutionPlan:
 
 #: 各代码前缀的涨跌停幅度（与 app/services/trading/execution_rules.py 一致）
 _LIMIT_BY_PREFIX: Tuple[Tuple[str, float], ...] = (
-    ("30", 0.20),   # 创业板
-    ("68", 0.20),   # 科创板
-    ("92", 0.30),   # 北交所
+    ("30", 0.20),  # 创业板
+    ("68", 0.20),  # 科创板
+    ("92", 0.30),  # 北交所
     ("83", 0.30),
     ("87", 0.30),
     ("43", 0.30),
     ("82", 0.30),
-    ("60", 0.10),   # 沪主板
-    ("00", 0.10),   # 深主板
+    ("60", 0.10),  # 沪主板
+    ("00", 0.10),  # 深主板
 )
 
 #: ST 股涨跌停幅度
@@ -722,15 +722,15 @@ def build_execution_plan(
 
     # ══ 买入 ══════════════════════════════════════════════════════
     n_target = len(target_codes)
-    target_weight = (
-        (1.0 - config.cash_reserve_pct) / n_target if n_target > 0 else 0.0
-    )
+    target_weight = (1.0 - config.cash_reserve_pct) / n_target if n_target > 0 else 0.0
     buy_budget_total = cash_running * config.cash_use_pct
     budget_remaining = buy_budget_total
 
     # 买入候选：delta 模式 = 信号显式买入；target 模式 = 目标组合里没持有的
     if mode == "delta":
-        candidates = [c for c in sorted(set(snapshot.buy_codes)) if c not in target_set or True]
+        candidates = [
+            c for c in sorted(set(snapshot.buy_codes)) if c not in target_set or True
+        ]
     else:
         candidates = [c for c in target_codes if c not in ledger.positions]
 
@@ -956,7 +956,9 @@ def render_markdown(plan: ExecutionPlan) -> str:
         lines.append(
             "| 代码 | 名称 | 方向 | 数量 | 单价 | 金额 | 费用 | 成本价 | 盈亏 | 理由 |"
         )
-        lines.append("|------|------|------|------|------|------|------|------|------|------|")
+        lines.append(
+            "|------|------|------|------|------|------|------|------|------|------|"
+        )
         for o in plan.sells:
             lines.append(
                 f"| {o.code} | {o.name} | 卖出 | {o.shares} | {o.price:.3f} | "

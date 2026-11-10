@@ -22,11 +22,9 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass, field
-from datetime import datetime
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-import numpy as np
 import pandas as pd
 
 from app.services.trading.latest_quote import enrich_orders
@@ -208,7 +206,7 @@ def load_nav_daily(strategy: str) -> Dict[str, Any]:
         "initial_capital": None,
         "points": [],
         "note": "暂无日频盯市数据（data/paper/<strategy>_nav_daily.json 不存在）；"
-            "该产物由 cron 0294eb16149f 工作日 18:20 产出",
+        "该产物由 cron 0294eb16149f 工作日 18:20 产出",
     }
     raw = _read_json(_nav_daily_path(strategy))
     if not isinstance(raw, dict):
@@ -278,7 +276,7 @@ def extract_nav_from_trades(
             v = float(pv)
         except (TypeError, ValueError):
             continue
-        if not (v == v) or v <= 0:   # NaN 或非法（非正）
+        if not (v == v) or v <= 0:  # NaN 或非法（非正）
             continue
         d = str(t.get("date") or "")
         if nav_dates and nav_dates[-1] == d:
@@ -317,31 +315,33 @@ class TradingSignalService:
         for s in SIGNAL_STRATEGIES.values():
             holdings = _read_json(_paper_path(s.key)) or {}
             ln = plines.get(s.key) or {}
-            out.append({
-                "key": s.key,
-                "display_name": s.display_name,
-                "desc": s.desc,
-                "factor_note": s.factor_note,
-                "topk": s.topk,
-                "ndrop": s.ndrop,
-                "has_paper": bool(holdings),
-                "last_signal": holdings.get("last_signal"),
-                "n_positions": len(holdings.get("positions", {}) or {}),
-                # 空壳线（无 holdings 文件）→ 以注册表回落，别给 null
-                # （null 会被前端读成"这条线没数据"，实际是"100 万现金待部署"）。
-                "last_value": (
-                    holdings.get("last_value")
-                    if holdings.get("last_value") is not None
-                    else ln.get("value")
-                ),
-                # ── 新增（只增不改）────────────────────────────
-                "exposure": ln.get("exposure"),
-                "invested_return_pct": ln.get("invested_return_pct"),
-                "pnl_display": ln.get("pnl_display"),
-                "as_of": ln.get("as_of"),
-                "status": ln.get("status"),
-                "n_trades": ln.get("n_trades"),
-            })
+            out.append(
+                {
+                    "key": s.key,
+                    "display_name": s.display_name,
+                    "desc": s.desc,
+                    "factor_note": s.factor_note,
+                    "topk": s.topk,
+                    "ndrop": s.ndrop,
+                    "has_paper": bool(holdings),
+                    "last_signal": holdings.get("last_signal"),
+                    "n_positions": len(holdings.get("positions", {}) or {}),
+                    # 空壳线（无 holdings 文件）→ 以注册表回落，别给 null
+                    # （null 会被前端读成"这条线没数据"，实际是"100 万现金待部署"）。
+                    "last_value": (
+                        holdings.get("last_value")
+                        if holdings.get("last_value") is not None
+                        else ln.get("value")
+                    ),
+                    # ── 新增（只增不改）────────────────────────────
+                    "exposure": ln.get("exposure"),
+                    "invested_return_pct": ln.get("invested_return_pct"),
+                    "pnl_display": ln.get("pnl_display"),
+                    "as_of": ln.get("as_of"),
+                    "status": ln.get("status"),
+                    "n_trades": ln.get("n_trades"),
+                }
+            )
         return out
 
     # ── 今日可执行信号 ──
@@ -353,9 +353,7 @@ class TradingSignalService:
         """
         spec = SIGNAL_STRATEGIES.get(strategy)
         if spec is None:
-            raise ValueError(
-                f"未知策略 {strategy}，可选: {list(SIGNAL_STRATEGIES)}"
-            )
+            raise ValueError(f"未知策略 {strategy}，可选: {list(SIGNAL_STRATEGIES)}")
 
         portfolio = _read_json(os.path.join(PAPER_DIR, "portfolio.json")) or {}
         lines = portfolio.get("lines", {}) or {}
@@ -383,20 +381,24 @@ class TradingSignalService:
         buys = []
         for b in (line or {}).get("buys", []) or []:
             code = b.get("code", "")
-            buys.append({
-                **b,
-                "name": b.get("name") or self.stock_name(code),
-                "limit_pct": limit_pct(code),
-            })
+            buys.append(
+                {
+                    **b,
+                    "name": b.get("name") or self.stock_name(code),
+                    "limit_pct": limit_pct(code),
+                }
+            )
 
         sells = []
         for s in (line or {}).get("sells", []) or []:
             code = s.get("code", "")
-            sells.append({
-                **s,
-                "name": s.get("name") or self.stock_name(code),
-                "limit_pct": limit_pct(code),
-            })
+            sells.append(
+                {
+                    **s,
+                    "name": s.get("name") or self.stock_name(code),
+                    "limit_pct": limit_pct(code),
+                }
+            )
 
         # 持有：补上股数 / 成本 / 市值，外部用户照着看持仓
         holds = []
@@ -404,15 +406,17 @@ class TradingSignalService:
             pos = positions.get(code, {})
             shares = int(pos.get("shares", 0) or 0)
             cost = float(pos.get("cost", 0) or 0)
-            holds.append({
-                "code": code,
-                # ETF（袖套腿）不在 A 股名称表里 → 用持仓文件里写入的 name
-                "name": pos.get("name") or self.stock_name(code),
-                "shares": shares,
-                "cost": cost,
-                "cost_amount": round(shares * cost, 2),
-                "buy_date": pos.get("buy_date", ""),
-            })
+            holds.append(
+                {
+                    "code": code,
+                    # ETF（袖套腿）不在 A 股名称表里 → 用持仓文件里写入的 name
+                    "name": pos.get("name") or self.stock_name(code),
+                    "shares": shares,
+                    "cost": cost,
+                    "cost_amount": round(shares * cost, 2),
+                    "buy_date": pos.get("buy_date", ""),
+                }
+            )
         holds.sort(key=lambda h: -(h.get("cost_amount") or 0))
 
         _ln = line or {}
@@ -426,25 +430,22 @@ class TradingSignalService:
         # （满仓线现金就是 0），不能被回落到注册表。
         _h_cash = holdings.get("cash")
         _h_value = holdings.get("last_value")
-        cash = float(
-            _h_cash if _h_cash is not None else (_ln.get("cash") or 0)
-        )
-        value = float(
-            _h_value if _h_value is not None else (_ln.get("value") or 0)
-        )
+        cash = float(_h_cash if _h_cash is not None else (_ln.get("cash") or 0))
+        value = float(_h_value if _h_value is not None else (_ln.get("value") or 0))
         _h_capital = holdings.get("initial_capital")
         capital = float(
-            _h_capital if _h_capital is not None
+            _h_capital
+            if _h_capital is not None
             else (_ln.get("initial_capital") or 1_000_000)
         )
 
         # 观测口径层（附录 A）：展示用 PnL 字符串 —— 从未成交的线是 "—"
         # （0.00% 会被读成"打平"，它其实只是"什么都没做"）。
         _pnl = _ln.get("pnl_pct")
-        _pnl_display = (
-            _ln.get("pnl_display")
-            or ("—" if _ln.get("n_trades") == 0
-                else (f"{float(_pnl):.2f}%" if _pnl is not None else "—"))
+        _pnl_display = _ln.get("pnl_display") or (
+            "—"
+            if _ln.get("n_trades") == 0
+            else (f"{float(_pnl):.2f}%" if _pnl is not None else "—")
         )
 
         # ── 建设项 C（2026-11-05）：可下单清单 ────────────────────────────
@@ -469,7 +470,9 @@ class TradingSignalService:
             "capital": capital,
             # 门禁 d：**原字段语义与取值不变**（前端 TS 类型是 number，
             # 改成 null 会编译不过）。诚实信号放在新增的 pnl_display / status 上。
-            "total_return_pct": round((value / capital - 1) * 100, 3) if capital else 0.0,
+            "total_return_pct": (
+                round((value / capital - 1) * 100, 3) if capital else 0.0
+            ),
             # 观测口径层（附录 A，2026-11-02）：展示用字符串。
             # 从未成交的线 → "—"，不再显示 0.00%（0.00% 会被读成"打平"，
             # 而它其实只是"什么都没做"——实测该线在裸 PnL 榜上排第 2，
@@ -537,9 +540,7 @@ class TradingSignalService:
     def performance(self, strategy: str) -> Dict[str, Any]:
         """纸面组合的业绩与交易记录 —— 对外展示真实 track record。"""
         if strategy not in SIGNAL_STRATEGIES:
-            raise ValueError(
-                f"未知策略 {strategy}，可选: {list(SIGNAL_STRATEGIES)}"
-            )
+            raise ValueError(f"未知策略 {strategy}，可选: {list(SIGNAL_STRATEGIES)}")
         holdings = _read_json(_paper_path(strategy)) or {}
         positions = holdings.get("positions", {}) or {}
         capital = float(holdings.get("initial_capital", 1_000_000) or 1_000_000)
@@ -559,7 +560,6 @@ class TradingSignalService:
 
         buys = [t for t in trades if t.get("action") == "BUY"]
         sells = [t for t in trades if t.get("action") == "SELL"]
-        gross_pl = 0.0
         realized = 0.0
         cost_basis: Dict[str, float] = {}
         for t in trades:
@@ -575,10 +575,10 @@ class TradingSignalService:
                 if basis > 0:
                     # 按比例结转成本
                     sold_shares = float(t.get("shares", 0) or 0)
-                    total_shares = sum(
-                        float(x.get("shares", 0) or 0)
-                        for x in positions.values()
-                    ) + sold_shares
+                    total_shares = (
+                        sum(float(x.get("shares", 0) or 0) for x in positions.values())
+                        + sold_shares
+                    )
                     share = min(1.0, sold_shares / total_shares) if total_shares else 0
                     realized += amount - basis * share
                     cost_basis[code] = basis * (1 - share)
@@ -607,10 +607,13 @@ class TradingSignalService:
                     rets.append(nav[i] / nav[i - 1] - 1.0)
             if len(rets) >= 2:
                 import statistics
+
                 mu = statistics.fmean(rets)
-                sd = statistics.pstdev(rets) or (statistics.stdev(rets) if len(rets) > 1 else 0)
+                sd = statistics.pstdev(rets) or (
+                    statistics.stdev(rets) if len(rets) > 1 else 0
+                )
                 if sd > 0:
-                    sharpe = round(mu / sd * (252 ** 0.5), 4)
+                    sharpe = round(mu / sd * (252**0.5), 4)
             peak = nav[0]
             worst = 0.0
             for v in nav:
@@ -642,7 +645,9 @@ class TradingSignalService:
             "value": round(value, 2),
             "cash": round(cash, 2),
             "position_value": round(market_value, 2),
-            "total_return_pct": round((value / capital - 1) * 100, 3) if capital else 0.0,
+            "total_return_pct": (
+                round((value / capital - 1) * 100, 3) if capital else 0.0
+            ),
             "n_positions": len(positions),
             "n_trades": len(trades),
             # 风险指标（2026-10-27 新增）—— 付费用户必须看到真实风险

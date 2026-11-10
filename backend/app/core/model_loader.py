@@ -20,6 +20,7 @@
   from app.services.backtest.model_loader import safe_joblib_load
   model = safe_joblib_load(path)
 """
+
 from __future__ import annotations
 
 import os
@@ -51,7 +52,9 @@ def _make_scalar_shim():
             a, b = args
             if isinstance(a, np.dtype) and isinstance(b, bytes):
                 return real(a, b)
-            if isinstance(a, np.dtype) and isinstance(b, (int, float, np.ndarray, np.generic)):
+            if isinstance(a, np.dtype) and isinstance(
+                b, (int, float, np.ndarray, np.generic)
+            ):
                 return real(a, b)
             if isinstance(b, np.dtype):
                 # 老顺序: scalar(obj, dtype) → 换算成新签名
@@ -65,7 +68,10 @@ class _CompatUnpickler(pickle.Unpickler):
     """把 numpy scalar / lightgbm Booster 的反序列化做兼容处理。"""
 
     def find_class(self, module: str, name: str):
-        if name == "scalar" and module in ("numpy._core.multiarray", "numpy.core.multiarray"):
+        if name == "scalar" and module in (
+            "numpy._core.multiarray",
+            "numpy.core.multiarray",
+        ):
             return _make_scalar_shim()
         if name == "Booster" and module in ("lightgbm.basic", "lightgbm.sklearn"):
             # 用真 Booster, 但 __setstate__ 前后加日志; 段错误无法捕获,

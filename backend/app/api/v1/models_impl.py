@@ -568,13 +568,17 @@ async def train_model_task(
                 if strategy == SearchStrategy.GRID_SEARCH.value:
                     combinations = _generate_grid_combinations(param_space)
                     if not combinations:
-                        logger.opt(exception=True).warning("超参数网格为空，改用随机搜索")
+                        logger.opt(exception=True).warning(
+                            "超参数网格为空，改用随机搜索"
+                        )
                         combinations = []
                     if combinations and len(combinations) > total_trials:
                         combinations = random.sample(combinations, total_trials)
                     trial_params = combinations
                 elif strategy == SearchStrategy.BAYESIAN_OPTIMIZATION.value:
-                    logger.opt(exception=True).warning("暂不支持贝叶斯优化，改用随机搜索")
+                    logger.opt(exception=True).warning(
+                        "暂不支持贝叶斯优化，改用随机搜索"
+                    )
                     trial_params = []
                 else:
                     trial_params = []
@@ -622,7 +626,9 @@ async def train_model_task(
                             )()
                             logger.info(f"发现更好的超参数组合，得分: {score:.4f}")
                     except Exception as e:
-                        logger.opt(exception=True).error(f"超参数试验 {trial_id} 失败: {e}")
+                        logger.opt(exception=True).error(
+                            f"超参数试验 {trial_id} 失败: {e}"
+                        )
 
                 if best_trial and best_trial.score > 0:
                     final_hyperparameters.update(best_trial.hyperparameters)
@@ -646,7 +652,9 @@ async def train_model_task(
                         },
                     )
                 else:
-                    logger.opt(exception=True).warning("超参数调优未找到有效结果，使用默认参数")
+                    logger.opt(exception=True).warning(
+                        "超参数调优未找到有效结果，使用默认参数"
+                    )
                     tuning_summary = {
                         "strategy": strategy,
                         "trials": len(trial_params),
@@ -732,7 +740,9 @@ async def train_model_task(
 
             # 确保超参数不为空
             if not final_hyperparameters or len(final_hyperparameters) == 0:
-                logger.opt(exception=True).warning(f"模型 {model_id} 的超参数为空，使用默认值")
+                logger.opt(exception=True).warning(
+                    f"模型 {model_id} 的超参数为空，使用默认值"
+                )
                 final_hyperparameters = (
                     hyperparameters.copy() if hyperparameters else {}
                 )
@@ -841,7 +851,9 @@ async def train_model_task(
                 "模型训练取消通知",
             )
         except Exception as e:
-            logger.opt(exception=True).error(f"统一Qlib模型训练失败: {model_id}, 错误: {e}")
+            logger.opt(exception=True).error(
+                f"统一Qlib模型训练失败: {model_id}, 错误: {e}"
+            )
             model_info.status = "failed"
             model_info.training_stage = "failed"
             model_info.performance_metrics = _build_training_failure_payload(e)
@@ -978,7 +990,9 @@ async def get_model_evaluation_report(model_id: str) -> StandardResponse:
         # 检查评估报告是否存在
         report_payload = model.evaluation_report
         if report_payload is None:
-            logger.opt(exception=True).warning(f"模型 {model_id} 的评估报告为 None，状态: {model.status}")
+            logger.opt(exception=True).warning(
+                f"模型 {model_id} 的评估报告为 None，状态: {model.status}"
+            )
             raise HTTPException(
                 status_code=404, detail="该模型尚未生成评估报告，请等待训练完成"
             )
@@ -1234,7 +1248,9 @@ async def get_available_features(
                         },
                     )
             except Exception as e:
-                logger.opt(exception=True).warning(f"获取实际特征失败，返回理论特征列表: {e}")
+                logger.opt(exception=True).warning(
+                    f"获取实际特征失败，返回理论特征列表: {e}"
+                )
 
         # 返回理论特征列表（使用实际训练时的特征名称格式）
         # 将理论特征名称转换为实际训练时使用的格式
@@ -1360,7 +1376,9 @@ async def delete_model(model_id: str) -> StandardResponse:
                     model_file.unlink()
                     logger.info(f"已删除模型文件: {model.file_path}")
             except Exception as e:
-                logger.opt(exception=True).warning(f"删除模型文件失败: {e}，继续删除数据库记录")
+                logger.opt(exception=True).warning(
+                    f"删除模型文件失败: {e}，继续删除数据库记录"
+                )
 
         # 删除数据库记录
         session.delete(model)

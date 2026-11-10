@@ -18,7 +18,6 @@
 from __future__ import annotations
 
 import random
-import string
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -36,8 +35,8 @@ from app.models.commerce_models import (
 )
 
 # 单笔充值上下限（分）
-MIN_DEPOSIT_CENTS = 1000        # ¥10
-MAX_DEPOSIT_CENTS = 500_000      # ¥5000
+MIN_DEPOSIT_CENTS = 1000  # ¥10
+MAX_DEPOSIT_CENTS = 500_000  # ¥5000
 
 
 def _utcnow() -> datetime:
@@ -275,8 +274,9 @@ class PaymentService:
                     # 只升不降（避免误操作把付费用户降级）
                     _rank = {"free": 0, "pro": 1, "enterprise": 2}
                     if _rank.get(target, 0) > _rank.get(current, 0):
-                        # setattr 绕过 Pyright 的 Column[str] 类型误报
-                        setattr(user, "subscription_tier", target)
+                        # 直接赋值（B010：setattr 传常量属性名并不比直接赋值更安全）；
+                        # type: ignore 保留对 Pyright 的 Column[str] 误报抑制
+                        user.subscription_tier = target  # type: ignore[assignment]
                         upgraded_to = target
                         logger.info(
                             f"用户 {user.id} 套餐升级: {current} → {target} "
@@ -297,7 +297,9 @@ class PaymentService:
             if not self.db:
                 await db.close()
 
-    async def cancel_order(self, order_id: str, admin_remark: str = "") -> Tuple[Optional[PaymentOrder], Optional[str]]:
+    async def cancel_order(
+        self, order_id: str, admin_remark: str = ""
+    ) -> Tuple[Optional[PaymentOrder], Optional[str]]:
         """取消订单（管理员操作）。"""
         db = await self._session()
         try:

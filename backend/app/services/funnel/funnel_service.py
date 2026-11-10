@@ -232,9 +232,7 @@ def build_report(
         days_seen = by_user_day.get(user_id, set())
         if (first_dt.date() + timedelta(days=1)) in days_seen:
             d1_hits += 1
-        window = {
-            first_dt.date() + timedelta(days=i) for i in range(1, 8)
-        }
+        window = {first_dt.date() + timedelta(days=i) for i in range(1, 8)}
         if days_seen & window:
             d7_hits += 1
 
@@ -273,9 +271,7 @@ def build_report(
         "funnel": funnel,
         "paywall": {
             "view_pricing_users": len(users_by_event.get(EVENT_VIEW_PRICING, set())),
-            "click_upgrade_users": len(
-                users_by_event.get(EVENT_CLICK_UPGRADE, set())
-            ),
+            "click_upgrade_users": len(users_by_event.get(EVENT_CLICK_UPGRADE, set())),
             "wallet_open_users": len(users_by_event.get(EVENT_WALLET_OPEN, set())),
             "quota_exhausted_users": len(
                 users_by_event.get(EVENT_QUOTA_EXHAUSTED, set())

@@ -10,6 +10,7 @@
 - 单位在加载时校验：`amount / (volume × close)` 必须 ≈ 1，否则直接抛错而不是产出错数。
 - 这是"估算"，不是官方流通市值；用途只做**相对分层**（ quartile 分位 ），不做绝对值结论。
 """
+
 from __future__ import annotations
 
 import json
@@ -24,11 +25,18 @@ UNIT_RATIO_TOL = (0.7, 1.4)  # amount/(volume×close) 的可接受区间
 
 
 def _parquet(data_root: str, code: str) -> str:
-    return os.path.join(data_root, "parquet", "baostock_daily", code.replace(".", "_") + ".parquet")
+    return os.path.join(
+        data_root, "parquet", "baostock_daily", code.replace(".", "_") + ".parquet"
+    )
 
 
-def estimate_caps(data_root: str, start: str, end: str, codes: list[str],
-                  cache_path: str | None = None) -> dict[str, float]:
+def estimate_caps(
+    data_root: str,
+    start: str,
+    end: str,
+    codes: list[str],
+    cache_path: str | None = None,
+) -> dict[str, float]:
     """code -> 窗口内自由流通市值中位数（元）。命中缓存则直接读缓存。"""
     if cache_path and os.path.exists(cache_path):
         with open(cache_path) as f:
@@ -52,7 +60,14 @@ def estimate_caps(data_root: str, start: str, end: str, codes: list[str],
         volume = pd.to_numeric(d["volume"], errors="coerce")
         close = pd.to_numeric(d["close"], errors="coerce")
         turn = pd.to_numeric(d["turn"], errors="coerce")
-        ok = np.isfinite(amount) & np.isfinite(volume) & np.isfinite(close) & (amount > 0) & (volume > 0) & (close > 0)
+        ok = (
+            np.isfinite(amount)
+            & np.isfinite(volume)
+            & np.isfinite(close)
+            & (amount > 0)
+            & (volume > 0)
+            & (close > 0)
+        )
         if ok.sum() >= 5:
             ratios.append(float(np.median((amount[ok] / (volume[ok] * close[ok])))))
         good = ok & np.isfinite(turn) & (turn > 0)
@@ -73,11 +88,16 @@ def estimate_caps(data_root: str, start: str, end: str, codes: list[str],
     if cache_path:
         os.makedirs(os.path.dirname(cache_path), exist_ok=True)
         with open(cache_path, "w") as f:
-            json.dump({"built_at": datetime.now().isoformat(timespec="seconds"),
-                       "window": [start, end],
-                       "method": "median(amount / (turn/100))",
-                       "n_codes": len(caps),
-                       "caps": caps}, f)
+            json.dump(
+                {
+                    "built_at": datetime.now().isoformat(timespec="seconds"),
+                    "window": [start, end],
+                    "method": "median(amount / (turn/100))",
+                    "n_codes": len(caps),
+                    "caps": caps,
+                },
+                f,
+            )
     return caps
 
 

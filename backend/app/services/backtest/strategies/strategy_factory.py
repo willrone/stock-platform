@@ -11,13 +11,13 @@ from app.core.error_handler import ErrorSeverity, TaskError
 from ..core.base_strategy import BaseStrategy
 from ..core.strategy_portfolio import StrategyPortfolio
 from .factor_ranking_strategy import FactorRankingStrategy
-from .honest_composite_strategy import HonestCompositeStrategy
-from .rsi_71421_strategy import Rsi71421Strategy
 from .gbm_voltgt_strategy import GbmVoltgtStrategy
+from .honest_composite_strategy import HonestCompositeStrategy
 from .lightgbm_strategy import LightGBMPredictionStrategy
 from .ml_ensemble_strategy import MLEnsembleLgbXgbRiskCtlStrategy
 from .model_prediction_strategy import ModelPredictionStrategy
 from .model_topk_dropout_strategy import ModelTopkDropoutStrategy
+from .rsi_71421_strategy import Rsi71421Strategy
 from .strategies import (  # 技术分析策略; 统计套利策略; 因子投资策略
     BollingerBandStrategy,
     CCIStrategy,
