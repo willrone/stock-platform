@@ -6409,56 +6409,6 @@ K=10（单价上限 90 元）时低波动更强：3y 命中 90%、年化 19.42%�
    比对必须用「按共同日期对齐的累计比值」。
 4. baostock 并行/高频拉取会把 IP 打进黑名单（`10001011`）。以后 baostock 只当注册表用，不当行情主力。
 
-### 12.85 门禁红灯复盘（2026-11-10，push 到 main 后 CI 三条红）
-
-**现象**：`1c8c8e47` 合入 main 后，GitHub Actions 三个 job 红：后端测试、后端代码质量、前端代码质量。
-
-**根因（不是运气差，是流程洞）**：
-1. `code-quality.yml` / `test.yml` 只在 **main/develop 的 push 和 PR** 上触发。分支 `feat/vwap-below-optin` 从 2026-10-14 起 27 天没有跑过任何门禁，攒下 **61 个文件未被 black 格式化 + 89 条 flake8 违规**。合进 main 那一刻一次性爆。
-2. `scripts/paper_portfolio.py` 把 `BACKEND_ROOT` 写死成 `/Users/rone/Projects/stock-platform/backend`。CI runner 是 `/home/runner/...`，且该脚本被测试 import（`test_paper_portfolio_api` 等）→ **import 期直接 FileNotFoundError**。本地永远发现不了这种 bug：本地路径恰好对。
-
-**已修**：
-- `paper_portfolio.py`：`BACKEND_ROOT` 改为由 `__file__` 推导。**但后端测试真正的红点在 collect 阶段**：
-  `tests/unit/trading/{test_fix_adj_cost_backfill_guard,test_fix_adj_cost_lock,test_ledger_column_contract,test_paper_daily_nav_lock}.py`
-  报 `FileNotFoundError: '/Users/rone/Projects/stock-platform/backend/scripts/daily_signal.py'` ——
-  它们 import `scripts.{fix_adj_cost_backfill,paper_portfolio,paper_daily_nav}`，这些脚本用 importlib
-  按**写死的绝对路径**加载 `daily_signal.py`。本地路径恰好对所以永远绿，CI 上 `/home/runner/...` 必炸。
-  因此把 `backend/scripts/*.py` 里这类仓库绝对路径一次性清光（130+ 文件 / 约 275 行，含一批写错的
-  `/Users/rone/projects/…` 小写路径——本地其实不存在），统一改 `os.path.dirname(...)` 推导。
-  批量改写的流程教训：第一版把 `import os` 插进了 `from __future__ import annotations`，
-  是 `compileall` 当场抓出来的，**批量改写必须跟一遍编译自检**。
-- 风格：`autoflake` 清掉 18 条 F401（未用 import）与 7 条 F841（未用局部变量）；black/isort 重放到全 `app/`；E741（`l` 变量名，2 处，含 `h == l` 引用）、E201/E202（ensemble f-string 里的 dict 推导，改为先赋值 `weight_repr`）、B007（循环变量未用 → `_ts0`）、B010（`setattr(user, "subscription_tier", …)` → 直接属性赋值 + `# type: ignore`）逐条手改。
-- **明确放松的一条**：`E226`（算术运算符空格）加入 `.flake8` 的 ignore。理由：pycodestyle 自己默认就忽略 E226，本仓库 `select=E` 把它打开，于是与 black 直接打架（`r*100`、`amt/1e4`、`lagged[self.lag :]`）。CI 先 black 后 flake8，两条必须同时为真。
-- **明确保留的例外**：`official_lgbm_model.py` 的 E402 —— 必须在 `import qlib/lightgbm` 之前设 `OMP_NUM_THREADS=1`，否则 macOS+3.13+libomp 在 predict 阶段 SIGSEGV（§12.44）。顺序是硬要求，不是风格。
-
-**登记的复杂度债（C901，10 个函数，不是修好，是亮出来）**：
-`tradability.build_tradability` 28、`trade_modes.execute` 22、`gbm_lab_strategy.execute` 26、`gbm_voltgt_strategy.execute` 47、`honest_composite_strategy.execute` 39、`methods_composite_strategy.execute` 25、`regime_switched_strategy.execute` 30、`execution_plan.build_execution_plan` 29、`multi_asset_service._build_portfolio_metrics` 43、`signal_service._rebalance_to_target` 26。
-全部在真钱链路（撮合/调仓/策略执行）上，盲拆会改行为 → 先写进 `per-file-ignores` 并登记，重构单独排期。`.flake8` 里写明规则：**新写的复杂函数必须拆，不许往这个清单里加**。
-
-**新增本地门禁**：`backend/tests/unit/test_backend_style_gate.py` —— 在本地测试里跑 CI 的 black/isort/flake8 三条，push 前就能看见红灯（工具没装则跳过）。
-
-**前端**：三条门禁里真正红的只有 `format:check`（35 文件），`lint` 只有 97 条 warning（`next lint` 对 warning 退出 0）、
-`type-check` 本地全新缓存下本来就 exit 0 —— CI 里 type-check 是被前一步失败连带跳过的。
-处理：prettier 全 `src/`、`next lint --fix` 补 78 处 curly、手删零引用死代码
-（tuning 页 `renderValue`、templates 页 5 个未用 import、paper-portfolio 的 `neg`、
-StrategyRaceChart 未用的 indexOf Map、GlobalSnackbar 的 `handleClose`/`latestMessage`/`queuedMessageCount`、
-AppLayout 的 `findNavGroup`、`useCommerce` 的 `EVENT_TYPES` import 与未用的 `router`）。
-**没有降门禁**：没关任何 eslint 规则、没加 `eslint-disable`、没改 `package.json` scripts。
-剩 2 条 `no-console` warning 在 `utils/logger.ts`（这模块本身就是 console 封装，删了会改日志行为）。
-本地复跑（清缓存后）：`format:check` 0 / `lint` 0 error 2 warning / `type-check` 0 / `test:ci` 17 suites 168 tests 0。
-
-**CI 与本地数据层的边界（这次定下来的规则）**：CI 跑的是干净 checkout，`data/` 被 .gitignore 排除（618MB 不进仓库）
-→ 读真实数据层的断言（ETF 日线 / baostock 注册表 / baostock 日线 / 22f 信号产物 / 长窗口研究产物）在 CI 必红。
-规则：这类用例一律写成「**目标产物不存在 → pytest.skip，理由写明缺的是哪一层数据**」，产物在就必须跑，
-不许静默跳过；本地全量 `pytest tests/` 仍然是它们的真正执行场所（本轮实测 4 个文件 31 passed / 0 skipped）。
-另外补了 `tests/ci_smoke_model.py`：CI bootstrap 播种的 `model_info.xgboost_v1` 指向一个 CI 里不存在的 joblib，
-把预测属性测试打红 → 播种时顺手 dump 一个不挑特征宽度的冒烟模型，**让 CI 真跑预测逻辑而不是 skip**；
-文件已存在则不覆盖，本机真模型不会被替换。
-模拟 CI 的正规做法：`git worktree add --detach /tmp/ci_sim HEAD` + `GITHUB_ACTIONS=true`
-（不设这个变量时 `tests/conftest.py` 的建表 bootstrap 不跑，integration 会假红 `no such table: tasks`）。
-
-**基础设施发现（未解决，需要本人操作）**：gh 登录 token 的 scope 只有 `gist, read:org, repo`，**没有 `workflow`** → 任何改 `.github/workflows/*` 的 commit 推不上去。想把 CI 的 `pip install black isort flake8`（不钉版本）换成 `requirements-quality.txt`（钉 black==26.3.1/isort==8.0.1/flake8==7.3.0，与本地一致）的补丁存在 `~/.hermes/cache/scratch/ci_pin_tools.patch`，等 token 补 scope 后再推。风险提示：CI 现装最新 black，本地用 26.3.1，**版本漂移会让格式化门禁自己变红**。
-
 ### 12.84 长窗口含退市复验结果（2014-2022 入场 × 3 年持有，自建总回报口径）
 
 **先说作废的那一份**：首跑 `if j < last` 判反，把每个持仓都记成「期内退市」并把结算日推到面板末根，
@@ -6511,6 +6461,56 @@ AppLayout 的 `findNavGroup`、`useCommerce` 的 `EVENT_TYPES` import 与未用�
 不要同一步同时推 feat 和 main（会白跑一遍）。`security-scan.yml` 保持只 main/develop + 每周一定时。
 补这一条需要 gh token 的 `workflow` scope（2026-11-10 已 `gh auth refresh -s workflow` 补上）。
 
+
+### 12.85 门禁红灯复盘（2026-11-10，push 到 main 后 CI 三条红）
+
+**现象**：`1c8c8e47` 合入 main 后，GitHub Actions 三个 job 红：后端测试、后端代码质量、前端代码质量。
+
+**根因（不是运气差，是流程洞）**：
+1. `code-quality.yml` / `test.yml` 只在 **main/develop 的 push 和 PR** 上触发。分支 `feat/vwap-below-optin` 从 2026-10-14 起 27 天没有跑过任何门禁，攒下 **61 个文件未被 black 格式化 + 89 条 flake8 违规**。合进 main 那一刻一次性爆。
+2. `scripts/paper_portfolio.py` 把 `BACKEND_ROOT` 写死成 `/Users/rone/Projects/stock-platform/backend`。CI runner 是 `/home/runner/...`，且该脚本被测试 import（`test_paper_portfolio_api` 等）→ **import 期直接 FileNotFoundError**。本地永远发现不了这种 bug：本地路径恰好对。
+
+**已修**：
+- `paper_portfolio.py`：`BACKEND_ROOT` 改为由 `__file__` 推导。**但后端测试真正的红点在 collect 阶段**：
+  `tests/unit/trading/{test_fix_adj_cost_backfill_guard,test_fix_adj_cost_lock,test_ledger_column_contract,test_paper_daily_nav_lock}.py`
+  报 `FileNotFoundError: '/Users/rone/Projects/stock-platform/backend/scripts/daily_signal.py'` ——
+  它们 import `scripts.{fix_adj_cost_backfill,paper_portfolio,paper_daily_nav}`，这些脚本用 importlib
+  按**写死的绝对路径**加载 `daily_signal.py`。本地路径恰好对所以永远绿，CI 上 `/home/runner/...` 必炸。
+  因此把 `backend/scripts/*.py` 里这类仓库绝对路径一次性清光（130+ 文件 / 约 275 行，含一批写错的
+  `/Users/rone/projects/…` 小写路径——本地其实不存在），统一改 `os.path.dirname(...)` 推导。
+  批量改写的流程教训：第一版把 `import os` 插进了 `from __future__ import annotations`，
+  是 `compileall` 当场抓出来的，**批量改写必须跟一遍编译自检**。
+- 风格：`autoflake` 清掉 18 条 F401（未用 import）与 7 条 F841（未用局部变量）；black/isort 重放到全 `app/`；E741（`l` 变量名，2 处，含 `h == l` 引用）、E201/E202（ensemble f-string 里的 dict 推导，改为先赋值 `weight_repr`）、B007（循环变量未用 → `_ts0`）、B010（`setattr(user, "subscription_tier", …)` → 直接属性赋值 + `# type: ignore`）逐条手改。
+- **明确放松的一条**：`E226`（算术运算符空格）加入 `.flake8` 的 ignore。理由：pycodestyle 自己默认就忽略 E226，本仓库 `select=E` 把它打开，于是与 black 直接打架（`r*100`、`amt/1e4`、`lagged[self.lag :]`）。CI 先 black 后 flake8，两条必须同时为真。
+- **明确保留的例外**：`official_lgbm_model.py` 的 E402 —— 必须在 `import qlib/lightgbm` 之前设 `OMP_NUM_THREADS=1`，否则 macOS+3.13+libomp 在 predict 阶段 SIGSEGV（§12.44）。顺序是硬要求，不是风格。
+
+**登记的复杂度债（C901，10 个函数，不是修好，是亮出来）**：
+`tradability.build_tradability` 28、`trade_modes.execute` 22、`gbm_lab_strategy.execute` 26、`gbm_voltgt_strategy.execute` 47、`honest_composite_strategy.execute` 39、`methods_composite_strategy.execute` 25、`regime_switched_strategy.execute` 30、`execution_plan.build_execution_plan` 29、`multi_asset_service._build_portfolio_metrics` 43、`signal_service._rebalance_to_target` 26。
+全部在真钱链路（撮合/调仓/策略执行）上，盲拆会改行为 → 先写进 `per-file-ignores` 并登记，重构单独排期。`.flake8` 里写明规则：**新写的复杂函数必须拆，不许往这个清单里加**。
+
+**新增本地门禁**：`backend/tests/unit/test_backend_style_gate.py` —— 在本地测试里跑 CI 的 black/isort/flake8 三条，push 前就能看见红灯（工具没装则跳过）。
+
+**前端**：三条门禁里真正红的只有 `format:check`（35 文件），`lint` 只有 97 条 warning（`next lint` 对 warning 退出 0）、
+`type-check` 本地全新缓存下本来就 exit 0 —— CI 里 type-check 是被前一步失败连带跳过的。
+处理：prettier 全 `src/`、`next lint --fix` 补 78 处 curly、手删零引用死代码
+（tuning 页 `renderValue`、templates 页 5 个未用 import、paper-portfolio 的 `neg`、
+StrategyRaceChart 未用的 indexOf Map、GlobalSnackbar 的 `handleClose`/`latestMessage`/`queuedMessageCount`、
+AppLayout 的 `findNavGroup`、`useCommerce` 的 `EVENT_TYPES` import 与未用的 `router`）。
+**没有降门禁**：没关任何 eslint 规则、没加 `eslint-disable`、没改 `package.json` scripts。
+剩 2 条 `no-console` warning 在 `utils/logger.ts`（这模块本身就是 console 封装，删了会改日志行为）。
+本地复跑（清缓存后）：`format:check` 0 / `lint` 0 error 2 warning / `type-check` 0 / `test:ci` 17 suites 168 tests 0。
+
+**CI 与本地数据层的边界（这次定下来的规则）**：CI 跑的是干净 checkout，`data/` 被 .gitignore 排除（618MB 不进仓库）
+→ 读真实数据层的断言（ETF 日线 / baostock 注册表 / baostock 日线 / 22f 信号产物 / 长窗口研究产物）在 CI 必红。
+规则：这类用例一律写成「**目标产物不存在 → pytest.skip，理由写明缺的是哪一层数据**」，产物在就必须跑，
+不许静默跳过；本地全量 `pytest tests/` 仍然是它们的真正执行场所（本轮实测 4 个文件 31 passed / 0 skipped）。
+另外补了 `tests/ci_smoke_model.py`：CI bootstrap 播种的 `model_info.xgboost_v1` 指向一个 CI 里不存在的 joblib，
+把预测属性测试打红 → 播种时顺手 dump 一个不挑特征宽度的冒烟模型，**让 CI 真跑预测逻辑而不是 skip**；
+文件已存在则不覆盖，本机真模型不会被替换。
+模拟 CI 的正规做法：`git worktree add --detach /tmp/ci_sim HEAD` + `GITHUB_ACTIONS=true`
+（不设这个变量时 `tests/conftest.py` 的建表 bootstrap 不跑，integration 会假红 `no such table: tasks`）。
+
+**基础设施发现（未解决，需要本人操作）**：gh 登录 token 的 scope 只有 `gist, read:org, repo`，**没有 `workflow`** → 任何改 `.github/workflows/*` 的 commit 推不上去。想把 CI 的 `pip install black isort flake8`（不钉版本）换成 `requirements-quality.txt`（钉 black==26.3.1/isort==8.0.1/flake8==7.3.0，与本地一致）的补丁存在 `~/.hermes/cache/scratch/ci_pin_tools.patch`，等 token 补 scope 后再推。风险提示：CI 现装最新 black，本地用 26.3.1，**版本漂移会让格式化门禁自己变红**。
 
 ### 12.86 §12.84 补强：日线起点推到 2008，13 期重跑 —— 命中率那条腿站住了，收益率那条腿塌了（2026-11-10）
 
