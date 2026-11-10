@@ -25,7 +25,10 @@ from scripts.entry_timing_study import (
 
 @pytest.fixture(scope="module")
 def px() -> pd.DataFrame:
-    return load_closes()
+    try:
+        return load_closes()
+    except FileNotFoundError as exc:
+        pytest.skip(f"没有 ETF 日线产物（{exc}）——本文件其余合成用例不受影响，真实净值用例必须在本机跑")
 
 
 def test_buy_batch_uses_integer_lots_and_keeps_remainder():

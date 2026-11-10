@@ -79,10 +79,12 @@ def test_fetch_layer_writes_new_dir_not_the_live_layer():
     assert "close" in COLS and "close_hfq" in COLS and "pct_chg_raw" in COLS
 
 
+@pytest.mark.skipif(not os.path.exists(REGISTRY), reason="注册表副本还没落盘（数据到位后这条必须绿，skip 不算完工）")
 def test_registry_excludes_index_rows():
-    """注册表 type=1 才是股票；把指数混进宇宙会让覆盖率与退市计数全是假的。"""
-    import baostock as bs
-    # baostock 已把本机 IP 拉黑（10001011 黑名单用户）→ 注册表验收改用落盘副本，不许再依赖登录
+    """注册表 type=1 才是股票；把指数混进宇宙会让覆盖率与退市计数全是假的。
+
+    baostock 已把本机 IP 拉黑（10001011 黑名单用户）→ 验收只读落盘副本，不许再依赖登录。
+    """
     df = pd.read_parquet(REGISTRY)
     stk = df[df["type"] == "1"]
     assert len(stk) > 5000

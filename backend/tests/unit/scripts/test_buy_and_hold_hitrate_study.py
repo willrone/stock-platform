@@ -9,11 +9,14 @@
 """
 from __future__ import annotations
 
+import os
+
 import numpy as np
 import pandas as pd
 import pytest
 
 from scripts.buy_and_hold_hitrate_study import (
+    BAOSTOCK_DIR,
     CAPITAL,
     FEE_RATE,
     HAIRCUT_RETURN,
@@ -29,6 +32,7 @@ from scripts.buy_and_hold_hitrate_study import (
 )
 
 CODES = ["000001.SZ", "600000.SH"]
+NO_DATA = "CI 上没有真实数据层（data/ 被 .gitignore 排除）；这条口径断言只在有数据层的机器上有效，本地必须绿"
 
 
 def _panel(dates, px, rets):
@@ -45,6 +49,10 @@ def _dates(n=400):
     return [d.strftime("%Y-%m-%d") for d in pd.bdate_range("2022-01-03", periods=n)]
 
 
+@pytest.mark.skipif(
+    not os.path.exists(os.path.join(BAOSTOCK_DIR, "600000_SH.parquet")),
+    reason="数据层缺失：pct_chg 口径断言需要真实 baostock_daily 日线（%s）" % NO_DATA,
+)
 def test_adj_chain_actually_contains_dividends():
     """整份研究的收益口径靠 pct_chg 链。若它其实等于未复权收益，命中率结论全是假的。"""
     a = audit_adj_chain()
@@ -53,10 +61,12 @@ def test_adj_chain_actually_contains_dividends():
     assert a["verdict"] == "close 未复权、pct_chg 含分红"
 
 
+@pytest.mark.skipif(
+    not os.path.exists(os.path.join(BAOSTOCK_DIR, "600000_SH.parquet")),
+    reason="数据层缺失：退市股缺席这件事必须对着真实库断言（%s）" % NO_DATA,
+)
 def test_pool_has_no_delisted_stocks_and_must_be_disclosed():
     """池只有存续股：这些真实退过市的代码在库里根本不存在 → 任何命中率都是上界。"""
-    import os
-    from scripts.buy_and_hold_hitrate_study import BAOSTOCK_DIR
     for code in ("300104_SZ", "000018_SZ", "002231_SZ", "300216_SZ"):
         assert not os.path.exists(os.path.join(BAOSTOCK_DIR, f"{code}.parquet")), code
     assert os.path.exists(os.path.join(BAOSTOCK_DIR, "600000_SH.parquet"))
