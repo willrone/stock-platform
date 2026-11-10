@@ -63,13 +63,7 @@ import { MobileTaskCard } from '../../components/mobile/MobileTaskCard';
 
 export default function TasksPage() {
   const router = useRouter();
-  const {
-    currentPage,
-    pageSize,
-    statusFilter,
-    setPagination,
-    setStatusFilter,
-  } = useTaskStore();
+  const { currentPage, pageSize, statusFilter, setPagination, setStatusFilter } = useTaskStore();
 
   /**
    * 【state P0-8】服务端任务列表**由本页本地持有**，不再放全局 store。
@@ -84,9 +78,7 @@ export default function TasksPage() {
 
   /** 局部更新单条任务（WebSocket 实时进度用） */
   const updateTask = useCallback((taskId: string, patch: Partial<Task>) => {
-    setTasks(prev =>
-      prev.map(t => (t.task_id === taskId ? { ...t, ...patch } : t))
-    );
+    setTasks(prev => prev.map(t => (t.task_id === taskId ? { ...t, ...patch } : t)));
   }, []);
 
   const [searchText, setSearchText] = useState('');
@@ -115,8 +107,7 @@ export default function TasksPage() {
     } catch (error) {
       // 【P1-06】失败必须让用户看见，不能静默呈现"0 个任务"
       logger.error('加载任务失败:', error);
-      const message =
-        error instanceof Error ? error.message : '加载任务失败，请稍后重试';
+      const message = error instanceof Error ? error.message : '加载任务失败，请稍后重试';
       setLoadError(message);
       setTasks([]);
       setTotal(0);

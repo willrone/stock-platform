@@ -175,14 +175,21 @@ export default function PricingPage() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await apiRequest.get<
-          Array<{ id: string; name: string; monthly_price_cents: number; display_name?: string }>
-        >('/billing/plans');
-        const list = Array.isArray(res) ? res : (res as unknown as { plans?: typeof res })?.plans ?? [];
-        if (cancelled) return;
+        const res =
+          await apiRequest.get<
+            Array<{ id: string; name: string; monthly_price_cents: number; display_name?: string }>
+          >('/billing/plans');
+        const list = Array.isArray(res)
+          ? res
+          : (res as unknown as { plans?: typeof res })?.plans ?? [];
+        if (cancelled) {
+          return;
+        }
         const map: typeof planMeta = {};
         for (const p of list) {
-          if (!p?.name) continue;
+          if (!p?.name) {
+            continue;
+          }
           map[p.name] = {
             id: p.id,
             monthly_price_cents: p.monthly_price_cents ?? 0,
@@ -193,7 +200,9 @@ export default function PricingPage() {
       } catch {
         // 拉不到就保持静态兜底，不阻断页面
       } finally {
-        if (!cancelled) setPlanMetaLoading(false);
+        if (!cancelled) {
+          setPlanMetaLoading(false);
+        }
       }
     })();
     return () => {
@@ -204,7 +213,9 @@ export default function PricingPage() {
   /** 展示用价格：优先后端真实价，缺失时用静态文案 */
   const displayPrice = (plan: Plan): string => {
     const meta = planMeta[plan.id];
-    if (!meta) return plan.price;
+    if (!meta) {
+      return plan.price;
+    }
     return `¥${(meta.monthly_price_cents / 100).toFixed(0)}`;
   };
 
@@ -235,7 +246,7 @@ export default function PricingPage() {
       setError(
         planMetaLoading
           ? '套餐信息加载中，请稍候再试'
-          : '暂时无法获取套餐信息，请稍后重试或联系客服',
+          : '暂时无法获取套餐信息，请稍后重试或联系客服'
       );
       return;
     }
@@ -288,10 +299,18 @@ export default function PricingPage() {
         {error && (
           <Alert severity="warning" sx={{ mb: 3 }} onClose={() => setError(null)}>
             {error}
-            <Button size="small" sx={{ ml: 1.5 }} onClick={() => {
-              trackEvent('click_upgrade', { plan: 'wallet_recharge', logged_in: loggedIn, tier: currentTier });
-              router.push('/wallet');
-            }}>
+            <Button
+              size="small"
+              sx={{ ml: 1.5 }}
+              onClick={() => {
+                trackEvent('click_upgrade', {
+                  plan: 'wallet_recharge',
+                  logged_in: loggedIn,
+                  tier: currentTier,
+                });
+                router.push('/wallet');
+              }}
+            >
               去钱包充值
             </Button>
           </Alert>
@@ -302,7 +321,11 @@ export default function PricingPage() {
             severity="info"
             sx={{ mb: 3 }}
             action={
-              <Button color="inherit" size="small" onClick={() => router.push('/settings/subscription')}>
+              <Button
+                color="inherit"
+                size="small"
+                onClick={() => router.push('/settings/subscription')}
+              >
                 管理订阅
               </Button>
             }
@@ -392,7 +415,11 @@ export default function PricingPage() {
                             size={16}
                             style={{ color: 'text.disabled', flexShrink: 0, marginTop: 3 }}
                           />
-                          <Typography variant="body2" color="text.disabled" sx={{ lineHeight: 1.6 }}>
+                          <Typography
+                            variant="body2"
+                            color="text.disabled"
+                            sx={{ lineHeight: 1.6 }}
+                          >
                             {f}
                           </Typography>
                         </Stack>
@@ -420,7 +447,11 @@ export default function PricingPage() {
                         '当前套餐'
                       ) : !loggedIn ? (
                         // 【P1-8】未登录用户点付费档也要有付费语义，不能全显示"免费注册"
-                        plan.id === 'free' ? '免费注册' : `注册并开通${plan.name}`
+                        plan.id === 'free' ? (
+                          '免费注册'
+                        ) : (
+                          `注册并开通${plan.name}`
+                        )
                       ) : (
                         plan.cta
                       )}
@@ -513,8 +544,7 @@ export default function PricingPage() {
             体验版不需要任何付款。
             <br />
             <br />
-            充值到账后系统会**自动开通对应套餐**（free / pro / enterprise），
-            不需要另外发邮件申请。
+            充值到账后系统会**自动开通对应套餐**（free / pro / enterprise）， 不需要另外发邮件申请。
           </Typography>
         </Alert>
 

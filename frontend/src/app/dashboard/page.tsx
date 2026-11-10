@@ -181,53 +181,53 @@ export default function DashboardPage() {
    * 现在单一 loader，重试与首屏走同一条路径。
    */
   const loadDashboardData = useCallback(async () => {
-      try {
-        setLoading(true);
+    try {
+      setLoading(true);
 
-        // 并行请求：最近任务 + 统计数据 + 系统健康状态
-        const [tasksResult, statsResult, healthResult] = await Promise.all([
-          TaskService.getTasks(undefined, 5, 0),
-          TaskService.getTaskStats(),
-          apiRequest
-            .get<{ overall_healthy?: boolean; services?: Record<string, ServiceHealthRaw> }>(
-              '/monitoring/health'
-            )
-            .catch(() => null),
-        ]);
+      // 并行请求：最近任务 + 统计数据 + 系统健康状态
+      const [tasksResult, statsResult, healthResult] = await Promise.all([
+        TaskService.getTasks(undefined, 5, 0),
+        TaskService.getTaskStats(),
+        apiRequest
+          .get<{ overall_healthy?: boolean; services?: Record<string, ServiceHealthRaw> }>(
+            '/monitoring/health'
+          )
+          .catch(() => null),
+      ]);
 
-        setRecentTasks(tasksResult.tasks);
+      setRecentTasks(tasksResult.tasks);
 
-        // 【P2-12】从后端取真实健康状态（apiRequest 已拆信封，services 在顶层）
-        const rawServices = healthResult?.services ?? {};
-        const parsed = Object.entries(rawServices).map(([key, s]) => ({
-          key,
-          healthy: s?.healthy !== false,
-          label: s?.status_label ?? (s?.healthy === false ? '异常' : '正常'),
-          responseTimeMs: s?.response_time_ms,
-          core: s?.core === true,
-          errorMessage: s?.error_message ?? undefined,
-        }));
-        setServices(parsed);
+      // 【P2-12】从后端取真实健康状态（apiRequest 已拆信封，services 在顶层）
+      const rawServices = healthResult?.services ?? {};
+      const parsed = Object.entries(rawServices).map(([key, s]) => ({
+        key,
+        healthy: s?.healthy !== false,
+        label: s?.status_label ?? (s?.healthy === false ? '异常' : '正常'),
+        responseTimeMs: s?.response_time_ms,
+        core: s?.core === true,
+        errorMessage: s?.error_message ?? undefined,
+      }));
+      setServices(parsed);
 
-        const hasError = parsed.some(s => !s.healthy);
-        const hasWarning = parsed.some(s => s.healthy && s.label !== '正常');
+      const hasError = parsed.some(s => !s.healthy);
+      const hasWarning = parsed.some(s => s.healthy && s.label !== '正常');
 
-        setSystemStats({
-          totalTasks: statsResult.total,
-          runningTasks: statsResult.running,
-          completedTasks: statsResult.completed,
-          failedTasks: statsResult.failed,
-          dataFiles: 0,
-          systemHealth: hasError ? 'error' : hasWarning ? 'warning' : 'good',
-        });
-      } catch (error) {
-        const errMsg = error instanceof Error ? error.message : '加载仪表板数据失败';
-        console.error('加载仪表板数据失败:', error);
-        setLoadError(errMsg);
-        showSnackbar.showError(errMsg);
-      } finally {
-        setLoading(false);
-      }
+      setSystemStats({
+        totalTasks: statsResult.total,
+        runningTasks: statsResult.running,
+        completedTasks: statsResult.completed,
+        failedTasks: statsResult.failed,
+        dataFiles: 0,
+        systemHealth: hasError ? 'error' : hasWarning ? 'warning' : 'good',
+      });
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : '加载仪表板数据失败';
+      console.error('加载仪表板数据失败:', error);
+      setLoadError(errMsg);
+      showSnackbar.showError(errMsg);
+    } finally {
+      setLoading(false);
+    }
   }, [showSnackbar]);
 
   useEffect(() => {
@@ -376,12 +376,22 @@ export default function DashboardPage() {
                     label={`↓ 卖出 ${todaySummary.sells}`}
                     sx={{ height: 28 }}
                   />
-                  <Chip size="small" variant="outlined" label={`持有 ${todaySummary.holds}`} sx={{ height: 28 }} />
+                  <Chip
+                    size="small"
+                    variant="outlined"
+                    label={`持有 ${todaySummary.holds}`}
+                    sx={{ height: 28 }}
+                  />
                   {todaySummary.totalReturnPct !== undefined && (
                     <DeltaValue value={todaySummary.totalReturnPct} variant="body2" />
                   )}
                   {todayAge !== null && todayAge > 7 && (
-                    <Chip size="small" color="warning" label={`已过期 ${todayAge} 天`} sx={{ height: 28 }} />
+                    <Chip
+                      size="small"
+                      color="warning"
+                      label={`已过期 ${todayAge} 天`}
+                      sx={{ height: 28 }}
+                    />
                   )}
                 </Stack>
               )}
@@ -652,21 +662,13 @@ export default function DashboardPage() {
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         {s.key.includes('data') || s.key.includes('parquet') ? (
-                          <Database
-                            size={16}
-                            color={s.healthy ? '#2e7d32' : '#d32f2f'}
-                          />
+                          <Database size={16} color={s.healthy ? '#2e7d32' : '#d32f2f'} />
                         ) : s.key.includes('indicator') ? (
-                          <Activity
-                            size={16}
-                            color={s.healthy ? '#2e7d32' : '#d32f2f'}
-                          />
+                          <Activity size={16} color={s.healthy ? '#2e7d32' : '#d32f2f'} />
                         ) : (
                           <Wifi size={16} color={s.healthy ? '#2e7d32' : '#d32f2f'} />
                         )}
-                        <Typography variant="body2">
-                          {SERVICE_LABEL[s.key] ?? s.key}
-                        </Typography>
+                        <Typography variant="body2">{SERVICE_LABEL[s.key] ?? s.key}</Typography>
                       </Box>
                       <Chip
                         label={s.label}
@@ -791,7 +793,10 @@ export default function DashboardPage() {
         </Box>
       </Box>
 
-      <Box sx={{ height: BOTTOM_NAV_CONTENT_PADDING, display: { xs: 'block', md: 'none' } }} aria-hidden="true" />
+      <Box
+        sx={{ height: BOTTOM_NAV_CONTENT_PADDING, display: { xs: 'block', md: 'none' } }}
+        aria-hidden="true"
+      />
     </Box>
   );
 }

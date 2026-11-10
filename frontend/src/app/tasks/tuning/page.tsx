@@ -17,11 +17,7 @@ import {
   CardHeader,
   Chip,
   CircularProgress,
-  Divider,
   IconButton,
-  List,
-  ListItem,
-  ListItemText,
   Snackbar,
   TextField,
   Typography,
@@ -82,22 +78,14 @@ function getFieldGroup(key: string): string {
   return FIELD_GROUPS[prefix] || prefix || '其他';
 }
 
-/** Render a value for display — handles nested objects, arrays, primitives */
-function renderValue(v: unknown): string {
-  if (v === null || v === undefined) return '—';
-  if (Array.isArray(v)) {
-    if (v.length === 0) return '[]';
-    if (typeof v[0] === 'string') return v.join(', ');
-    return JSON.stringify(v);
-  }
-  if (typeof v === 'object') return JSON.stringify(v);
-  return String(v);
-}
-
 /** Pretty-print a JSON-style value as a compact string */
 function formatValue(v: unknown): string {
-  if (v === null || v === undefined) return '—';
-  if (typeof v === 'boolean') return v ? 'true' : 'false';
+  if (v === null || v === undefined) {
+    return '—';
+  }
+  if (typeof v === 'boolean') {
+    return v ? 'true' : 'false';
+  }
   if (typeof v === 'number') {
     if (Number.isFinite(v)) {
       // 保留最多 6 位小数
@@ -107,10 +95,14 @@ function formatValue(v: unknown): string {
     return '—';
   }
   if (Array.isArray(v)) {
-    if (v.every(x => typeof x === 'string')) return v.join(', ');
+    if (v.every(x => typeof x === 'string')) {
+      return v.join(', ');
+    }
     return JSON.stringify(v);
   }
-  if (typeof v === 'object') return JSON.stringify(v);
+  if (typeof v === 'object') {
+    return JSON.stringify(v);
+  }
   return String(v);
 }
 
@@ -169,7 +161,9 @@ export default function TuningPage() {
     apiRequest
       .get<TaskBrief[]>('/tasks?limit=200&status=completed')
       .then(data => {
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
         // data 可能是 {tasks, total, ...} 结构，按两种形态归一为列表
         const list: TaskBrief[] = Array.isArray(data)
           ? data
@@ -180,7 +174,9 @@ export default function TuningPage() {
         // fallback: 可能是列表响应变成了分页结构
       })
       .finally(() => {
-        if (!cancelled) setTasksLoading(false);
+        if (!cancelled) {
+          setTasksLoading(false);
+        }
       });
     return () => {
       cancelled = true;
@@ -195,9 +191,7 @@ export default function TuningPage() {
     setSubmitResult(null);
     setNewTaskName('');
     try {
-      const resp = await apiRequest.get<Record<string, unknown>>(
-        `/tasks/${task.task_id}/config`
-      );
+      const resp = await apiRequest.get<Record<string, unknown>>(`/tasks/${task.task_id}/config`);
       const snapshot = resp;
       if (snapshot && typeof snapshot === 'object') {
         setFlatConfig(flattenObject(snapshot as Record<string, unknown>));
@@ -244,7 +238,9 @@ export default function TuningPage() {
 
   /* ── Preview ───────────────────────────────────────────────── */
   const handlePreview = async () => {
-    if (!selectedTask) return;
+    if (!selectedTask) {
+      return;
+    }
     setPreviewLoading(true);
     setPreview(null);
     setSubmitResult(null);
@@ -285,7 +281,9 @@ export default function TuningPage() {
 
   /* ── Submit ────────────────────────────────────────────────── */
   const handleSubmit = async () => {
-    if (!selectedTask || !preview) return;
+    if (!selectedTask || !preview) {
+      return;
+    }
     setSubmitLoading(true);
 
     const typedOverrides: Record<string, unknown> = {};
@@ -337,7 +335,9 @@ export default function TuningPage() {
     > = {};
     for (const [path, orig] of filtered) {
       const group = getFieldGroup(path);
-      if (!groups[group]) groups[group] = [];
+      if (!groups[group]) {
+        groups[group] = [];
+      }
       const overrideVal = overrides[path];
       groups[group].push({
         path,

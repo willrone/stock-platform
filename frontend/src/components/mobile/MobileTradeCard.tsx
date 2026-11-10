@@ -90,7 +90,9 @@ export const MobileTradeCard: React.FC<{ trade: TradeCardData }> = ({ trade }) =
         bgcolor: 'background.paper',
       }}
     >
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}>
+      <Box
+        sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}
+      >
         <Box sx={{ minWidth: 0 }}>
           <Typography variant="body1" fontWeight={700} sx={{ fontFamily: 'monospace' }}>
             {trade.code}
@@ -119,7 +121,10 @@ export const MobileTradeCard: React.FC<{ trade: TradeCardData }> = ({ trade }) =
       <Stack spacing={0.25} sx={{ mt: 1 }}>
         {trade.side !== 'hold' && (
           <>
-            <Row label="参考价" value={trade.price != null ? `¥${trade.price.toFixed(2)}` : '暂无'} />
+            <Row
+              label="参考价"
+              value={trade.price != null ? `¥${trade.price.toFixed(2)}` : '暂无'}
+            />
             <Row label="股数" value={fmtShares(trade.shares)} />
             <Row label="金额" value={fmtMoney(trade.amount)} />
             <Row label="费用" value={trade.fee != null ? fmtMoney(trade.fee) : '暂无'} />

@@ -565,7 +565,8 @@ export default function SignalsPage() {
           策略信号
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          选择一个或多个策略后，生成全市场（分页）最近 N 个交易日窗口内的「最新信号」，点击某只股票可查看多策略近 N 日信号事件历史与价格走势。
+          选择一个或多个策略后，生成全市场（分页）最近 N
+          个交易日窗口内的「最新信号」，点击某只股票可查看多策略近 N 日信号事件历史与价格走势。
         </Typography>
       </Box>
 
@@ -674,8 +675,8 @@ export default function SignalsPage() {
           </Stack>
 
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-            「最新信号」= 近 {days} 个交易日窗口内该股票最后一次信号，<strong>不等于今天的信号</strong>。
-            勾选「全量生成」会串行翻完全市场（{' '}
+            「最新信号」= 近 {days} 个交易日窗口内该股票最后一次信号，
+            <strong>不等于今天的信号</strong>。 勾选「全量生成」会串行翻完全市场（{' '}
             {total ? total.toLocaleString('zh-CN') : '数千'} 条），耗时较长且会占用较多内存 ——
             移动端建议保持关闭，用分页浏览。
           </Typography>
@@ -856,9 +857,9 @@ export default function SignalsPage() {
                 ? `最新信号（全量 ${rows.length.toLocaleString('zh-CN')} 条，已选策略：${
                     selectedStrategyNames.map(name => getStrategyLabel(name)).join('，') || '无'
                   }）`
-                : `最新信号（第 ${serverPage} 页，本页 ${filteredRows.length} 条 / 共 ${total.toLocaleString(
-                    'zh-CN'
-                  )} 条，已选策略：${
+                : `最新信号（第 ${serverPage} 页，本页 ${
+                    filteredRows.length
+                  } 条 / 共 ${total.toLocaleString('zh-CN')} 条，已选策略：${
                     selectedStrategyNames.map(name => getStrategyLabel(name)).join('，') || '无'
                   }）`}
             </Typography>
@@ -1178,7 +1179,10 @@ export default function SignalsPage() {
         </DialogContent>
       </Dialog>
 
-      <Box sx={{ height: BOTTOM_NAV_CONTENT_PADDING, display: { xs: 'block', md: 'none' } }} aria-hidden="true" />
+      <Box
+        sx={{ height: BOTTOM_NAV_CONTENT_PADDING, display: { xs: 'block', md: 'none' } }}
+        aria-hidden="true"
+      />
     </Box>
   );
 }

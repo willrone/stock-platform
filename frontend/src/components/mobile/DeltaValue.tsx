@@ -56,7 +56,9 @@ export const DeltaValue: React.FC<DeltaValueProps> = ({
       component="span"
       sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25, color }}
       role="img"
-      aria-label={`${positive ? '上涨' : negative ? '下跌' : '持平'} ${Math.abs(value).toFixed(digits)}${suffix}`}
+      aria-label={`${positive ? '上涨' : negative ? '下跌' : '持平'} ${Math.abs(value).toFixed(
+        digits
+      )}${suffix}`}
     >
       <Icon size={variant === 'h6' ? 16 : 13} aria-hidden="true" />
       <Typography variant={variant} sx={{ color, fontWeight: 600 }}>

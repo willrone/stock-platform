@@ -38,9 +38,7 @@ import { RefreshCw, ShieldAlert, Lock } from 'lucide-react';
 import { ErrorState } from '@/components/mobile/ErrorState';
 import { MobileTradeCard } from '@/components/mobile/MobileTradeCard';
 import { ResponsiveTable } from '@/components/mobile/ResponsiveTable';
-import StrategyRaceChart, {
-  RaceNavPoint,
-} from '@/components/charts/StrategyRaceChart';
+import StrategyRaceChart, { RaceNavPoint } from '@/components/charts/StrategyRaceChart';
 import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
 import { SafeAreaTop } from '@/components/mobile/SafeAreaTop';
 import { BOTTOM_NAV_CONTENT_PADDING, MIN_TOUCH_TARGET } from '@/components/mobile/safeArea';
@@ -154,8 +152,21 @@ type LineSignal = {
   n_positions: number;
   buys: Trade[];
   sells: Trade[];
-  holds: Array<{ code: string; name?: string; shares: number; cost: number; cost_amount: number; buy_date: string }>;
-  cost_model?: { commission: number; stamp_tax: number; slippage: number; cash_reserve: number; board_lot: number };
+  holds: Array<{
+    code: string;
+    name?: string;
+    shares: number;
+    cost: number;
+    cost_amount: number;
+    buy_date: string;
+  }>;
+  cost_model?: {
+    commission: number;
+    stamp_tax: number;
+    slippage: number;
+    cash_reserve: number;
+    board_lot: number;
+  };
   fill_assumption?: string;
   upgrade_hint?: string;
   // ── 观测口径层（2026-11-02）：暴露度 / 投入段收益 / as-of / 成交笔数 / 状态 ──
@@ -261,7 +272,7 @@ export default function PaperPortfolioPage() {
       setStrategies(infos);
 
       // 各条线的实时明细并发拉取；单条线失败（403 付费墙等）不影响其它线
-      const usable = infos.filter((s) => !s.locked);
+      const usable = infos.filter(s => !s.locked);
       const settled = await Promise.allSettled(
         usable.map(s =>
           tradingGet<LineSignal>(`/trading/signal?strategy=${encodeURIComponent(s.key)}`)
@@ -317,7 +328,7 @@ export default function PaperPortfolioPage() {
   }, [load]);
 
   const line = active ? lines[active] : undefined;
-  const activeInfo = strategies.find((s) => s.key === active);
+  const activeInfo = strategies.find(s => s.key === active);
   const cap = 1_000_000;
   const ageDays = daysSince(line?.date);
   const isStale = ageDays !== null && ageDays > STALE_DAYS;
@@ -332,7 +343,12 @@ export default function PaperPortfolioPage() {
       <SafeAreaTop />
       <MobileBottomNav />
 
-      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 0.5 }}>
+      <Stack
+        direction="row"
+        justifyContent="space-between"
+        alignItems="flex-start"
+        sx={{ mb: 0.5 }}
+      >
         <Box sx={{ minWidth: 0 }}>
           <Typography variant="h5" gutterBottom>
             多策略纸面盘（策略赛马）
@@ -363,8 +379,8 @@ export default function PaperPortfolioPage() {
 
       <Alert severity="warning" icon={<ShieldAlert size={18} />} sx={{ mb: 2, mt: 1.5 }}>
         <Typography variant="body2">
-          这是<strong>纸面虚拟盘</strong>，各条线独立 100 万初始资金、独立记账。
-          成本模型：佣金 3.0‱ + 印花税 5.0‱（卖出） + 滑点 1.0‰ + 现金预留 5%，
+          这是<strong>纸面虚拟盘</strong>，各条线独立 100 万初始资金、独立记账。 成本模型：佣金 3.0‱
+          + 印花税 5.0‱（卖出） + 滑点 1.0‰ + 现金预留 5%，
           成交价按「信号日收盘出信号、下一交易日成交」（lag1）假设。
         </Typography>
         <Typography variant="body2" sx={{ mt: 0.5 }}>
@@ -446,9 +462,7 @@ export default function PaperPortfolioPage() {
               {race.benchmark_comparison && (
                 <Alert
                   severity={
-                    race.benchmark_comparison.beats_benchmark_total_return
-                      ? 'success'
-                      : 'warning'
+                    race.benchmark_comparison.beats_benchmark_total_return ? 'success' : 'warning'
                   }
                   sx={{ mb: 2 }}
                 >
@@ -515,11 +529,10 @@ export default function PaperPortfolioPage() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {race.strategies.map((s) => {
+                    {race.strategies.map(s => {
                       const m = s.metrics;
                       const t = s.turnover;
                       const pos = m.total_return ?? 0;
-                      const neg = m.total_return ?? 0;
                       const freqColor =
                         t.frequency === '高频'
                           ? 'error'
@@ -561,7 +574,8 @@ export default function PaperPortfolioPage() {
                             <Typography
                               variant="body2"
                               sx={{
-                                color: (m.annualized_return ?? 0) >= 0 ? 'success.main' : 'error.main',
+                                color:
+                                  (m.annualized_return ?? 0) >= 0 ? 'success.main' : 'error.main',
                               }}
                             >
                               {fmtPct(m.annualized_return)}
@@ -655,7 +669,10 @@ export default function PaperPortfolioPage() {
                     {race.benchmark && (
                       <TableRow sx={{ bgcolor: 'background.default' }}>
                         <TableCell>
-                          <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                          <Typography
+                            variant="body2"
+                            sx={{ fontWeight: 600, color: 'text.secondary' }}
+                          >
                             基准 · {race.benchmark.name ?? '全市场等权'}
                           </Typography>
                         </TableCell>
@@ -670,7 +687,10 @@ export default function PaperPortfolioPage() {
                           </Typography>
                         </TableCell>
                         <TableCell align="right">
-                          <Typography variant="body2" sx={{ fontWeight: 700, color: 'text.secondary' }}>
+                          <Typography
+                            variant="body2"
+                            sx={{ fontWeight: 700, color: 'text.secondary' }}
+                          >
                             {race.benchmark.sharpe_ratio?.toFixed(3) ?? '—'}
                           </Typography>
                         </TableCell>
@@ -692,12 +712,16 @@ export default function PaperPortfolioPage() {
                 <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
                   净值曲线对比
                 </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                  起点 = 1.0（期初 100 万）；曲线由分月收益复利还原
-                  （月频 36 点，非日频精确净值，阶梯感是预期的）。
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: 'block', mb: 1 }}
+                >
+                  起点 = 1.0（期初 100 万）；曲线由分月收益复利还原 （月频 36
+                  点，非日频精确净值，阶梯感是预期的）。
                 </Typography>
                 <StrategyRaceChart
-                  series={race.strategies.map((s) => ({
+                  series={race.strategies.map(s => ({
                     key: s.key,
                     name: s.name,
                     isMainline: s.is_mainline,
@@ -719,7 +743,7 @@ export default function PaperPortfolioPage() {
                     口径披露
                   </Typography>
                   <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
-                    {race.disclosure.map((d) => (
+                    {race.disclosure.map(d => (
                       <Typography key={d} component="li" variant="caption" color="text.secondary">
                         {d}
                       </Typography>
@@ -734,7 +758,7 @@ export default function PaperPortfolioPage() {
 
       {/* 各条线总览 */}
       <Stack direction="row" spacing={1.5} sx={{ mb: 2, flexWrap: 'wrap' }}>
-        {order.map((s) => {
+        {order.map(s => {
           const l = lines[s.key];
           // 注意：不要 `?? 0` —— 取不到数据时显示 ¥0 会被读成"市值归零"，
           // 实际是"这条线没有数据"。fmtMoney(undefined) → 「暂无」。
@@ -794,7 +818,12 @@ export default function PaperPortfolioPage() {
               }}
             >
               <CardContent sx={{ py: 1.25, '&:last-child': { pb: 1.25 } }}>
-                <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
+                <Stack
+                  direction="row"
+                  justifyContent="space-between"
+                  alignItems="center"
+                  spacing={1}
+                >
                   <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                     {s.key}
                   </Typography>
@@ -837,9 +866,11 @@ export default function PaperPortfolioPage() {
                 >
                   {obsNeverBuilt
                     ? '未建仓（从未成交 · 0.00% 不代表打平）'
-                    : `暴露 ${obsExposure != null ? `${(obsExposure * 100).toFixed(1)}%` : '—'} · 投入段 ${
-                        obsInvRet != null ? `${obsInvRet.toFixed(2)}%` : '—'
-                      }${obsAsOf ? ` · 数据日 ${obsAsOf}` : ''}`}
+                    : `暴露 ${
+                        obsExposure != null ? `${(obsExposure * 100).toFixed(1)}%` : '—'
+                      } · 投入段 ${obsInvRet != null ? `${obsInvRet.toFixed(2)}%` : '—'}${
+                        obsAsOf ? ` · 数据日 ${obsAsOf}` : ''
+                      }`}
                 </Typography>
                 <Typography
                   variant="caption"
@@ -942,7 +973,9 @@ export default function PaperPortfolioPage() {
                                   <TableCell align="right">
                                     {t.price != null ? t.price.toFixed(2) : '暂无'}
                                   </TableCell>
-                                  <TableCell align="right">{t.shares?.toLocaleString() ?? '暂无'}</TableCell>
+                                  <TableCell align="right">
+                                    {t.shares?.toLocaleString() ?? '暂无'}
+                                  </TableCell>
                                   <TableCell align="right">{fmtMoney(t.amount)}</TableCell>
                                   <TableCell align="right">{feeOf(t).toFixed(2)}</TableCell>
                                   <TableCell align="right">{fmtScore(t.score)}</TableCell>
@@ -971,7 +1004,10 @@ export default function PaperPortfolioPage() {
         数据仅供研究，不构成投资建议。纸面成交不保证实盘可复现。
       </Typography>
 
-      <Box sx={{ height: BOTTOM_NAV_CONTENT_PADDING, display: { xs: 'block', md: 'none' } }} aria-hidden="true" />
+      <Box
+        sx={{ height: BOTTOM_NAV_CONTENT_PADDING, display: { xs: 'block', md: 'none' } }}
+        aria-hidden="true"
+      />
     </Box>
   );
 }

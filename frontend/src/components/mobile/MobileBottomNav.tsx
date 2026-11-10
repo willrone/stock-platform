@@ -23,7 +23,17 @@
  */
 
 import React from 'react';
-import { Box, ButtonBase, Divider, Drawer, List, ListItemButton, ListItemIcon, ListItemText, Typography } from '@mui/material';
+import {
+  Box,
+  ButtonBase,
+  Divider,
+  Drawer,
+  List,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Typography,
+} from '@mui/material';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -99,7 +109,7 @@ export const MobileBottomNav: React.FC = () => {
           width: '100%',
           maxWidth: '100vw',
           boxSizing: 'border-box',
-          zIndex: (theme) => theme.zIndex.drawer,
+          zIndex: theme => theme.zIndex.drawer,
           display: { xs: 'flex', md: 'none' },
           backgroundColor: 'background.paper',
           borderTop: 1,

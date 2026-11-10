@@ -229,10 +229,9 @@ export class TaskService {
     let actualFormat = requestedFormat;
 
     try {
-      payload = await apiRequest.post<TaskExportPayload | Blob>(
-        `/tasks/${taskId}/export`,
-        { format: requestedFormat }
-      );
+      payload = await apiRequest.post<TaskExportPayload | Blob>(`/tasks/${taskId}/export`, {
+        format: requestedFormat,
+      });
     } catch (error) {
       // 后端不支持该格式时降级到 excel（后端已确认支持的最小集合）
       if (requestedFormat !== 'excel' && isUnsupportedFormatError(error)) {

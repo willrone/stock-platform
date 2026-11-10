@@ -64,26 +64,24 @@ export default function StrategyRaceChart({
   // 全部策略共享同一条日期轴（取所有日期的并集，按月排序）
   const axis = useMemo(() => {
     const set = new Set<string>();
-    series.forEach((s) => s.nav.forEach((p) => set.add(p.date)));
+    series.forEach(s => s.nav.forEach(p => set.add(p.date)));
     return Array.from(set).sort();
   }, [series]);
 
-  const indexOf = useMemo(() => {
-    const m = new Map<string, number>();
-    axis.forEach((d, i) => m.set(d, i));
-    return m;
-  }, [axis]);
-
   useEffect(() => {
-    if (!chartRef.current) return;
+    if (!chartRef.current) {
+      return;
+    }
 
     if (chartInstance.current) {
       chartInstance.current.dispose();
       chartInstance.current = null;
     }
 
-    const usable = series.filter((s) => s.nav && s.nav.length > 0);
-    if (usable.length === 0 || axis.length === 0) return;
+    const usable = series.filter(s => s.nav && s.nav.length > 0);
+    if (usable.length === 0 || axis.length === 0) {
+      return;
+    }
 
     const isDark = theme.palette.mode === 'dark';
     const textColor = isDark ? 'rgba(255,255,255,0.72)' : 'rgba(0,0,0,0.65)';
@@ -94,9 +92,11 @@ export default function StrategyRaceChart({
     let chart: EChartsNS.ECharts | null = null;
     let onResize: (() => void) | null = null;
 
-    void import('echarts').then((echarts) => {
+    void import('echarts').then(echarts => {
       // 组件在 import 完成前已卸载 / ref 已失效 → 直接放弃渲染
-      if (disposed || !chartRef.current) return;
+      if (disposed || !chartRef.current) {
+        return;
+      }
 
       chart = echarts.init(chartRef.current);
       chartInstance.current = chart;
@@ -104,8 +104,8 @@ export default function StrategyRaceChart({
       const echartsSeries: EChartsNS.SeriesOption[] = usable.map((s, i) => {
         const color = SERIES_COLORS[i % SERIES_COLORS.length];
         // 对齐到统一日期轴：缺失的月份用 null（不连线断点）
-        const byDate = new Map(s.nav.map((p) => [p.date, p.value]));
-        const data: (number | null)[] = axis.map((d) => {
+        const byDate = new Map(s.nav.map(p => [p.date, p.value]));
+        const data: (number | null)[] = axis.map(d => {
           const v = byDate.get(d);
           return v === undefined ? null : v;
         });
@@ -194,7 +194,7 @@ export default function StrategyRaceChart({
     };
   }, [series, axis, theme.palette.mode]);
 
-  const hasData = series.some((s) => s.nav && s.nav.length > 0);
+  const hasData = series.some(s => s.nav && s.nav.length > 0);
 
   return (
     <Box>

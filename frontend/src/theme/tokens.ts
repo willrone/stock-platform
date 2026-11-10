@@ -282,8 +282,12 @@ export function semanticColorOf(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) {
     return 'semantics.flat';
   }
-  if (value > 0) return 'semantics.up';
-  if (value < 0) return 'semantics.down';
+  if (value > 0) {
+    return 'semantics.up';
+  }
+  if (value < 0) {
+    return 'semantics.down';
+  }
   return 'semantics.flat';
 }
 
@@ -292,7 +296,11 @@ export function semanticColorValue(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) {
     return semanticColors.flat;
   }
-  if (value > 0) return semanticColors.up;
-  if (value < 0) return semanticColors.down;
+  if (value > 0) {
+    return semanticColors.up;
+  }
+  if (value < 0) {
+    return semanticColors.down;
+  }
   return semanticColors.flat;
 }

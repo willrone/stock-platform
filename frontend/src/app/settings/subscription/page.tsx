@@ -96,9 +96,7 @@ export default function SubscriptionPage() {
         }
       }
       setTier(cachedTier);
-      setLoadError(
-        e instanceof Error ? e.message : '加载订阅信息失败，请稍后重试'
-      );
+      setLoadError(e instanceof Error ? e.message : '加载订阅信息失败，请稍后重试');
     } finally {
       setLoading(false);
     }
@@ -142,7 +140,7 @@ export default function SubscriptionPage() {
     );
   }
 
-  const tierLabel = tier ? (TIER_LABEL[tier] ?? tier.toUpperCase()) : '未知';
+  const tierLabel = tier ? TIER_LABEL[tier] ?? tier.toUpperCase() : '未知';
   const isFree = tier === 'free';
 
   return (
@@ -191,9 +189,7 @@ export default function SubscriptionPage() {
                 </Box>
 
                 <Chip
-                  label={
-                    tier === null ? '档位未知' : isFree ? '免费方案' : '订阅有效'
-                  }
+                  label={tier === null ? '档位未知' : isFree ? '免费方案' : '订阅有效'}
                   color={tier === null ? 'warning' : isFree ? 'default' : 'primary'}
                   sx={{ width: 'fit-content' }}
                 />
@@ -284,10 +280,7 @@ export default function SubscriptionPage() {
                   </Typography>
                   <LinearProgress
                     variant="determinate"
-                    value={usagePercent(
-                      usage.backtests_this_month,
-                      usage.monthly_backtest_limit
-                    )}
+                    value={usagePercent(usage.backtests_this_month, usage.monthly_backtest_limit)}
                     sx={{ height: 6, borderRadius: 3 }}
                   />
                 </Box>
@@ -316,15 +309,9 @@ export default function SubscriptionPage() {
         <CardContent>
           <Box sx={{ textAlign: 'center', py: 2 }}>
             <Typography variant="body2" color="text.secondary">
-              {isFree
-                ? '当前为免费方案，暂无账单记录'
-                : '账单记录将由支付服务同步'}
+              {isFree ? '当前为免费方案，暂无账单记录' : '账单记录将由支付服务同步'}
             </Typography>
-            <Button
-              onClick={openBillingPortal}
-              disabled={isFree}
-              sx={{ mt: 1, minHeight: 44 }}
-            >
+            <Button onClick={openBillingPortal} disabled={isFree} sx={{ mt: 1, minHeight: 44 }}>
               打开账单门户
             </Button>
           </Box>

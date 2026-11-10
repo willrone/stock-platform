@@ -17,20 +17,6 @@ import { useSnackbarStore } from '../../stores/useSnackbarStore';
 
 export const GlobalSnackbar: React.FC = () => {
   const { messages, removeMessage } = useSnackbarStore();
-  // 只显示最新的一条消息，避免遮挡
-  const latestMessage = messages.length > 0 ? messages[messages.length - 1] : null;
-  // 其他消息排队等待
-  const queuedMessageCount = messages.length - 1;
-
-  const handleClose = (_event?: React.SyntheticEvent | Event, reason?: string) => {
-    if (reason === 'clickaway') {
-      return;
-    }
-    if (latestMessage) {
-      removeMessage(latestMessage.id);
-    }
-  };
-
   return (
     <Box
       sx={{
@@ -53,7 +39,9 @@ export const GlobalSnackbar: React.FC = () => {
             open={true}
             autoHideDuration={message.duration || 4000}
             onClose={(event, reason) => {
-              if (reason === 'clickaway') return;
+              if (reason === 'clickaway') {
+                return;
+              }
               removeMessage(message.id);
             }}
             anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}

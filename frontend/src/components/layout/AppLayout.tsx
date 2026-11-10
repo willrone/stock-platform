@@ -50,12 +50,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAppStore } from '../../stores/useAppStore';
 import { useSnackbarStore } from '../../stores/useSnackbarStore';
 import { wsService } from '../../services/websocket';
-import {
-  findActiveKey,
-  findNavGroup,
-  getBreadcrumbs,
-  navGroups,
-} from './navGroups';
+import { findActiveKey, getBreadcrumbs, navGroups } from './navGroups';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -79,7 +74,9 @@ const focusOutline = {
  * 故在此内联同实现；待 api.ts 导出后可直接改回 import。
  */
 const clearStoredAuth = (): void => {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined') {
+    return;
+  }
   window.localStorage.removeItem('access_token');
   window.localStorage.removeItem('refresh_token');
   window.localStorage.removeItem('user_info');
@@ -123,12 +120,12 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     checkConnection();
     const interval = setInterval(checkConnection, 5000);
 
-    const handleSystemAlert = (data: {
-      level: 'info' | 'warning' | 'error';
-      message: string;
-    }) => {
-      if (data.level === 'error') showError(data.message);
-      else if (data.level === 'warning') showWarning(data.message);
+    const handleSystemAlert = (data: { level: 'info' | 'warning' | 'error'; message: string }) => {
+      if (data.level === 'error') {
+        showError(data.message);
+      } else if (data.level === 'warning') {
+        showWarning(data.message);
+      }
     };
 
     wsService.on('system:alert', handleSystemAlert);
@@ -191,15 +188,13 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       </Box>
 
       {/* 菜单区：flex:1 自滚动，底部条目（如「系统设置」）不会被裁切 */}
-      <Box
-        component="nav"
-        aria-label="主导航"
-        sx={{ flex: 1, overflowY: 'auto', px: 1.5, py: 1 }}
-      >
+      <Box component="nav" aria-label="主导航" sx={{ flex: 1, overflowY: 'auto', px: 1.5, py: 1 }}>
         <List sx={{ p: 0 }}>
           {navGroups.map(group => {
             const items = group.items.filter(item => !item.adminOnly || isAdmin);
-            if (items.length === 0) return null;
+            if (items.length === 0) {
+              return null;
+            }
             const isCollapsed = Boolean(collapsed[group.id]);
             const GroupIcon = isCollapsed ? ChevronRight : ChevronDown;
             return (
@@ -216,11 +211,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                   }}
                 >
                   <GroupIcon size={16} aria-hidden />
-                  <Typography
-                    variant="overline"
-                    component="span"
-                    sx={{ ml: 0.5, fontWeight: 600 }}
-                  >
+                  <Typography variant="overline" component="span" sx={{ ml: 0.5, fontWeight: 600 }}>
                     {group.label}
                   </Typography>
                 </ListItemButton>
@@ -368,7 +359,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             {/* 右侧：连接状态 + 账号菜单 */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
               <Chip
-                icon={wsConnected ? <Wifi size={16} aria-hidden /> : <WifiOff size={16} aria-hidden />}
+                icon={
+                  wsConnected ? <Wifi size={16} aria-hidden /> : <WifiOff size={16} aria-hidden />
+                }
                 label={wsConnected ? '已连接' : '未连接'}
                 color={wsConnected ? 'success' : 'error'}
                 size="small"
@@ -411,20 +404,29 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                   </Typography>
                 </Box>
                 <Divider />
-                <ListItemButton onClick={() => handleNav('/settings')} sx={{ mx: 0.5, borderRadius: 1, ...focusOutline }}>
+                <ListItemButton
+                  onClick={() => handleNav('/settings')}
+                  sx={{ mx: 0.5, borderRadius: 1, ...focusOutline }}
+                >
                   <ListItemIcon sx={{ minWidth: 36 }}>
                     <Settings size={18} aria-hidden />
                   </ListItemIcon>
                   <ListItemText primary="系统设置" />
                 </ListItemButton>
-                <ListItemButton onClick={() => handleNav('/wallet')} sx={{ mx: 0.5, borderRadius: 1, ...focusOutline }}>
+                <ListItemButton
+                  onClick={() => handleNav('/wallet')}
+                  sx={{ mx: 0.5, borderRadius: 1, ...focusOutline }}
+                >
                   <ListItemIcon sx={{ minWidth: 36 }}>
                     <Wallet size={18} aria-hidden />
                   </ListItemIcon>
                   <ListItemText primary="钱包" />
                 </ListItemButton>
                 {isAdmin && (
-                  <ListItemButton onClick={() => handleNav('/admin/payments')} sx={{ mx: 0.5, borderRadius: 1, ...focusOutline }}>
+                  <ListItemButton
+                    onClick={() => handleNav('/admin/payments')}
+                    sx={{ mx: 0.5, borderRadius: 1, ...focusOutline }}
+                  >
                     <ListItemIcon sx={{ minWidth: 36 }}>
                       <Wallet size={18} aria-hidden />
                     </ListItemIcon>

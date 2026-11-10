@@ -76,7 +76,14 @@ type DailySignal = {
   n_positions: number;
   buys: Trade[];
   sells: Trade[];
-  holds: Array<{ code: string; name?: string; shares: number; cost: number; cost_amount: number; buy_date: string }>;
+  holds: Array<{
+    code: string;
+    name?: string;
+    shares: number;
+    cost: number;
+    cost_amount: number;
+    buy_date: string;
+  }>;
   cost_model?: {
     commission: number;
     stamp_tax: number;
@@ -121,7 +128,7 @@ const TradeTable: React.FC<{ rows: Trade[]; side: 'buy' | 'sell' }> = ({ rows, s
     <>
       {/* 移动端：卡片 */}
       <Box sx={{ display: { xs: 'block', md: 'none' } }}>
-        {rows.map((r) => (
+        {rows.map(r => (
           <MobileTradeCard
             key={`${side}-${r.code}`}
             trade={{
@@ -154,11 +161,15 @@ const TradeTable: React.FC<{ rows: Trade[]; side: 'buy' | 'sell' }> = ({ rows, s
               </TableRow>
             </TableHead>
             <TableBody>
-              {rows.map((r) => (
+              {rows.map(r => (
                 <TableRow key={`${side}-${r.code}`} hover>
-                  <TableCell sx={{ fontFamily: 'ui-monospace, Menlo, monospace' }}>{r.code}</TableCell>
+                  <TableCell sx={{ fontFamily: 'ui-monospace, Menlo, monospace' }}>
+                    {r.code}
+                  </TableCell>
                   <TableCell>{r.name || '—'}</TableCell>
-                  <TableCell align="right">{r.shares?.toLocaleString?.() ?? r.shares ?? '暂无'}</TableCell>
+                  <TableCell align="right">
+                    {r.shares?.toLocaleString?.() ?? r.shares ?? '暂无'}
+                  </TableCell>
                   <TableCell align="right">
                     {r.price != null ? r.price.toFixed(2) : '暂无'}
                   </TableCell>
@@ -218,7 +229,9 @@ export default function PaperSignalPage() {
       { label: '持仓数', value: String(data.n_positions ?? '暂无') },
       {
         label: '买 / 卖 / 持',
-        value: `${data.buys?.length ?? 0} / ${data.sells?.length ?? 0} / ${data.holds?.length ?? 0}`,
+        value: `${data.buys?.length ?? 0} / ${data.sells?.length ?? 0} / ${
+          data.holds?.length ?? 0
+        }`,
       },
     ];
   }, [data]);
@@ -231,7 +244,12 @@ export default function PaperSignalPage() {
       <SafeAreaTop />
       <MobileBottomNav />
 
-      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 0.5 }}>
+      <Stack
+        direction="row"
+        justifyContent="space-between"
+        alignItems="flex-start"
+        sx={{ mb: 0.5 }}
+      >
         <Box sx={{ minWidth: 0 }}>
           <Typography variant="h5" fontWeight={700}>
             纸面信号
@@ -303,7 +321,7 @@ export default function PaperSignalPage() {
           </Alert>
 
           <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
-            {stats.map((s) => (
+            {stats.map(s => (
               <Card key={s.label} variant="outlined" sx={{ minWidth: 140, flex: '0 0 auto' }}>
                 <CardContent sx={{ py: 1.25, '&:last-child': { pb: 1.25 } }}>
                   <Typography variant="caption" color="text.secondary">
@@ -344,7 +362,7 @@ export default function PaperSignalPage() {
               </Typography>
               <Divider sx={{ mb: 1.5 }} />
               <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                {(data.holds ?? []).map((h) => (
+                {(data.holds ?? []).map(h => (
                   <Chip
                     key={h.code}
                     label={`${h.code}${h.name ? ` ${h.name}` : ''}`}
@@ -366,13 +384,17 @@ export default function PaperSignalPage() {
               成本模型：佣金 {(data.cost_model.commission * 10000).toFixed(1)}‱ · 印花税{' '}
               {(data.cost_model.stamp_tax * 10000).toFixed(1)}‱（卖出） · 滑点{' '}
               {(data.cost_model.slippage * 1000).toFixed(1)}‰（单边） · 现金预留{' '}
-              {(data.cost_model.cash_reserve * 100).toFixed(0)}% · {data.cost_model.board_lot} 股整手
+              {(data.cost_model.cash_reserve * 100).toFixed(0)}% · {data.cost_model.board_lot}{' '}
+              股整手
             </Typography>
           )}
         </>
       )}
 
-      <Box sx={{ height: BOTTOM_NAV_CONTENT_PADDING, display: { xs: 'block', md: 'none' } }} aria-hidden="true" />
+      <Box
+        sx={{ height: BOTTOM_NAV_CONTENT_PADDING, display: { xs: 'block', md: 'none' } }}
+        aria-hidden="true"
+      />
     </Box>
   );
 }

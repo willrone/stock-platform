@@ -109,11 +109,7 @@ export default function ResetPasswordPage() {
         <CardContent>
           <Box sx={{ textAlign: 'center', mb: 3 }}>
             <KeyRound size={44} aria-hidden style={{ color: 'primary.main' }} />
-            <Typography
-              variant="h5"
-              component="h1"
-              sx={{ mt: 1.5, mb: 0.5, fontWeight: 600 }}
-            >
+            <Typography variant="h5" component="h1" sx={{ mt: 1.5, mb: 0.5, fontWeight: 600 }}>
               {isResetMode ? '重置密码' : '忘记密码'}
             </Typography>
             <Typography variant="body2" color="text.secondary">

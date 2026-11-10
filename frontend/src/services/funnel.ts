@@ -35,7 +35,9 @@ function randomId(): string {
 }
 
 function safeGet(store: Storage | undefined, key: string): string {
-  if (!store) return '';
+  if (!store) {
+    return '';
+  }
   try {
     return store.getItem(key) ?? '';
   } catch {
@@ -44,7 +46,9 @@ function safeGet(store: Storage | undefined, key: string): string {
 }
 
 function safeSet(store: Storage | undefined, key: string, value: string): void {
-  if (!store) return;
+  if (!store) {
+    return;
+  }
   try {
     store.setItem(key, value);
   } catch {
@@ -54,7 +58,9 @@ function safeSet(store: Storage | undefined, key: string, value: string): void {
 
 /** 匿名设备标识（注册前也用它记录行为，注册后由后端归并到 user_id） */
 export function getAnonId(): string {
-  if (typeof window === 'undefined') return '';
+  if (typeof window === 'undefined') {
+    return '';
+  }
   let id = safeGet(window.localStorage, ANON_KEY);
   if (!id) {
     id = randomId();
@@ -65,7 +71,9 @@ export function getAnonId(): string {
 
 /** 标签页会话标识 */
 export function getSessionId(): string {
-  if (typeof window === 'undefined') return '';
+  if (typeof window === 'undefined') {
+    return '';
+  }
   let id = safeGet(window.sessionStorage, SESSION_KEY);
   if (!id) {
     id = randomId();
@@ -79,15 +87,16 @@ export function getSessionId(): string {
  * @param event 事件名，取值见 FunnelEventName
  * @param props 附加属性（可选，序列化后 ≤2KB）
  */
-export function trackEvent(
-  event: FunnelEventName,
-  props?: Record<string, unknown>
-): void {
-  if (typeof window === 'undefined') return;
+export function trackEvent(event: FunnelEventName, props?: Record<string, unknown>): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
   try {
     const token = safeGet(window.localStorage, 'access_token');
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (token) headers.Authorization = `Bearer ${token}`;
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
 
     void fetch('/api/v1/funnel/track', {
       method: 'POST',
@@ -109,13 +118,14 @@ export function trackEvent(
 /**
  * 同一标签页会话内只上报一次（用于页面挂载类事件）。
  */
-export function trackEventOnce(
-  event: FunnelEventName,
-  props?: Record<string, unknown>
-): void {
-  if (typeof window === 'undefined') return;
+export function trackEventOnce(event: FunnelEventName, props?: Record<string, unknown>): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
   const key = `${FIRED_PREFIX}${event}`;
-  if (safeGet(window.sessionStorage, key)) return;
+  if (safeGet(window.sessionStorage, key)) {
+    return;
+  }
   safeSet(window.sessionStorage, key, '1');
   trackEvent(event, props);
 }

@@ -41,13 +41,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import {
-  CreditCard,
-  History,
-  RefreshCw,
-  TrendingDown,
-  Wallet as WalletIcon,
-} from 'lucide-react';
+import { CreditCard, History, RefreshCw, TrendingDown, Wallet as WalletIcon } from 'lucide-react';
 
 import { apiRequest } from '@/services/api';
 import { trackEventOnce } from '@/services/funnel';
@@ -393,11 +387,7 @@ export default function WalletPage() {
                   }}
                 />
                 <Typography variant="h4" component="p" sx={{ fontWeight: 600 }}>
-                  {loadError
-                    ? '—'
-                    : balance && balance.balance_cents > 0
-                      ? '可用'
-                      : '余额不足'}
+                  {loadError ? '—' : balance && balance.balance_cents > 0 ? '可用' : '余额不足'}
                 </Typography>
               </Box>
               {/* 【P0-2】充值按钮现在打开真实表单对话框，不再是空操作 */}
@@ -427,10 +417,7 @@ export default function WalletPage() {
           {usageSummary && Object.keys(usageSummary.events ?? {}).length > 0 ? (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
               {Object.entries(usageSummary.events).map(([type, data]) => (
-                <Box
-                  key={type}
-                  sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5 }}
-                >
+                <Box key={type} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5 }}>
                   <Box
                     sx={{
                       display: 'flex',
@@ -492,7 +479,9 @@ export default function WalletPage() {
                         <TableCell>
                           <Typography variant="caption">
                             {record.charged_at || record.created_at
-                              ? new Date(record.charged_at || record.created_at).toLocaleString('zh-CN')
+                              ? new Date(record.charged_at || record.created_at).toLocaleString(
+                                  'zh-CN'
+                                )
                               : '—'}
                           </Typography>
                         </TableCell>
@@ -612,7 +601,8 @@ export default function WalletPage() {
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
             <Typography variant="body2" color="text.secondary">
-              可充值范围 ¥{minYuan} ~ ¥{maxYuan}。下单后请按收款指引付款，管理员确认到账后余额自动更新。
+              可充值范围 ¥{minYuan} ~ ¥{maxYuan}
+              。下单后请按收款指引付款，管理员确认到账后余额自动更新。
             </Typography>
             <TextField
               label="充值金额（元）"
@@ -644,11 +634,7 @@ export default function WalletPage() {
             onClick={handleDeposit}
             disabled={depositLoading}
             startIcon={
-              depositLoading ? (
-                <CircularProgress size={16} />
-              ) : (
-                <CreditCard size={16} aria-hidden />
-              )
+              depositLoading ? <CircularProgress size={16} /> : <CreditCard size={16} aria-hidden />
             }
             sx={{ minHeight: 44 }}
           >

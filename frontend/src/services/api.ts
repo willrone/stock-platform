@@ -35,12 +35,7 @@
  * `res.data.data` 一种访问方式。
  */
 
-import axios, {
-  AxiosInstance,
-  AxiosResponse,
-  AxiosError,
-  InternalAxiosRequestConfig,
-} from 'axios';
+import axios, { AxiosInstance, AxiosResponse, AxiosError, InternalAxiosRequestConfig } from 'axios';
 
 // 标准响应格式（对应后端 StandardResponse）
 export interface ApiResponse<T = unknown> {
@@ -252,7 +247,8 @@ const refreshAccessToken = async (): Promise<string> => {
       if (!retryable || attempt === REFRESH_MAX_RETRIES) {
         break;
       }
-      const backoff = REFRESH_BACKOFF_MS[attempt] ?? REFRESH_BACKOFF_MS[REFRESH_BACKOFF_MS.length - 1];
+      const backoff =
+        REFRESH_BACKOFF_MS[attempt] ?? REFRESH_BACKOFF_MS[REFRESH_BACKOFF_MS.length - 1];
       await delay(backoff);
     }
   }
@@ -432,13 +428,9 @@ const createPayloadView = <T>(payload: Record<string, unknown>): T => {
  *   - `res.data.data.data.xxx`  → 业务字段
  * 标准信封接口的 res.data / res.data.data 语义保持不变。
  */
-export const normalizeResponse = <T = unknown>(
-  response: unknown
-): NormalizedApiResponse<T> => {
+export const normalizeResponse = <T = unknown>(response: unknown): NormalizedApiResponse<T> => {
   // 既支持传响应体，也支持直接传 axios 响应对象
-  const body = isAxiosResponseLike(response)
-    ? (response as { data: unknown }).data
-    : response;
+  const body = isAxiosResponseLike(response) ? (response as { data: unknown }).data : response;
   const timestamp = new Date().toISOString();
 
   // 规则 1：标准信封
@@ -447,8 +439,7 @@ export const normalizeResponse = <T = unknown>(
     // 标准信封语义保持不变：data 仍是原来的业务数据，只在缺 timestamp 时补齐
     return {
       ...envelope,
-      timestamp:
-        typeof envelope.timestamp === 'string' ? envelope.timestamp : timestamp,
+      timestamp: typeof envelope.timestamp === 'string' ? envelope.timestamp : timestamp,
     };
   }
 

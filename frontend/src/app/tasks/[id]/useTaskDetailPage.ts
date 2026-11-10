@@ -35,9 +35,7 @@ function classifyTaskDetailError(error: unknown): TaskDetailLoadError {
     message?: string;
   } | null;
   const status = raw?.status ?? raw?.response?.status;
-  const message =
-    (typeof raw?.message === 'string' && raw.message.trim()) ||
-    '加载任务详情失败';
+  const message = (typeof raw?.message === 'string' && raw.message.trim()) || '加载任务详情失败';
 
   if (status === 404) {
     return { kind: 'not_found', message: '任务不存在或已被删除', status };

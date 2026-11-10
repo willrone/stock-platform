@@ -3,7 +3,11 @@
  *
  * 统一管理后端服务器地址配置，用于WebSocket等需要直接连接后端的场景
  */
-import { DEFAULT_BACKEND_PORT, DEFAULT_BACKEND_HTTP_URL, DEFAULT_BACKEND_WS_URL } from '@/config/backend';
+import {
+  DEFAULT_BACKEND_PORT,
+  DEFAULT_BACKEND_HTTP_URL,
+  DEFAULT_BACKEND_WS_URL,
+} from '@/config/backend';
 
 /**
  * 获取后端WebSocket地址

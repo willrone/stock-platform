@@ -308,9 +308,7 @@ export default function DataManagementPage() {
     const q = stockQuery.trim().toLowerCase();
     const filtered = q
       ? localStocks.filter(
-          s =>
-            s.ts_code.toLowerCase().includes(q) ||
-            (s.name ?? '').toLowerCase().includes(q)
+          s => s.ts_code.toLowerCase().includes(q) || (s.name ?? '').toLowerCase().includes(q)
         )
       : localStocks;
     const dir = sortDir === 'asc' ? 1 : -1;
@@ -1215,7 +1213,9 @@ export default function DataManagementPage() {
                       />
                       <Typography variant="caption" color="text.secondary">
                         共 {localStocks.length.toLocaleString('zh-CN')} 只
-                        {stockQuery.trim() ? ` · 命中 ${sortedLocalStocks.length.toLocaleString('zh-CN')} 只` : ''}
+                        {stockQuery.trim()
+                          ? ` · 命中 ${sortedLocalStocks.length.toLocaleString('zh-CN')} 只`
+                          : ''}
                       </Typography>
                     </Stack>
 
@@ -1339,7 +1339,10 @@ export default function DataManagementPage() {
         </CardContent>
       </Card>
 
-      <Box sx={{ height: BOTTOM_NAV_CONTENT_PADDING, display: { xs: 'block', md: 'none' } }} aria-hidden="true" />
+      <Box
+        sx={{ height: BOTTOM_NAV_CONTENT_PADDING, display: { xs: 'block', md: 'none' } }}
+        aria-hidden="true"
+      />
     </Box>
   );
 }

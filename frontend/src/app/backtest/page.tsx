@@ -241,12 +241,7 @@ export default function BacktestPage() {
     const winRate = pick('win_rate');
 
     // 一个指标都拿不到 → 视为无摘要
-    if (
-      totalReturn === null &&
-      sharpeRatio === null &&
-      maxDrawdown === null &&
-      winRate === null
-    ) {
+    if (totalReturn === null && sharpeRatio === null && maxDrawdown === null && winRate === null) {
       return null;
     }
 
@@ -263,9 +258,7 @@ export default function BacktestPage() {
 
   /** 数值 → 展示文本；null 显示破折号（不是 0，也不是 undefined） */
   const fmtMetric = (value: number | null | undefined, digits = 2): string =>
-    value === null || value === undefined || !Number.isFinite(value)
-      ? '—'
-      : value.toFixed(digits);
+    value === null || value === undefined || !Number.isFinite(value) ? '—' : value.toFixed(digits);
 
   if (loading) {
     return <LoadingSpinner text="加载回测任务..." />;

@@ -194,7 +194,12 @@ export default function PredictionsPage() {
       <Typography
         variant="h4"
         gutterBottom
-        sx={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: { xs: '1.5rem', sm: '2rem' } }}
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          fontSize: { xs: '1.5rem', sm: '2rem' },
+        }}
       >
         <Brain size={32} />
         预测分析
@@ -468,7 +473,10 @@ export default function PredictionsPage() {
         </Card>
       )}
 
-      <Box sx={{ height: BOTTOM_NAV_CONTENT_PADDING, display: { xs: 'block', md: 'none' } }} aria-hidden="true" />
+      <Box
+        sx={{ height: BOTTOM_NAV_CONTENT_PADDING, display: { xs: 'block', md: 'none' } }}
+        aria-hidden="true"
+      />
     </Box>
   );
 }

@@ -9,13 +9,7 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Typography,
-} from '@mui/material';
+import { Box, Button, Card, CardContent, Typography } from '@mui/material';
 import { ChevronRight, CreditCard, ShieldCheck } from 'lucide-react';
 
 import { useAppStore } from '@/stores/useAppStore';

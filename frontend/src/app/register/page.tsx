@@ -86,12 +86,18 @@ export default function RegisterPage() {
       }
 
       localStorage.setItem('access_token', data.access_token);
-      if (data.refresh_token) localStorage.setItem('refresh_token', data.refresh_token);
-      if (data.user) localStorage.setItem('user_info', JSON.stringify(data.user));
+      if (data.refresh_token) {
+        localStorage.setItem('refresh_token', data.refresh_token);
+      }
+      if (data.user) {
+        localStorage.setItem('user_info', JSON.stringify(data.user));
+      }
 
       // 统一归一：保证 subscription_tier / is_admin 正确
       const normalized = normalizeUser(data.user ?? null);
-      if (normalized) setUser(normalized);
+      if (normalized) {
+        setUser(normalized);
+      }
 
       router.push('/dashboard');
     } catch (submitError) {

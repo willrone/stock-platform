@@ -45,14 +45,14 @@ export const chartSemantic = {
   up: semanticColors.up,
   upLight: semanticColors.upLight,
   upDark: semanticColors.upDark,
-  upFill: withAlpha(semanticColors.up, 0.30),
-  upFillFaint: withAlpha(semanticColors.up, 0.10),
+  upFill: withAlpha(semanticColors.up, 0.3),
+  upFillFaint: withAlpha(semanticColors.up, 0.1),
   /** 下跌 / 负收益 —— 绿 */
   down: semanticColors.down,
   downLight: semanticColors.downLight,
   downDark: semanticColors.downDark,
-  downFill: withAlpha(semanticColors.down, 0.30),
-  downFillFaint: withAlpha(semanticColors.down, 0.10),
+  downFill: withAlpha(semanticColors.down, 0.3),
+  downFillFaint: withAlpha(semanticColors.down, 0.1),
   /** 平盘 */
   flat: semanticColors.flat,
 } as const;
@@ -169,9 +169,15 @@ export const chartNeutral = {
 
 /** 数值 → 图表涨跌色 */
 export function chartColorOf(value: number | null | undefined): string {
-  if (value === null || value === undefined || Number.isNaN(value)) return chartSemantic.flat;
-  if (value > 0) return chartSemantic.up;
-  if (value < 0) return chartSemantic.down;
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return chartSemantic.flat;
+  }
+  if (value > 0) {
+    return chartSemantic.up;
+  }
+  if (value < 0) {
+    return chartSemantic.down;
+  }
   return chartSemantic.flat;
 }
 
@@ -180,8 +186,12 @@ export function chartFillOf(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) {
     return withAlpha(chartSemantic.flat, 0.1);
   }
-  if (value > 0) return chartSemantic.upFill;
-  if (value < 0) return chartSemantic.downFill;
+  if (value > 0) {
+    return chartSemantic.upFill;
+  }
+  if (value < 0) {
+    return chartSemantic.downFill;
+  }
   return withAlpha(chartSemantic.flat, 0.1);
 }
 
@@ -190,15 +200,25 @@ export function chartFaintFillOf(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) {
     return withAlpha(chartSemantic.flat, 0.1);
   }
-  if (value > 0) return chartSemantic.upFillFaint;
-  if (value < 0) return chartSemantic.downFillFaint;
+  if (value > 0) {
+    return chartSemantic.upFillFaint;
+  }
+  if (value < 0) {
+    return chartSemantic.downFillFaint;
+  }
   return withAlpha(chartSemantic.flat, 0.1);
 }
 
 /** 涨跌色 → MUI sx 可用的 palette 路径（与 theme.tokens.semanticColorOf 保持一致） */
 export function chartSemanticTokenOf(value: number | null | undefined): string {
-  if (value === null || value === undefined || Number.isNaN(value)) return 'semantics.flat';
-  if (value > 0) return 'semantics.up';
-  if (value < 0) return 'semantics.down';
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return 'semantics.flat';
+  }
+  if (value > 0) {
+    return 'semantics.up';
+  }
+  if (value < 0) {
+    return 'semantics.down';
+  }
   return 'semantics.flat';
 }

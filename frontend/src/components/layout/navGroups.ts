@@ -148,10 +148,14 @@ export interface BreadcrumbEntry {
  */
 export function getBreadcrumbs(pathname: string, isAdmin: boolean): BreadcrumbEntry[] {
   const activeKey = findActiveKey(pathname, isAdmin);
-  if (!activeKey) return [];
+  if (!activeKey) {
+    return [];
+  }
 
   const current = findNavItem(activeKey);
-  if (!current) return [];
+  if (!current) {
+    return [];
+  }
 
   const parent = allNavItems
     .filter(
@@ -168,13 +172,7 @@ export function getBreadcrumbs(pathname: string, isAdmin: boolean): BreadcrumbEn
 }
 
 /** 不套后台外壳（AppLayout）的公开页路径 */
-export const PUBLIC_PATHS = [
-  '/',
-  '/login',
-  '/register',
-  '/reset-password',
-  '/pricing',
-] as const;
+export const PUBLIC_PATHS = ['/', '/login', '/register', '/reset-password', '/pricing'] as const;
 
 export type PublicPath = (typeof PUBLIC_PATHS)[number];
 

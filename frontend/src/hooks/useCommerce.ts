@@ -1,6 +1,4 @@
 import { useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import { EVENT_TYPES } from '@/services/api/commerce';
 import { useSnackbarStore } from '@/stores/useSnackbarStore';
 import { commerceService } from '@/services/commerce/commerce.service';
 
@@ -16,7 +14,6 @@ import { commerceService } from '@/services/commerce/commerce.service';
  * }
  */
 export function useCommerce() {
-  const router = useRouter();
   // 只取稳定的 action 引用（zustand store 对象每次渲染都是新引用）
   const showError = useSnackbarStore(s => s.showError);
   const showSuccess = useSnackbarStore(s => s.showSuccess);
@@ -42,16 +39,19 @@ export function useCommerce() {
   }, [showError]);
 
   // 检查是否可以执行指定操作
-  const checkCanExecute = useCallback(async (event_type: string) => {
-    try {
-      const result = await commerceService.checkCanExecute(event_type);
-      setCheckResult(result);
-      return result;
-    } catch (e) {
-      showError('检查失败');
-      return { can_proceed: false, message: '检查失败，请重试', estimated_cost_yuan: 0 };
-    }
-  }, [showError]);
+  const checkCanExecute = useCallback(
+    async (event_type: string) => {
+      try {
+        const result = await commerceService.checkCanExecute(event_type);
+        setCheckResult(result);
+        return result;
+      } catch (e) {
+        showError('检查失败');
+        return { can_proceed: false, message: '检查失败，请重试', estimated_cost_yuan: 0 };
+      }
+    },
+    [showError]
+  );
 
   // 记录用量并扣费
   const recordUsage = useCallback(
@@ -82,17 +82,20 @@ export function useCommerce() {
   );
 
   // 充值
-  const deposit = useCallback(async (amount: number) => {
-    try {
-      await commerceService.deposit(amount);
-      // 重新查询余额
-      const balanceInfo = await commerceService.getBalance();
-      setBalance(balanceInfo.balance_yuan);
-      showSuccess(`充值成功！当前余额 ¥${balanceInfo.balance_yuan.toFixed(2)}`);
-    } catch (e) {
-      showError('充值失败');
-    }
-  }, [showSuccess, showError]);
+  const deposit = useCallback(
+    async (amount: number) => {
+      try {
+        await commerceService.deposit(amount);
+        // 重新查询余额
+        const balanceInfo = await commerceService.getBalance();
+        setBalance(balanceInfo.balance_yuan);
+        showSuccess(`充值成功！当前余额 ¥${balanceInfo.balance_yuan.toFixed(2)}`);
+      } catch (e) {
+        showError('充值失败');
+      }
+    },
+    [showSuccess, showError]
+  );
 
   // 刷新余额
   const refreshBalance = useCallback(async () => {

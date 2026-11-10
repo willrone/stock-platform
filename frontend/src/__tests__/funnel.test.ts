@@ -7,12 +7,7 @@
  *   3. trackEvent 永不抛错、永远带 auth 头（登录态）
  */
 
-import {
-  getAnonId,
-  getSessionId,
-  trackEvent,
-  trackEventOnce,
-} from '@/services/funnel';
+import { getAnonId, getSessionId, trackEvent, trackEventOnce } from '@/services/funnel';
 
 describe('漏斗埋点客户端', () => {
   const originalFetch = global.fetch;

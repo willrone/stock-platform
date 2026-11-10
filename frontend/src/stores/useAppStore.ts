@@ -87,14 +87,18 @@ export const USER_INFO_STORAGE_KEY = 'user_info';
  * 后端字段：id / email / username / subscription_tier / is_admin
  */
 export function normalizeUser(input: UserInput | null | undefined): User | null {
-  if (!input) return null;
+  if (!input) {
+    return null;
+  }
 
   const email = input.email ?? '';
   const name = input.name ?? input.username ?? email;
   const id = input.id ?? '';
 
   // 三者全空说明没有有效用户
-  if (!id && !email && !name) return null;
+  if (!id && !email && !name) {
+    return null;
+  }
 
   const normalized: User = {
     id,
@@ -104,19 +108,27 @@ export function normalizeUser(input: UserInput | null | undefined): User | null 
     is_admin: Boolean(input.is_admin),
   };
 
-  if (input.avatar) normalized.avatar = input.avatar;
-  if (input.subscription_tier) normalized.subscription_tier = input.subscription_tier;
+  if (input.avatar) {
+    normalized.avatar = input.avatar;
+  }
+  if (input.subscription_tier) {
+    normalized.subscription_tier = input.subscription_tier;
+  }
 
   return normalized;
 }
 
 /** 读取 localStorage.user_info（后端登录态原样），映射为 store 的 user */
 export function readStoredUser(): User | null {
-  if (typeof window === 'undefined') return null;
+  if (typeof window === 'undefined') {
+    return null;
+  }
 
   try {
     const raw = window.localStorage.getItem(USER_INFO_STORAGE_KEY);
-    if (!raw) return null;
+    if (!raw) {
+      return null;
+    }
     return normalizeUser(JSON.parse(raw) as UserInput);
   } catch {
     // 脏数据不应阻断启动
@@ -133,7 +145,9 @@ export function readStoredUser(): User | null {
  */
 const safeStateStorage = {
   getItem: (name: string): string | null => {
-    if (typeof window === 'undefined') return null;
+    if (typeof window === 'undefined') {
+      return null;
+    }
     try {
       return window.localStorage.getItem(name);
     } catch {
@@ -141,7 +155,9 @@ const safeStateStorage = {
     }
   },
   setItem: (name: string, value: string): void => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined') {
+      return;
+    }
     try {
       window.localStorage.setItem(name, value);
     } catch {
@@ -149,7 +165,9 @@ const safeStateStorage = {
     }
   },
   removeItem: (name: string): void => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined') {
+      return;
+    }
     try {
       window.localStorage.removeItem(name);
     } catch {
@@ -161,10 +179,14 @@ const safeStateStorage = {
 const appStorage: PersistStorage<PersistedAppState> = {
   getItem: (name: string): StorageValue<PersistedAppState> | null => {
     const raw = safeStateStorage.getItem(name);
-    if (!raw) return null;
+    if (!raw) {
+      return null;
+    }
     try {
       const parsed = JSON.parse(raw) as StorageValue<PersistedAppState>;
-      if (!parsed || typeof parsed !== 'object' || !('state' in parsed)) return null;
+      if (!parsed || typeof parsed !== 'object' || !('state' in parsed)) {
+        return null;
+      }
       return parsed;
     } catch {
       return null;
@@ -195,7 +217,7 @@ const defaultWsUrl = (): string => {
 export const useAppStore = create<AppState>()(
   devtools(
     persist(
-      (set) => ({
+      set => ({
         // 初始状态
         user: null,
         isAuthenticated: false,
@@ -209,7 +231,7 @@ export const useAppStore = create<AppState>()(
         error: null,
 
         // Actions
-        setUser: (user) => {
+        setUser: user => {
           const normalized = normalizeUser(user);
           set(
             () => ({
@@ -221,13 +243,13 @@ export const useAppStore = create<AppState>()(
           );
         },
 
-        setLoading: (loading) => set({ loading }, false, 'setLoading'),
+        setLoading: loading => set({ loading }, false, 'setLoading'),
 
-        setError: (error) => set({ error }, false, 'setError'),
+        setError: error => set({ error }, false, 'setError'),
 
-        updateConfig: (newConfig) =>
+        updateConfig: newConfig =>
           set(
-            (state) => ({
+            state => ({
               config: { ...state.config, ...newConfig },
             }),
             false,
@@ -271,7 +293,7 @@ export const useAppStore = create<AppState>()(
          * 结果交给 merge 拼回完整 state，所以这里返回落盘形态是正确的；
          * 仅类型层面需要一次断言。
          */
-        migrate: (persistedState) => {
+        migrate: persistedState => {
           const raw = (persistedState ?? {}) as Record<string, unknown>;
           const rawUser = raw.user as UserInput | undefined | null;
 
@@ -287,8 +309,10 @@ export const useAppStore = create<AppState>()(
          * 恢复完成后的兜底：用 localStorage.user_info（后端登录态）补齐 user，
          * 这样 is_admin / subscription_tier 在刷新后依然可见。
          */
-        onRehydrateStorage: () => (state) => {
-          if (!state) return;
+        onRehydrateStorage: () => state => {
+          if (!state) {
+            return;
+          }
           const stored = readStoredUser();
           if (stored) {
             state.setUser(stored);

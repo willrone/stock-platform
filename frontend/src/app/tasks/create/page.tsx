@@ -752,13 +752,22 @@ function CreateTaskPageContent() {
                                 {strategy.price && (
                                   <Typography
                                     variant="caption"
-                                    color={strategy.tier === 'advanced' ? 'warning.main' : 'text.secondary'}
+                                    color={
+                                      strategy.tier === 'advanced'
+                                        ? 'warning.main'
+                                        : 'text.secondary'
+                                    }
                                     sx={{ fontWeight: 600 }}
                                   >
                                     {strategy.price}
-                                    {strategy.sharpe_10y != null && ` · 10年夏普 ${strategy.sharpe_10y.toFixed(3)}`}
+                                    {strategy.sharpe_10y != null &&
+                                      ` · 10年夏普 ${strategy.sharpe_10y.toFixed(3)}`}
                                     {strategy.est_seconds != null &&
-                                      ` · ${strategy.est_seconds >= 60 ? `${Math.round(strategy.est_seconds / 60)} 分钟` : `${strategy.est_seconds} 秒`}`}
+                                      ` · ${
+                                        strategy.est_seconds >= 60
+                                          ? `${Math.round(strategy.est_seconds / 60)} 分钟`
+                                          : `${strategy.est_seconds} 秒`
+                                      }`}
                                   </Typography>
                                 )}
                               </Box>
@@ -773,9 +782,8 @@ function CreateTaskPageContent() {
                             ? '正在加载策略列表...'
                             : formData.strategy_name
                               ? `当前选中策略：${
-                                  availableStrategies.find(
-                                    s => s.key === formData.strategy_name
-                                  )?.name || formData.strategy_name
+                                  availableStrategies.find(s => s.key === formData.strategy_name)
+                                    ?.name || formData.strategy_name
                                 }（${formData.strategy_name}）`
                               : '请选择交易策略'}
                       </FormHelperText>

@@ -76,8 +76,12 @@ interface CompareResponse {
 
 /** 将任意值转为可读字符串 */
 function formatValue(value: unknown): string {
-  if (value === null || value === undefined) return '—';
-  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  if (value === null || value === undefined) {
+    return '—';
+  }
+  if (typeof value === 'boolean') {
+    return value ? 'true' : 'false';
+  }
   if (typeof value === 'object') {
     try {
       return JSON.stringify(value);
@@ -90,7 +94,9 @@ function formatValue(value: unknown): string {
 
 /** 找出 values 中与"多数值"不同的 task_id 集合 */
 function getMinorityTaskIds(values: ParameterValue[]): Set<string> {
-  if (values.length <= 1) return new Set();
+  if (values.length <= 1) {
+    return new Set();
+  }
 
   // 序列化后做频次统计
   const freq = new Map<string, number>();
@@ -173,9 +179,13 @@ export default function ComparePage() {
           setAllBacktestTasks(backtestTasks);
         }
       } catch {
-        if (!cancelled) setError('加载任务列表失败');
+        if (!cancelled) {
+          setError('加载任务列表失败');
+        }
       } finally {
-        if (!cancelled) setLoadingTasks(false);
+        if (!cancelled) {
+          setLoadingTasks(false);
+        }
       }
     };
 
@@ -188,7 +198,9 @@ export default function ComparePage() {
   /* ---------- compare ---------- */
 
   const handleCompare = async () => {
-    if (selectedTasks.length < 2) return;
+    if (selectedTasks.length < 2) {
+      return;
+    }
 
     setComparing(true);
     setError(null);
@@ -209,7 +221,9 @@ export default function ComparePage() {
   /* ---------- ui handlers ---------- */
 
   const handleModeChange = (_: React.MouseEvent<HTMLElement>, newMode: 'diff' | 'full') => {
-    if (newMode) setMode(newMode);
+    if (newMode) {
+      setMode(newMode);
+    }
   };
 
   const handleSelectionChange = (_: React.SyntheticEvent, value: Task[]) => {

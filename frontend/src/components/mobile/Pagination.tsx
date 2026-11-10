@@ -65,7 +65,9 @@ export const Pagination: React.FC<PaginationProps> = ({
       <Typography variant="caption" color="text.secondary">
         {total === 0
           ? '无数据'
-          : `显示 ${from}-${to} / 共 ${total.toLocaleString('zh-CN')} 条${label ? ` · ${label}` : ''}`}
+          : `显示 ${from}-${to} / 共 ${total.toLocaleString('zh-CN')} 条${
+              label ? ` · ${label}` : ''
+            }`}
       </Typography>
 
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>

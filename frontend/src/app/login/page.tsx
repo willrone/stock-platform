@@ -54,11 +54,15 @@ export default function LoginPage() {
       if (data.refresh_token) {
         localStorage.setItem('refresh_token', data.refresh_token);
       }
-      if (data.user) localStorage.setItem('user_info', JSON.stringify(data.user));
+      if (data.user) {
+        localStorage.setItem('user_info', JSON.stringify(data.user));
+      }
       // 统一归一：subscription_tier / is_admin 由 normalizeUser 处理，
       // 不再手写映射（手写版本漏字段会让管理员入口不显示）
       const normalized = normalizeUser(data.user ?? null);
-      if (normalized) setUser(normalized);
+      if (normalized) {
+        setUser(normalized);
+      }
       router.push('/dashboard');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '登录失败');
@@ -85,9 +89,13 @@ export default function LoginPage() {
       if (data.refresh_token) {
         localStorage.setItem('refresh_token', data.refresh_token);
       }
-      if (data.user) localStorage.setItem('user_info', JSON.stringify(data.user));
+      if (data.user) {
+        localStorage.setItem('user_info', JSON.stringify(data.user));
+      }
       const normalized = normalizeUser(data.user ?? null);
-      if (normalized) setUser(normalized);
+      if (normalized) {
+        setUser(normalized);
+      }
       router.push('/dashboard');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '注册失败');

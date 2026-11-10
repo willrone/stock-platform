@@ -143,11 +143,7 @@ interface EmptyStateProps {
   action?: React.ReactNode;
 }
 
-export const EmptyState: React.FC<EmptyStateProps> = ({
-  title = '暂无数据',
-  message,
-  action,
-}) => (
+export const EmptyState: React.FC<EmptyStateProps> = ({ title = '暂无数据', message, action }) => (
   <Stack
     alignItems="center"
     justifyContent="center"

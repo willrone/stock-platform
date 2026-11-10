@@ -811,7 +811,9 @@ export default function TodaySignalPage() {
                     size="small"
                     variant="outlined"
                     label={`价格截至 ${signal.price_as_of ?? '未知'}${
-                      (signal.n_price_dates ?? 1) > 1 ? `（最新到 ${signal.price_as_of_newest}）` : ''
+                      (signal.n_price_dates ?? 1) > 1
+                        ? `（最新到 ${signal.price_as_of_newest}）`
+                        : ''
                     }`}
                     sx={{ height: 24, fontSize: 12 }}
                   />
@@ -843,9 +845,15 @@ export default function TodaySignalPage() {
                     />
                   )}
                 </Stack>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-                  股数来自纸面撮合（整手，与账本一致）；最新价与参考金额按<strong>行情层最后一根收盘价</strong>
-                  重算，<strong>不等于</strong>信号日撮合价。红色行 = 这个价买不进／卖不出，仍然列在这里。
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: 'block', mb: 1.5 }}
+                >
+                  股数来自纸面撮合（整手，与账本一致）；最新价与参考金额按
+                  <strong>行情层最后一根收盘价</strong>
+                  重算，<strong>不等于</strong>信号日撮合价。红色行 =
+                  这个价买不进／卖不出，仍然列在这里。
                 </Typography>
                 <ResponsiveTable minWidth={880}>
                   <Table size="small">
@@ -872,8 +880,8 @@ export default function TodaySignalPage() {
                               bgcolor: blocked
                                 ? 'rgba(198,40,40,0.08)'
                                 : unknown
-                                ? 'rgba(237,108,2,0.07)'
-                                : 'transparent',
+                                  ? 'rgba(237,108,2,0.07)'
+                                  : 'transparent',
                             }}
                           >
                             <TableCell
@@ -885,7 +893,9 @@ export default function TodaySignalPage() {
                               {side === 'buy' ? '买' : '卖'}
                             </TableCell>
                             <TableCell>
-                              <Box component="span" sx={{ fontFamily: 'monospace' }}>{t.code}</Box>
+                              <Box component="span" sx={{ fontFamily: 'monospace' }}>
+                                {t.code}
+                              </Box>
                               <Typography variant="caption" color="text.secondary" component="span">
                                 {' '}
                                 {t.name ?? ''}
@@ -897,7 +907,11 @@ export default function TodaySignalPage() {
                                   <Box component="span" sx={{ fontFamily: 'monospace' }}>
                                     {t.latest_price.toFixed(2)}
                                   </Box>
-                                  <Typography variant="caption" color="text.secondary" component="span">
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                    component="span"
+                                  >
                                     {' '}
                                     {t.price_as_of ?? ''}
                                     {t.price_basis === '盘中未收盘' ? ' 盘中' : ''}
@@ -942,11 +956,16 @@ export default function TodaySignalPage() {
                               {t.ref_amount_latest != null ? fmtMoney(t.ref_amount_latest) : '—'}
                             </TableCell>
                             <TableCell align="right">
-                              {t.target_weight_pct != null ? `${t.target_weight_pct.toFixed(2)}%` : '—'}
+                              {t.target_weight_pct != null
+                                ? `${t.target_weight_pct.toFixed(2)}%`
+                                : '—'}
                             </TableCell>
                             <TableCell sx={{ maxWidth: 260 }}>
                               {blocked ? (
-                                <Typography variant="caption" sx={{ color: ORDER_BAD, fontWeight: 700 }}>
+                                <Typography
+                                  variant="caption"
+                                  sx={{ color: ORDER_BAD, fontWeight: 700 }}
+                                >
                                   {t.tradable_reason || '不可成交'}
                                 </Typography>
                               ) : unknown ? (
@@ -955,7 +974,10 @@ export default function TodaySignalPage() {
                                 </Typography>
                               ) : (
                                 <Stack direction="row" spacing={0.5} alignItems="center" useFlexGap>
-                                  <Typography variant="caption" sx={{ color: ORDER_OK, fontWeight: 700 }}>
+                                  <Typography
+                                    variant="caption"
+                                    sx={{ color: ORDER_OK, fontWeight: 700 }}
+                                  >
                                     可成交
                                   </Typography>
                                   {t.limit_check === false && (
