@@ -71,3 +71,16 @@ def pytest_configure(config: pytest.Config) -> None:
         Base.metadata.create_all(bind=connection)
         ensure_sqlite_task_updated_at_column_sync(connection)
         _seed_ci_smoke_models_sync(connection)
+
+    # 播种的 model_info 行写着 file_path=data/models/xgboost_v1.joblib，但干净 checkout 里没有这个文件，
+    # prediction_engine 于是走「数据库有记录 → 文件不存在 → PredictionError」分支，
+    # 把 test_prediction_engine_properties 的属性测试打红。补一个可加载的冒烟模型，
+    # 让 CI 真的跑预测逻辑，而不是把测试改成 skip。已存在就不覆盖（本机有真模型）。
+    seeded_model = Path("data/models/xgboost_v1.joblib")
+    if not seeded_model.exists():
+        import joblib
+
+        from tests.ci_smoke_model import CiSmokeModel
+
+        seeded_model.parent.mkdir(parents=True, exist_ok=True)
+        joblib.dump(CiSmokeModel(), seeded_model)
