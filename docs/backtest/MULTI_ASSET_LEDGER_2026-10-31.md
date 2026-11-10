@@ -6461,6 +6461,13 @@ K=10（单价上限 90 元）时低波动更强：3y 命中 90%、年化 19.42%�
 不要同一步同时推 feat 和 main（会白跑一遍）。`security-scan.yml` 保持只 main/develop + 每周一定时。
 补这一条需要 gh token 的 `workflow` scope（2026-11-10 已 `gh auth refresh -s workflow` 补上）。
 
+**首跑战果（同日，机制自证有效）**：feat 门禁上线后第一次推 feat 就抓到**我自己改出来的红点** ——
+`fetch_akshare_full_history.py` 把模块级 `START` 改名 `DEFAULT_START`，`test_baostock_full_history.py`
+的契约 `from scripts.fetch_akshare_full_history import START` 直接 ImportError（1 failed / 1103 passed）。
+修契约（测试改为断言 `DEFAULT_START == "20120101"`，并把「换起点必须显式 `--start`」写进断言注释）后
+feat 四条全绿才 ff 合 main —— **main 从未被这个红点污染**，以前这种问题要攒到合 main 才暴露。
+**可迁移教训：改模块级常量/改名前，先 grep 全仓谁 import 它 —— 测试契约也是使用者。**
+
 
 ### 12.85 门禁红灯复盘（2026-11-10，push 到 main 后 CI 三条红）
 
