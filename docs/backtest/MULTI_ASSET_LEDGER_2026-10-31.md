@@ -6502,3 +6502,12 @@ AppLayout 的 `findNavGroup`、`useCommerce` 的 `EVENT_TYPES` import 与未用�
 
 **可选补强**：把面板起点推到 2010–2011（akshare 支持），补出 2012/2013 期 → 10–11 期，SE 缩小约 10%。
 成本：全量重抓 ~13 分钟 + 重建 TR 面板 ~30 秒。未做，等决定。
+
+
+**12.85 补充（同日，机制已修）**：两条门禁 workflow 的 `push` 触发从 `[main, develop]`
+扩到 `[main, develop, "feat/*"]`，并加 `concurrency` + `cancel-in-progress`（同分支连推只留最新一次）。
+从此 feat 分支每次 push 都跑门禁，「攒 27 天红灯一次爆」这条路被堵死。
+代价：私有仓免费 2000 分钟/月，一次全套约 10 分钟 —— 新纪律是 **feat 门禁绿了才往 main 合**，
+不要同一步同时推 feat 和 main（会白跑一遍）。`security-scan.yml` 保持只 main/develop + 每周一定时。
+补这一条需要 gh token 的 `workflow` scope（2026-11-10 已 `gh auth refresh -s workflow` 补上）。
+
