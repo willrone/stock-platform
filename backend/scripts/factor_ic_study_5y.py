@@ -27,8 +27,8 @@ from math import erfc, sqrt
 import numpy as np
 import pandas as pd
 
-FEAT_DIR = "/Users/rone/projects/stock-platform/data/qlib_data/features/day"
-OUT_JSON = "/Users/rone/projects/stock-platform/data/strategy_baseline/factor_ic_study_5y.json"
+FEAT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "qlib_data", "features", "day")
+OUT_JSON = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "strategy_baseline", "factor_ic_study_5y.json")
 SMOKE_N = int(os.environ.get("IC_SMOKE_N", "0"))  # >0 = 抽样冒烟模式
 SPLIT = pd.Timestamp("2023-05-09")  # 子期分界 (对齐既有研究的 2023-26 子期惯例)
 HORIZONS = {"fwd1": 1, "fwd5": 5, "fwd20": 20}

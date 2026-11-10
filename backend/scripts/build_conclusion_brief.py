@@ -13,7 +13,7 @@ import json
 import os
 from typing import Any, Dict, List
 
-ROOT = "/Users/rone/Projects/stock-platform"
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 BT = os.path.join(ROOT, "data", "backtest")
 OUT = os.path.join(BT, "CONCLUSION_2026-10-27.md")
 

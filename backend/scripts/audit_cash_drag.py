@@ -14,11 +14,12 @@
 恒等式校验：Σ marketPnL ≈ (final_value − initial_cash) + total_cost
 （引擎口径：终值 − 初始 = 市场盈亏 − 成本；本仓库行情不复权，两边都不含分红）。
 """
+import os
 import json, os, sys
 import numpy as np
 import pandas as pd
 
-ROOT = "/Users/rone/Projects/stock-platform"
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DIR = os.path.join(ROOT, "data/strategy_baseline")
 # 估值必须用回测真正读的库：stock_data（全历史，不复权）。
 # baostock_daily 只是带 is_st/trade_status/amount 的镜像，且**北交所票只有 2026-05-11 起的 122 行** →

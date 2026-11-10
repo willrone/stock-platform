@@ -22,7 +22,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 
-BACKEND_ROOT = "/Users/rone/projects/stock-platform/backend"
+BACKEND_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BACKEND_ROOT)
 _spec = importlib.util.spec_from_file_location(
     "xleg", os.path.join(BACKEND_ROOT, "scripts", "expanded_legs_10y.py"))
@@ -35,9 +35,9 @@ from app.services.backtest.models import BacktestConfig
 from app.services.backtest.strategies.factor_ranking_strategy import (
     FactorRankingStrategy, _SCORES_ATTR)
 
-FEAT_DIR = "/Users/rone/projects/stock-platform/data/qlib_data/features/day"
-SURV_JSON = "/Users/rone/projects/stock-platform/data/strategy_baseline/factor_ic_study_5y.json"
-OUT_JSON = "/Users/rone/projects/stock-platform/data/strategy_baseline/ic_composite_panel5y.json"
+FEAT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "qlib_data", "features", "day")
+SURV_JSON = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "strategy_baseline", "factor_ic_study_5y.json")
+OUT_JSON = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "strategy_baseline", "ic_composite_panel5y.json")
 B2 = "CNTP5"
 
 t0 = time.time()

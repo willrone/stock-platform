@@ -100,7 +100,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-ROOT = Path("/Users/rone/Projects/stock-platform")
+ROOT = Path(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 BACKEND = ROOT / "backend"
 sys.path.insert(0, str(BACKEND))
 

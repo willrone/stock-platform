@@ -30,7 +30,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 
-ROOT = "/Users/rone/Projects/stock-platform"
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 PRICE_DIR = os.path.join(ROOT, "data", "parquet", "tr_panel")   # 自建总回报面板（§12.84 口径）
 REGISTRY = os.path.join(ROOT, "data", "parquet", "baostock_full", "_registry.parquet")
 OUT = os.path.join(ROOT, "data", "stocks", "buy_and_hold_hitrate_long.json")

@@ -28,7 +28,7 @@ import sys
 import numpy as np
 import pandas as pd
 
-ROOT = "/Users/rone/Projects/stock-platform"
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 PRICE_DIR = os.path.join(ROOT, "data", "parquet", "akshare_full")
 EVENT_DIR = os.path.join(ROOT, "data", "parquet", "dividend_events")
 VAL_DIR = os.path.join(ROOT, "data", "parquet", "baostock_daily")          # 2021 起有 pe/pb

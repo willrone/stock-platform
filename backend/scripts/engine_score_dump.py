@@ -18,8 +18,8 @@ import sys
 from datetime import datetime
 from typing import Any, Dict
 
-BACKEND = "/Users/rone/Projects/stock-platform/backend"
-ROOT = "/Users/rone/Projects/stock-platform"
+BACKEND = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.path.dirname(BACKEND)
 sys.path.insert(0, BACKEND)
 sys.path.insert(0, os.path.join(BACKEND, "scripts"))
 

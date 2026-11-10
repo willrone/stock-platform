@@ -31,7 +31,7 @@ import sys
 import time
 from typing import Dict, List
 
-ROOT = "/Users/rone/Projects/stock-platform"
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 OUT_DIR = os.path.join(ROOT, "data", "fundamentals")
 
 #: (接口名, 字段名) → 输出列名

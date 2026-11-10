@@ -13,7 +13,7 @@ from datetime import datetime
 
 import numpy as np
 
-BACKEND_ROOT = os.path.abspath('/Users/rone/projects/stock-platform/backend')
+BACKEND_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BACKEND_ROOT)
 _spec = importlib.util.spec_from_file_location(
     "rp10", os.path.join(BACKEND_ROOT, "scripts", "risk_parity_10y_experiment.py"))
@@ -25,7 +25,7 @@ rp10.START = datetime(2023, 5, 12)
 rp10.END = datetime(2026, 5, 8)
 # 3 年对照的宇宙: 用 3 年窗口中点(2024-05)的 point-in-time, 保持同方法
 rp10.MIDPOINT = datetime(2024, 5, 9)
-rp10.OUT_JSON = "/Users/rone/projects/stock-platform/data/strategy_baseline/risk_parity_3y_control.json"
+rp10.OUT_JSON = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "strategy_baseline", "risk_parity_3y_control.json")
 
 if __name__ == "__main__":
     rp10.main()

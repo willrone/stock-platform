@@ -33,7 +33,7 @@ from multiprocessing import Pool
 
 import pandas as pd
 
-ROOT = "/Users/rone/Projects/stock-platform"
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 STOCK_DIR = os.path.join(ROOT, "data", "parquet", "stock_data")
 OUT_DIR = os.path.join(ROOT, "data", "parquet", "baostock_daily")
 START = "2021-01-01"

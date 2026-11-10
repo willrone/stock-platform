@@ -24,7 +24,7 @@ import sys
 import time
 from datetime import datetime
 
-BACKEND = "/Users/rone/Projects/stock-platform/backend"
+BACKEND = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BACKEND)
 os.chdir(BACKEND)
 
@@ -36,8 +36,8 @@ logger.add(sys.stderr, level="ERROR")
 from app.services.backtest import BacktestExecutor  # noqa: E402
 from app.services.backtest.models import BacktestConfig  # noqa: E402
 
-QLIB = "/Users/rone/Projects/stock-platform/data/qlib_data/features/day"
-OUT = "/Users/rone/Projects/stock-platform/data/strategy_baseline/moving_average_fix_3y.json"
+QLIB = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "qlib_data", "features", "day")
+OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "strategy_baseline", "moving_average_fix_3y.json")
 
 
 def universe():
@@ -47,7 +47,7 @@ def universe():
 
 async def run(codes, sc, start, end):
     ex = BacktestExecutor(
-        data_dir="/Users/rone/Projects/stock-platform/data",
+        data_dir=os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data"),
         enable_parallel=True, max_workers=8,
         enable_performance_profiling=False, use_multiprocessing=False,
     )

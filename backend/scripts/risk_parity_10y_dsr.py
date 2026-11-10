@@ -18,7 +18,7 @@ from datetime import datetime
 
 import numpy as np
 
-DATA_ROOT = "/Users/rone/projects/stock-platform/data"
+DATA_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
 IN_JSON = os.path.join(DATA_ROOT, "strategy_baseline", "risk_parity_10y_experiment.json")
 OUT_JSON = os.path.join(DATA_ROOT, "strategy_baseline", "risk_parity_10y_dsr_final.json")
 N_TRIALS = 40  # 五轮研究独立试验数(保守上界, 与 3 年 DSR 同口径)

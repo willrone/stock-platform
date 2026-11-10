@@ -29,7 +29,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
 
-ROOT = "/Users/rone/Projects/stock-platform"
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 OUT_DIR = os.path.join(ROOT, "data", "parquet", "dividend_events")
 REGISTRY = os.path.join(ROOT, "data", "parquet", "baostock_full", "_registry.parquet")
 FAILURES = os.path.join(OUT_DIR, "_failures.txt")

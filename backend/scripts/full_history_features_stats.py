@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import os
 import json
 import sys
 from pathlib import Path
@@ -13,7 +14,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-ROOT = Path("/Users/rone/Projects/stock-platform")
+ROOT = Path(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 FULL = ROOT / "data" / "qlib_data" / "features_full"
 DAY = ROOT / "data" / "qlib_data" / "features" / "day"
 PROGRESS = ROOT / "data" / "backtest" / "full_history_features_progress.json"

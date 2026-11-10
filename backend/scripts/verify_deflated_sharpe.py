@@ -36,7 +36,7 @@ import math
 import os
 import sys
 
-ROOT = "/Users/rone/Projects/stock-platform"
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 OUT = os.path.join(ROOT, "data", "backtest", "deflated_sharpe.json")
 NAV_CACHE = os.path.join(ROOT, "data", "backtest", "_blend_nav_25f.json")
 SQRT252 = math.sqrt(252.0)

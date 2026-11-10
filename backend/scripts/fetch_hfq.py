@@ -30,7 +30,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
 
-ROOT = "/Users/rone/Projects/stock-platform"
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 STOCK_DIR = os.path.join(ROOT, "data", "parquet", "stock_data")
 OUT_DIR = os.path.join(ROOT, "data", "parquet", "stock_data_hfq")
 START = "20210101"

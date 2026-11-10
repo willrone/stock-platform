@@ -16,8 +16,8 @@ import sys
 import time
 from datetime import datetime
 
-BACKEND = "/Users/rone/Projects/stock-platform/backend"
-ROOT = "/Users/rone/Projects/stock-platform"
+BACKEND = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.path.dirname(BACKEND)
 sys.path.insert(0, BACKEND)
 
 import numpy as np  # noqa: E402

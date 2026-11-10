@@ -10,7 +10,7 @@ import math
 import os
 import statistics as st
 
-BASE = "/Users/rone/Projects/stock-platform/data/strategy_baseline"
+BASE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "strategy_baseline")
 PREFIX = "ablation_2026-11-06_"
 
 

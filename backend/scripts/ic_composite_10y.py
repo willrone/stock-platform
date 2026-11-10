@@ -26,7 +26,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 
-BACKEND_ROOT = "/Users/rone/projects/stock-platform/backend"
+BACKEND_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BACKEND_ROOT)
 _spec = importlib.util.spec_from_file_location(
     "xleg", os.path.join(BACKEND_ROOT, "scripts", "expanded_legs_10y.py"))
@@ -38,7 +38,7 @@ from app.services.backtest import BacktestExecutor
 from app.services.backtest.models import BacktestConfig
 from app.services.backtest.core import portfolio_manager_array as pma_module
 
-OUT_JSON = "/Users/rone/projects/stock-platform/data/strategy_baseline/ic_composite_10y.json"
+OUT_JSON = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "strategy_baseline", "ic_composite_10y.json")
 WIN_START = os.environ.get("IC_COMP_START")  # >0 = 覆盖窗口起点 (5y 窗内对照)
 SCORES_ATTR = "_factor_ranking_scores"
 

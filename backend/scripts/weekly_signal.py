@@ -31,7 +31,7 @@ from datetime import date, datetime
 import numpy as np
 import pandas as pd
 
-BACKEND_ROOT = "/Users/rone/Projects/stock-platform/backend"
+BACKEND_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROOT = os.path.dirname(BACKEND_ROOT)
 sys.path.insert(0, BACKEND_ROOT)
 

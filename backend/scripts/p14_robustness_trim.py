@@ -14,7 +14,7 @@ import sys
 
 import numpy as np
 
-BACKEND_DIR = "/Users/rone/Projects/stock-platform/backend"
+BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(BACKEND_DIR, "scripts"))
 os.chdir(BACKEND_DIR)
 

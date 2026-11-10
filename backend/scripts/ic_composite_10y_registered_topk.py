@@ -26,7 +26,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 
-BACKEND_ROOT = "/Users/rone/Projects/stock-platform/backend"
+BACKEND_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BACKEND_ROOT)
 
 # 复用 daily_signal 的精确 42f 打分 (不依赖 /tmp 映射)
@@ -47,7 +47,7 @@ from app.services.backtest.models import BacktestConfig  # noqa: E402
 from app.services.backtest.strategies.factor_ranking_strategy import (  # noqa: E402
     FactorRankingStrategy, _SCORES_ATTR)
 
-OUT_JSON = "/Users/rone/Projects/stock-platform/data/strategy_baseline/ic_composite_10y_registered_topk.json"
+OUT_JSON = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "strategy_baseline", "ic_composite_10y_registered_topk.json")
 START, END = m.START, m.END
 OOS_SPLIT = pd.Timestamp("2021-05-11")
 

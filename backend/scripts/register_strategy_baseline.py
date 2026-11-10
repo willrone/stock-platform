@@ -26,10 +26,10 @@ from datetime import datetime
 
 BACKEND_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if not os.path.isdir(BACKEND_ROOT):
-    BACKEND_ROOT = "/Users/rone/projects/stock-platform/backend"
+    BACKEND_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BACKEND_ROOT)
 
-DATA_ROOT = "/Users/rone/projects/stock-platform/data"
+DATA_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
 BASELINE_JSON = os.path.join(DATA_ROOT, "strategy_baseline", "baseline_full_market_3y.json")
 SOURCE_TAG = "baseline_full_market_3y"
 

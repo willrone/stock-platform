@@ -14,7 +14,7 @@ import statistics as st
 import numpy as np
 import pandas as pd
 
-ROOT = "/Users/rone/Projects/stock-platform"
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 D = os.path.join(ROOT, "data/strategy_baseline")
 ETF_DIR = os.path.join(ROOT, "data/etf/parquet")
 A, B = "2023-05-12", "2026-05-08"

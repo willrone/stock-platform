@@ -23,7 +23,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 
-ROOT = "/Users/rone/Projects/stock-platform"
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 FULL_DIR = os.path.join(ROOT, "data", "parquet", "akshare_full")          # 价格层（含 hfq）
 BAO_DIR = os.path.join(ROOT, "data", "parquet", "baostock_full")          # 注册表层（含退市名单）
 OLD_DIR = os.path.join(ROOT, "data", "parquet", "baostock_daily")

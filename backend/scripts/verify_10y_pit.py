@@ -31,8 +31,8 @@ import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-BACKEND = "/Users/rone/Projects/stock-platform/backend"
-ROOT = "/Users/rone/Projects/stock-platform"
+BACKEND = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.path.dirname(BACKEND)
 sys.path.insert(0, BACKEND)
 
 from app.services.backtest import BacktestExecutor  # noqa: E402

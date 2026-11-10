@@ -38,7 +38,7 @@ from typing import Dict, List, Tuple
 import numpy as np
 import pandas as pd
 
-ROOT = "/Users/rone/Projects/stock-platform"
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 RAW_DIR = os.path.join(ROOT, "data", "tdx_daily", "raw")
 OUT_DIR = os.path.join(ROOT, "data", "parquet", "baostock_daily")
 COLS = [

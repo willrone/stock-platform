@@ -11,7 +11,7 @@ import os
 import numpy as np
 import pandas as pd
 
-ETF_DIR = "/Users/rone/Projects/stock-platform/data/etf/parquet"
+ETF_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "etf", "parquet")
 A, B = "2023-05-12", "2026-05-08"
 COMMISSION_RATE, MIN_COMMISSION = 0.0003, 5.0  # 券商常见：万3，单笔最低 5 元；ETF 免印花税
 LOT = 100

@@ -8,11 +8,12 @@
 本地数据：baostock_daily 有 amount(元) / turn(换手率%) / pct_chg / volume →
   成交额/换手率 = 价格×自由流通股本 = 自由流通市值（一个纯推导，不需要额外数据）
 """
+import os
 import json, math, os, sys
 import numpy as np
 import pandas as pd
 
-ROOT = "/Users/rone/Projects/stock-platform"
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 BS = os.path.join(ROOT, "data/parquet/baostock_daily")
 D = os.path.join(ROOT, "data/strategy_baseline")
 

@@ -34,7 +34,7 @@ from multiprocessing import Pool
 
 import pandas as pd
 
-ROOT = "/Users/rone/Projects/stock-platform"
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 OUT_DIR = os.path.join(ROOT, "data", "parquet", "baostock_full")
 REGISTRY = os.path.join(OUT_DIR, "_registry.parquet")
 FAILURES = os.path.join(OUT_DIR, "_failures.txt")

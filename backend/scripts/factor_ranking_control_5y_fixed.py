@@ -9,7 +9,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 
-BACKEND_ROOT = "/Users/rone/projects/stock-platform/backend"
+BACKEND_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BACKEND_ROOT)
 _spec = importlib.util.spec_from_file_location(
     "xleg", os.path.join(BACKEND_ROOT, "scripts", "expanded_legs_10y.py"))
@@ -24,7 +24,7 @@ from app.services.backtest.strategies.factor_ranking_strategy import FactorRanki
 START = pd.Timestamp(os.environ.get("FR_START", "2021-05-11"))
 OUT_JSON = os.environ.get(
     "FR_OUT",
-    "/Users/rone/projects/stock-platform/data/strategy_baseline/factor_ranking_control_5y_fixed.json")
+    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "strategy_baseline", "factor_ranking_control_5y_fixed.json"))
 
 m.patch_loader()
 codes = m.list_universe()

@@ -1,10 +1,11 @@
 """Verify determinism fix: parallel path 3 runs identical + matches serial."""
+import os
 import sys, os, asyncio, hashlib, importlib.util
 
 os.environ["BASELINE_LOG_LEVEL"] = "ERROR"
 sys.argv = ["x"]
 
-ROOT = "/Users/rone/projects/stock-platform/backend"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.chdir(ROOT)
 if str(ROOT) not in sys.path:
     sys.path.insert(0, ROOT)

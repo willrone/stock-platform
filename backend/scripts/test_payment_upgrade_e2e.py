@@ -21,7 +21,7 @@ import os
 import sys
 import tempfile
 
-BACKEND = "/Users/rone/Projects/stock-platform/backend"
+BACKEND = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BACKEND)
 
 DB = os.path.join(tempfile.mkdtemp(prefix="paytest_"), "test.db")

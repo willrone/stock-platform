@@ -27,7 +27,7 @@ from typing import Any, Dict, List
 
 import pandas as pd
 
-BACKEND = "/Users/rone/Projects/stock-platform/backend"
+BACKEND = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BACKEND)
 
 

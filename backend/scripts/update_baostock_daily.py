@@ -25,8 +25,8 @@ import sys
 import time
 from typing import List
 
-BACKEND = "/Users/rone/Projects/stock-platform/backend"
-ROOT = "/Users/rone/Projects/stock-platform"
+BACKEND = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.path.dirname(BACKEND)
 sys.path.insert(0, BACKEND)
 
 OUT_DIR = os.path.join(ROOT, "data", "parquet", "baostock_daily")

@@ -25,7 +25,7 @@ from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 
-ROOT = "/Users/rone/Projects/stock-platform"
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 BAOSTOCK_DIR = os.path.join(ROOT, "data", "parquet", "baostock_daily")
 
 #: 需要加载的字段

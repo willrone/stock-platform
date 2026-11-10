@@ -29,6 +29,7 @@
     res_is = simulate(sc, mats, trad, cfg, rows=is_rows)
 """
 from __future__ import annotations
+import os
 
 import sys
 from typing import Any, Dict, Optional
@@ -36,7 +37,7 @@ from typing import Any, Dict, Optional
 import numpy as np
 import pandas as pd
 
-BACKEND = "/Users/rone/Projects/stock-platform/backend"
+BACKEND = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BACKEND not in sys.path:
     sys.path.insert(0, BACKEND)
 

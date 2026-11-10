@@ -57,7 +57,7 @@ from app.services.backtest import BacktestExecutor  # noqa: E402
 from app.services.backtest.models import BacktestConfig  # noqa: E402
 from app.services.backtest.core import portfolio_manager_array as pma_module  # noqa: E402
 
-DATA_ROOT = "/Users/rone/projects/stock-platform/data"
+DATA_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
 OUT_JSON = os.path.join(DATA_ROOT, "strategy_baseline", "risk_parity_experiment.json")
 START, END = datetime(2023, 5, 12), datetime(2026, 5, 8)
 

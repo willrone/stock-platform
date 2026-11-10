@@ -32,8 +32,8 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
-BACKEND = "/Users/rone/Projects/stock-platform/backend"
-ROOT = "/Users/rone/Projects/stock-platform"
+BACKEND = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.path.dirname(BACKEND)
 if BACKEND not in sys.path:
     sys.path.insert(0, BACKEND)
 if os.path.join(BACKEND, "scripts") not in sys.path:

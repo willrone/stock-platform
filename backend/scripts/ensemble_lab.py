@@ -42,8 +42,8 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
-BACKEND = "/Users/rone/Projects/stock-platform/backend"
-ROOT = "/Users/rone/Projects/stock-platform"
+BACKEND = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.path.dirname(BACKEND)
 QLIB_OFFICIAL = os.path.join(ROOT, "data", "qlib_official_data")
 QLIB_LIVE = os.path.join(ROOT, "data", "qlib_data")
 OUT_DIR = os.path.join(ROOT, "data", "backtest")

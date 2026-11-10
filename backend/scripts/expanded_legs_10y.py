@@ -52,7 +52,7 @@ from app.services.backtest.models import BacktestConfig  # noqa: E402
 from app.services.backtest.core import portfolio_manager_array as pma_module  # noqa: E402
 from app.services.backtest.execution import data_loader as dl_module  # noqa: E402
 
-DATA_ROOT = "/Users/rone/projects/stock-platform/data"
+DATA_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
 STOCK_DATA_DIR = os.path.join(DATA_ROOT, "parquet", "stock_data")
 OUT_JSON = os.path.join(DATA_ROOT, "strategy_baseline", "expanded_legs_10y.json")
 RP10_JSON = os.path.join(DATA_ROOT, "strategy_baseline", "risk_parity_10y_experiment.json")

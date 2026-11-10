@@ -7,13 +7,14 @@ OOS(2025-05→2026-05) 两段，报告两段的夏普/收益/回撤/笔数。
     backend/scripts/verify_ensemble_engine_oos.py --cases /tmp/ens_cases.json
 """
 from __future__ import annotations
+import os
 
 import argparse, asyncio, json, os, sys, time
 from datetime import datetime
 from typing import Any, Dict, List
 
-BACKEND = "/Users/rone/Projects/stock-platform/backend"
-ROOT = "/Users/rone/Projects/stock-platform"
+BACKEND = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.path.dirname(BACKEND)
 sys.path.insert(0, BACKEND); sys.path.insert(0, os.path.join(BACKEND, "scripts"))
 import ensemble_lab as L
 

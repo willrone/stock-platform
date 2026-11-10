@@ -30,7 +30,7 @@ import json
 import os
 import sys
 
-ROOT = "/Users/rone/Projects/stock-platform"
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(ROOT, "backend"))
 
 import numpy as np  # noqa: E402

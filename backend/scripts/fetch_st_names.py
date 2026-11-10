@@ -18,7 +18,7 @@ import json
 import os
 import sys
 
-ROOT = "/Users/rone/Projects/stock-platform"
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 OUT = os.path.join(ROOT, "data", "stocks", "st_names.json")
 
 

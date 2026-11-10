@@ -24,7 +24,7 @@ from datetime import datetime
 
 import numpy as np
 
-DATA_ROOT = "/Users/rone/projects/stock-platform/data"
+DATA_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
 IN_JSON = os.path.join(DATA_ROOT, "strategy_baseline", "risk_parity_10y_experiment.json")
 OUT_JSON = os.path.join(DATA_ROOT, "strategy_baseline", "quality_weight_10y.json")
 LEGS = ["stochastic", "factor_ranking", "bollinger"]
