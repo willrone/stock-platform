@@ -158,7 +158,9 @@ class TestTechnicalIndicatorProperties:
                 raise
 
     @given(
-        stock_codes=st.lists(stock_code_strategy(), min_size=1, max_size=3),
+        # unique=True：results 是以代码为 key 的 dict，重复代码必然被去重，
+        # 否则 "处理数 == 请求数" 这条断言在 hypothesis 抓到重复代码时必崩（assert 1 == 2）
+        stock_codes=st.lists(stock_code_strategy(), min_size=1, max_size=3, unique=True),
         indicators=st.lists(
             st.sampled_from(["MA5", "MA10", "RSI"]), min_size=1, max_size=3, unique=True
         ),
@@ -396,3 +398,39 @@ class TestTechnicalIndicatorProperties:
                 band_width = upper - lower
                 assert band_width > 0, "布林带宽度应该大于0"
                 assert band_width < current_price, "布林带宽度应该小于股价"
+
+
+class TestBatchDedupSemantics:
+    """显式锁死批量接口的去重语义。
+
+    results 是以股票代码为 key 的 dict，重复请求同一只股票必然塌成一条。
+    这条契约以前只能靠 hypothesis 恰好不抽到重复代码来侥幸通过
+    （assert 1 == 2 就是这么来的），现在写死。
+    """
+
+    def test_duplicate_codes_collapse_to_one_result_entry(self):
+        calculator = TechnicalIndicatorCalculator()
+        start = datetime(2023, 1, 1)
+        end = datetime(2023, 2, 28)
+        codes = ["600000.SH", "600000.SH", "000001.SZ"]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data_service = SimpleStockDataService(
+                data_path=temp_dir, remote_url="http://127.0.0.1"
+            )
+            for code in codes:
+                data = data_service.generate_mock_data(code, start, end)
+                assert data_service.save_to_local(data, code)
+
+            request = BatchIndicatorRequest(
+                stock_codes=codes,
+                indicators=["MA5"],
+                start_date=start,
+                end_date=end,
+            )
+            response = asyncio.run(
+                calculator.calculate_batch_indicators(request, data_service)
+            )
+
+            processed = len(response.results) + len(response.failed_stocks)
+            assert processed == len(set(codes)), "去重后的股票数才是被处理的股票数"
+            assert set(response.results) | set(response.failed_stocks) == set(codes)
