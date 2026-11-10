@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
-"""§12.84 「买了迟早会涨」长窗口无偏复核：2013–2022 入场 × 含退市股 × 真退市结局。
+"""§12.84 「买了迟早会涨」长窗口无偏复核：2010–2022 入场 × 含退市股 × 真退市结局。
 
 和 §12.83 的区别（这次把上界变成结论）：
 1. 宇宙来自 baostock 注册表 5,565 只（含 341 只已退市），价格来自 akshare 后复权 → **退市股在样本里**；
 2. 退市不再是「折价敏感性假设」，而是**真实结局**：持仓期内被摘牌的，给两个口径
    A 乐观=按摘牌前最后一根收盘价卖出；B 悲观=这份仓位归零。真值在两者之间（实务上多在退市整理期出，
    累计已跌 6–8 成），两个口径都报，差值就是诚实边界；
-3. 入场年份 2013–2022 共 10 期 × K=20 = 200 只/规则（§12.83 只有 40 只，SE≈7.8pp；这次 SE≈3.5pp）；
+3. 入场年份 2010–2022 共 13 期 × K=10/20。原设计写的是 2013–2022 十期，但日线只从 2012-01 起，
+   2013 期凑不齐 250 根 bar → **实际只跑出 9 期**（2014–2022）。2026-11-10 把日线起点推回 2008-01-01
+   （`fetch_akshare_full_history.py --start 20080101 --ipo-before 2011-12-31 --force`）
+   → 2010/2011/2012/2013 四期的 250 根 bar 与 12 月动量才真凑得齐，期数 9 → 13；
+   配对 t 的自由度 8 → 12，p<0.05 临界 t 从 2.306 降到 2.179（期数变多本身就让结论更容易被证实，
+   所以**换了期数之后的 t 不能和旧 t 直接比大小**）；
 4. 回报一律用**自建总回报面板** tr_panel（未复权价 × 分红再投 × 送转扩股，§12.84 口径审计的结论）。
    `close_hfq`（东财后复权）与 `pct_chg_raw`（实测就是未复权）都**禁止**用来算收益。
 
@@ -17,9 +22,17 @@ akshare 财务/分红接口对退市股直接返回空）——这本身就是�
 
 成本照旧：万3 佣金（最低 5 元）、卖出印花税 0.05%、整数手（100 股）、买入价用未复权真实价。
 
+已知偏差（写死在产物里，不许偷偷偏）：341 只退市股在东财分红接口上几乎全返回空 → 它们的分红被漏计、
+回报被**低估**。窗口推到 2008 之后，早期（2010–2013）持仓里碰上退市股的次数变多，这个低估变大；
+方向对「买了迟早会涨」是保守的（它只会让结论更容易被判成无效，不会凭空造出优势）。
+
+用法：cd backend && env -u PYTHONPATH .venv-py313/bin/python3 scripts/buy_and_hold_hitrate_long.py
+      [--entry-from 2010 --entry-to 2022]
+
 用法：cd backend && env -u PYTHONPATH .venv-py313/bin/python3 scripts/buy_and_hold_hitrate_long.py
 产出：../data/stocks/buy_and_hold_hitrate_long.json
 """
+
 from __future__ import annotations
 
 import json
@@ -31,23 +44,30 @@ import numpy as np
 import pandas as pd
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-PRICE_DIR = os.path.join(ROOT, "data", "parquet", "tr_panel")   # 自建总回报面板（§12.84 口径）
+PRICE_DIR = os.path.join(
+    ROOT, "data", "parquet", "tr_panel"
+)  # 自建总回报面板（§12.84 口径）
 REGISTRY = os.path.join(ROOT, "data", "parquet", "baostock_full", "_registry.parquet")
 OUT = os.path.join(ROOT, "data", "stocks", "buy_and_hold_hitrate_long.json")
 
 CAPITAL = 90_000.0
 LOT = 100
 COMM_RATE, COMM_MIN = 3e-4, 5.0
-STAMP = 5e-4                      # 卖出印花税
-ENTRY_YEARS = list(range(2013, 2023))
+STAMP = 5e-4  # 卖出印花税
+ENTRY_FROM, ENTRY_TO = 2010, 2022  # 2026-11-10 延长：日线起点推到 2008-01-01
 HORIZONS_Y = (1, 2, 3)
 KS = (10, 20)
-MIN_BARS_AT_ENTRY = 250           # 要有 250 日波动率
-AMOUNT_FLOOR = 1e7                # 入场日附近日均成交额 ≥1000 万（太死的票不进池）
+MIN_BARS_AT_ENTRY = 250  # 要有 250 日波动率
+AMOUNT_FLOOR = 1e7  # 入场日附近日均成交额 ≥1000 万（太死的票不进池）
 RANDOM_SEEDS = (7, 131, 20240)
 RULES = ("random", "low_vol", "mom12", "big_amount", "low_vol_big")
-RULE_CN = {"random": "随机", "low_vol": "低波动", "mom12": "12月动量",
-           "big_amount": "大成交额", "low_vol_big": "低波动∩大成交额"}
+RULE_CN = {
+    "random": "随机",
+    "low_vol": "低波动",
+    "mom12": "12月动量",
+    "big_amount": "大成交额",
+    "low_vol_big": "低波动∩大成交额",
+}
 
 
 def fee(buy_value: float, sell_value: float | None) -> float:
@@ -89,15 +109,23 @@ class Panel:
             self.amount[key] = d["amount"].astype("float32").to_numpy()
             alld.append(d["date"].to_numpy())
         self.cal = pd.DatetimeIndex(sorted(np.unique(np.concatenate(alld))))
-        idx = {r["code"].split(".")[1] + "." + r["code"].split(".")[0].upper(): r for _, r in reg.iterrows()}
+        idx = {
+            r["code"].split(".")[1] + "." + r["code"].split(".")[0].upper(): r
+            for _, r in reg.iterrows()
+        }
         self.meta = {}
         for key in self.dates:
             row = idx.get(key)
             out_raw = str(row["outDate"]) if row is not None else ""
             out = pd.Timestamp(out_raw) if out_raw not in ("", "NaT", "nan") else None
-            self.meta[key] = {"delisted": bool(row is not None and row["status"] != 1), "outDate": out}
-        print(f"面板：{len(self.dates)} 只，日历 {self.cal[0].date()}→{self.cal[-1].date()}，"
-              f"退市标记 {sum(1 for m in self.meta.values() if m['delisted'])} 只")
+            self.meta[key] = {
+                "delisted": bool(row is not None and row["status"] != 1),
+                "outDate": out,
+            }
+        print(
+            f"面板：{len(self.dates)} 只，日历 {self.cal[0].date()}→{self.cal[-1].date()}，"
+            f"退市标记 {sum(1 for m in self.meta.values() if m['delisted'])} 只"
+        )
 
     def asof_index(self, key: str, entry: pd.Timestamp) -> int:
         d = self.dates[key]
@@ -148,7 +176,7 @@ def pick(p: Panel, entry: pd.Timestamp, rule: str, k: int, seed: int) -> list[st
     if df.empty:
         return []
     budget_each = CAPITAL / k
-    price_cap = budget_each / LOT                      # 一手都买不起的直接剔除
+    price_cap = budget_each / LOT  # 一手都买不起的直接剔除
     df = df[df["price"] <= price_cap]
     if rule == "random":
         rs = np.random.default_rng(seed)
@@ -176,7 +204,7 @@ def settle(p: Panel, codes: list[str], entry: pd.Timestamp, horizon_y: int) -> d
     fees = 0.0
     wins = 0
     per_stock = []
-    delisted_recovered = 0.0            # A 口径里退市仓位拿回的钱（B 口径要抹掉）
+    delisted_recovered = 0.0  # A 口径里退市仓位拿回的钱（B 口径要抹掉）
     delisted_in_horizon = 0
 
     for code in codes:
@@ -198,8 +226,16 @@ def settle(p: Panel, codes: list[str], entry: pd.Timestamp, horizon_y: int) -> d
         # （这里曾写反成 `j < last` —— 那是「面板比到期日还长」= 活得好好的正常情况，
         #   结果全部持仓被误判成退市、结算日被推到面板最后一根，3 年持有变成 4~14 年，整份结果作废。）
         ends_early = bool(d[last] < exit_target)
-        j = last if ends_early else int(np.searchsorted(d.values, np.datetime64(exit_target), side="right") - 1)
-        if out is not None and out <= exit_target:       # 注册表说到期前摘牌：结算不许越过摘牌日
+        j = (
+            last
+            if ends_early
+            else int(
+                np.searchsorted(d.values, np.datetime64(exit_target), side="right") - 1
+            )
+        )
+        if (
+            out is not None and out <= exit_target
+        ):  # 注册表说到期前摘牌：结算不许越过摘牌日
             k = int(np.searchsorted(d.values, np.datetime64(out), side="left") - 1)
             j = min(j, max(k, i))
             ends_early = True
@@ -220,26 +256,80 @@ def settle(p: Panel, codes: list[str], entry: pd.Timestamp, horizon_y: int) -> d
 
         pnl_a = sell_val - f_sell - buy_val - f_buy
         wins += int(pnl_a > 0)
-        per_stock.append({"code": code, "lots": lots, "buy_price": round(price, 3),
-                          "ret_pct": round(gross * 100, 2), "caliber": caliber,
-                          "pnl_a": round(pnl_a, 2)})
+        per_stock.append(
+            {
+                "code": code,
+                "lots": lots,
+                "buy_price": round(price, 3),
+                "ret_pct": round(gross * 100, 2),
+                "caliber": caliber,
+                "pnl_a": round(pnl_a, 2),
+            }
+        )
 
-    nav_a = cash                                        # A 口径净值：逐笔结清后的现金
-    nav_b = nav_a - delisted_recovered                  # B 口径：退市仓位一分钱拿不回来
+    nav_a = cash  # A 口径净值：逐笔结清后的现金
+    nav_b = nav_a - delisted_recovered  # B 口径：退市仓位一分钱拿不回来
     years = horizon_y
     ann_a = (nav_a / CAPITAL) ** (1.0 / years) - 1.0 if nav_a > 0 else -1.0
     ann_b = (nav_b / CAPITAL) ** (1.0 / years) - 1.0 if nav_b > 0 else -1.0
     rets = [x["ret_pct"] for x in per_stock]
-    return {"n": len(per_stock), "hit_pct": round(100.0 * wins / max(len(per_stock), 1), 1),
-            "ann_a_pct": round(ann_a * 100, 2), "ann_b_pct": round(ann_b * 100, 2),
-            "median_ret_pct": round(float(np.median(rets)), 2) if rets else None,
-            "worst_ret_pct": round(float(np.min(rets)), 2) if rets else None,
-            "best_ret_pct": round(float(np.max(rets)), 2) if rets else None,
-            "delisted_in_horizon": delisted_in_horizon, "fees": round(fees, 2),
-            "nav_a": round(nav_a, 2), "nav_b": round(nav_b, 2), "picks": per_stock}
+    return {
+        "n": len(per_stock),
+        "hit_pct": round(100.0 * wins / max(len(per_stock), 1), 1),
+        "ann_a_pct": round(ann_a * 100, 2),
+        "ann_b_pct": round(ann_b * 100, 2),
+        "median_ret_pct": round(float(np.median(rets)), 2) if rets else None,
+        "worst_ret_pct": round(float(np.min(rets)), 2) if rets else None,
+        "best_ret_pct": round(float(np.max(rets)), 2) if rets else None,
+        "delisted_in_horizon": delisted_in_horizon,
+        "fees": round(fees, 2),
+        "nav_a": round(nav_a, 2),
+        "nav_b": round(nav_b, 2),
+        "picks": per_stock,
+    }
+
+
+def paired_t(a: list[float], b: list[float]) -> dict:
+    """同入场年期配对差的 t 检验。a/b 必须按同一批年份排序后逐位对齐。scipy 不在就只报 t，不编 p 值。"""
+    xa, xb = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
+    n = int(min(len(xa), len(xb)))
+    if n < 2:
+        return {
+            "n": n,
+            "mean_diff_pp": None,
+            "sd_diff_pp_pp": None,
+            "t": None,
+            "p_two_sided": None,
+        }
+    d = xa[:n] - xb[:n]
+    sd = float(np.std(d, ddof=1))
+    t = None if sd <= 0 else float(np.mean(d) / (sd / np.sqrt(n)))
+    p = None
+    if t is not None:
+        try:
+            from scipy import stats
+
+            p = float(2.0 * stats.t.sf(abs(t), n - 1))
+        except Exception:
+            p = None
+    return {
+        "n": n,
+        "mean_diff_pp": round(float(np.mean(d)), 2),
+        "sd_diff_pp_pp": round(sd, 2),
+        "t": None if t is None else round(t, 2),
+        "p_two_sided": None if p is None else round(p, 4),
+    }
 
 
 def main() -> int:
+    import argparse
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--entry-from", type=int, default=ENTRY_FROM)
+    ap.add_argument("--entry-to", type=int, default=ENTRY_TO)
+    args = ap.parse_args()
+    entry_years = list(range(args.entry_from, args.entry_to + 1))
+
     for d in (PRICE_DIR, REGISTRY):
         if not os.path.exists(d):
             print(f"缺 {d} → 先跑 fetch_akshare_full_history.py")
@@ -247,8 +337,14 @@ def main() -> int:
     p = Panel()
     p.load()
     results = []
-    for year in ENTRY_YEARS:
-        entry = p.cal[p.cal.year == year][0]
+    ran_years, skipped_years = [], []
+    for year in entry_years:
+        days = p.cal[p.cal.year == year]
+        if len(days) == 0:
+            skipped_years.append(f"{year}：面板里没有这一年的 bar")
+            continue
+        entry = days[0]
+        ran_years.append(year)
         for rule in RULES:
             for k in KS:
                 seeds = RANDOM_SEEDS if rule == "random" else (7,)
@@ -257,61 +353,144 @@ def main() -> int:
                     codes = pick(p, entry, rule, k, s)
                     if not codes:
                         continue
-                    r = settle(p, codes, entry, 3)      # 3 年是主口径
+                    r = settle(p, codes, entry, 3)  # 3 年是主口径
                     r["seed"] = s
                     runs.append(r)
                 if not runs:
                     continue
-                agg = {"entry": str(entry.date()), "year": year, "rule": rule, "k": k,
-                       "hit_pct": round(float(np.mean([r["hit_pct"] for r in runs])), 1),
-                       "ann_a_pct": round(float(np.mean([r["ann_a_pct"] for r in runs])), 2),
-                       "ann_b_pct": round(float(np.mean([r["ann_b_pct"] for r in runs])), 2),
-                       "delisted_in_horizon": int(np.sum([r["delisted_in_horizon"] for r in runs])),
-                       "n": int(np.sum([r["n"] for r in runs])),
-                       "runs": runs}
+                agg = {
+                    "entry": str(entry.date()),
+                    "year": year,
+                    "rule": rule,
+                    "k": k,
+                    "hit_pct": round(float(np.mean([r["hit_pct"] for r in runs])), 1),
+                    "ann_a_pct": round(
+                        float(np.mean([r["ann_a_pct"] for r in runs])), 2
+                    ),
+                    "ann_b_pct": round(
+                        float(np.mean([r["ann_b_pct"] for r in runs])), 2
+                    ),
+                    "delisted_in_horizon": int(
+                        np.sum([r["delisted_in_horizon"] for r in runs])
+                    ),
+                    "n": int(np.sum([r["n"] for r in runs])),
+                    "runs": runs,
+                }
                 results.append(agg)
-                print(f"{year} {RULE_CN[rule]:>12} K={k:>2} n={agg['n']:>2} "
-                      f"命中{agg['hit_pct']:>5}% 年化A{agg['ann_a_pct']:>7}% 年化B{agg['ann_b_pct']:>7}% "
-                      f"期内退市{agg['delisted_in_horizon']}", flush=True)
+                print(
+                    f"{year} {RULE_CN[rule]:>12} K={k:>2} n={agg['n']:>2} "
+                    f"命中{agg['hit_pct']:>5}% 年化A{agg['ann_a_pct']:>7}% 年化B{agg['ann_b_pct']:>7}% "
+                    f"期内退市{agg['delisted_in_horizon']}",
+                    flush=True,
+                )
 
-    # 规则级汇总（跨 10 期）
+    # 规则级汇总（跨全部入场期）+ 与随机基准的同期配对 t
     summary = []
-    for rule in RULES:
-        for k in KS:
-            rows = [r for r in results if r["rule"] == rule and r["k"] == k]
+    for k in KS:
+        rnd_rows = {
+            r["year"]: r for r in results if r["rule"] == "random" and r["k"] == k
+        }
+        for rule in RULES:
+            rows = sorted(
+                [r for r in results if r["rule"] == rule and r["k"] == k],
+                key=lambda r: r["year"],
+            )
             if not rows:
                 continue
             hits = [r["hit_pct"] for r in rows]
             ann_a = [r["ann_a_pct"] for r in rows]
             ann_b = [r["ann_b_pct"] for r in rows]
-            summary.append({"rule": rule, "cn": RULE_CN[rule], "k": k, "cohorts": len(rows),
-                            "n_stocks": int(np.sum([r["n"] for r in rows])),
-                            "hit_mean_pct": round(float(np.mean(hits)), 1),
-                            "hit_min_pct": round(float(np.min(hits)), 1),
-                            "hit_max_pct": round(float(np.max(hits)), 1),
-                            "hit_sd_pp": round(float(np.std(hits, ddof=1)), 1),
-                            "ann_a_mean_pct": round(float(np.mean(ann_a)), 2),
-                            "ann_b_mean_pct": round(float(np.mean(ann_b)), 2),
-                            "ann_a_win_cohorts": int(np.sum(np.array(ann_a) > 0)),
-                            "delisted_total": int(np.sum([r["delisted_in_horizon"] for r in rows]))})
+            entry = {
+                "rule": rule,
+                "cn": RULE_CN[rule],
+                "k": k,
+                "cohorts": len(rows),
+                "n_stocks": int(np.sum([r["n"] for r in rows])),
+                "hit_mean_pct": round(float(np.mean(hits)), 1),
+                "hit_min_pct": round(float(np.min(hits)), 1),
+                "hit_max_pct": round(float(np.max(hits)), 1),
+                "hit_sd_pp": round(float(np.std(hits, ddof=1)), 1),
+                "ann_a_mean_pct": round(float(np.mean(ann_a)), 2),
+                "ann_b_mean_pct": round(float(np.mean(ann_b)), 2),
+                "ann_a_win_cohorts": int(np.sum(np.array(ann_a) > 0)),
+                "delisted_total": int(np.sum([r["delisted_in_horizon"] for r in rows])),
+            }
+            if rule != "random" and rnd_rows:
+                yrs = [r["year"] for r in rows if r["year"] in rnd_rows]
+                entry["vs_random_ann"] = paired_t(
+                    [r["ann_a_pct"] for r in rows if r["year"] in rnd_rows],
+                    [rnd_rows[y]["ann_a_pct"] for y in yrs],
+                )
+                entry["vs_random_hit"] = paired_t(
+                    [r["hit_pct"] for r in rows if r["year"] in rnd_rows],
+                    [rnd_rows[y]["hit_pct"] for y in yrs],
+                )
+                entry["vs_random_years"] = yrs
+            summary.append(entry)
     summary.sort(key=lambda x: -x["ann_a_mean_pct"])
-    print("\n=== 规则级汇总（2013-2022 十期，3 年持有） ===")
-    print(f"{'规则':>16} {'K':>3} {'只数':>5} {'命中均值':>9} {'命中区间':>14} {'年化A':>8} {'年化B':>8} {'正收益期数':>10} {'期内退市':>8}")
+    print(
+        f"\n=== 规则级汇总（{ran_years[0] if ran_years else '?'}-{ran_years[-1] if ran_years else '?'} "
+        f"{len(ran_years)} 期，3 年持有，口径 A=退市按末根卖出) ==="
+    )
+    print(
+        f"{'规则':>16} {'K':>3} {'只数':>5} {'命中均值':>9} {'命中区间':>14} {'年化A':>8} {'年化B':>8} "
+        f"{'正收益期数':>10} {'期内退市':>8}  对随机配对 t"
+    )
     for s in summary:
-        print(f"{s['cn']:>16} {s['k']:>3} {s['n_stocks']:>5} {s['hit_mean_pct']:>8}% "
-              f"{s['hit_min_pct']:>5}-{s['hit_max_pct']:>5}% {s['ann_a_mean_pct']:>7}% {s['ann_b_mean_pct']:>7}% "
-              f"{s['ann_a_win_cohorts']:>6}/{s['cohorts']} {s['delisted_total']:>8}")
+        vs = s.get("vs_random_ann")
+        if vs is not None:
+            tail = f"Δ年化{vs['mean_diff_pp']:+.2f}pp t={vs['t']} p={vs['p_two_sided']}"
+        else:
+            tail = "（随机基准本身）"
+        print(
+            f"{s['cn']:>16} {s['k']:>3} {s['n_stocks']:>5} {s['hit_mean_pct']:>8}% "
+            f"{s['hit_min_pct']:>5}-{s['hit_max_pct']:>5}% {s['ann_a_mean_pct']:>7}% {s['ann_b_mean_pct']:>7}% "
+            f"{s['ann_a_win_cohorts']:>6}/{s['cohorts']} {s['delisted_total']:>8}  {tail}"
+        )
+    if skipped_years:
+        print(
+            "\n跳过入场期（数据凑不齐，不是失败但必须看见）：", "; ".join(skipped_years)
+        )
 
-    out = {"generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
-           "universe": {"price_dir": PRICE_DIR, "registry": REGISTRY,
-                        "panel_stocks": len(p.dates),
-                        "panel_delisted": sum(1 for m in p.meta.values() if m["delisted"])},
-           "calibers": {"A_乐观": "退市持仓按摘牌前最后一根收盘价卖出",
-                        "B_悲观": "退市持仓归零",
-                        "说明": "真实结果在两者之间（退市整理期出局通常已跌 6-8 成）"},
-           "excluded_rules": ["低PE/低PB/高ROE/股息率：含退市宇宙里凑不齐无偏数据（qlib 层仅 OHLCV 且不含退市股；akshare 财务/分红接口对退市股返回空）"],
-           "cost": {"commission_rate": COMM_RATE, "commission_min": COMM_MIN, "stamp_sell": STAMP, "lot": LOT},
-           "summary": summary, "detail": results}
+    out = {
+        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "universe": {
+            "price_dir": PRICE_DIR,
+            "registry": REGISTRY,
+            "panel_stocks": len(p.dates),
+            "panel_delisted": sum(1 for m in p.meta.values() if m["delisted"]),
+        },
+        "entry_years": {
+            "requested": entry_years,
+            "ran": ran_years,
+            "skipped": skipped_years,
+            "bar_gate": f"入场点必须有 ≥{MIN_BARS_AT_ENTRY + 1} 根 bar 才算 250 日波动率/12 月动量，"
+            f"所以面板起点必须早于最早入场年至少一年",
+        },
+        "calibers": {
+            "A_乐观": "退市持仓按摘牌前最后一根收盘价卖出",
+            "B_悲观": "退市持仓归零",
+            "说明": "真实结果在两者之间（退市整理期出局通常已跌 6-8 成）",
+        },
+        "known_biases": [
+            "341 只退市股在东财分红接口几乎全返回空 → 退市股分红被漏计、回报被低估（早期入场年更明显）",
+            "估值类规则（PE/PB/ROE/股息率）不可测：含退市宇宙里凑不齐无偏数据",
+            "面板起点 2008-01-01 之前上市的票，其 2008 前的分红事件不参与递推——"
+            "但 TR 是纯乘性指数，切片比值与起点无关，所以不影响持有期收益",
+            "配对 t 的自由度随入场期数变；换期数后的 t 不能和旧期数的 t 直接比大小",
+        ],
+        "excluded_rules": [
+            "低PE/低PB/高ROE/股息率：含退市宇宙里凑不齐无偏数据（qlib 层仅 OHLCV 且不含退市股；akshare 财务/分红接口对退市股返回空）"
+        ],
+        "cost": {
+            "commission_rate": COMM_RATE,
+            "commission_min": COMM_MIN,
+            "stamp_sell": STAMP,
+            "lot": LOT,
+        },
+        "summary": summary,
+        "detail": results,
+    }
     json.dump(out, open(OUT, "w"), ensure_ascii=False, indent=2)
     print(f"\n→ {OUT}")
     return 0

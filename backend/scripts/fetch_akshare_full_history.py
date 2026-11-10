@@ -20,7 +20,10 @@
 用法：
     cd backend && env -u PYTHONPATH .venv-py313/bin/python3 scripts/fetch_akshare_full_history.py --limit 8   # 冒烟
     cd backend && env -u PYTHONPATH .venv-py313/bin/python3 scripts/fetch_akshare_full_history.py --workers 6  # 全量
+    # 把历史推回 2008（只重拉 2012 年前上市的票，省一半流量）：
+    ... fetch_akshare_full_history.py --start 20080101 --ipo-before 2011-12-31 --force --workers 6
 """
+
 from __future__ import annotations
 
 import argparse
@@ -36,15 +39,29 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 OUT_DIR = os.path.join(ROOT, "data", "parquet", "akshare_full")
 REGISTRY = os.path.join(ROOT, "data", "parquet", "baostock_full", "_registry.parquet")
 FAILURES = os.path.join(OUT_DIR, "_failures.txt")
-START = "20120101"
-END = "20261110"
-COLS = ["date", "code", "open", "high", "low", "close", "close_hfq", "volume", "amount",
-        "pct_chg_raw", "turnover"]
+# 默认起点 2012；要延长历史（§12.84 补 2010/2011 期）必须显式 --start 20080101。
+# 终点默认「今天」，但 15:05 前自动退到昨天 —— 盘中重拉会写进半根当日 bar（同 §12.80 ETF 那条坑）。
+DEFAULT_START = "20120101"
+COLS = [
+    "date",
+    "code",
+    "open",
+    "high",
+    "low",
+    "close",
+    "close_hfq",
+    "volume",
+    "amount",
+    "pct_chg_raw",
+    "turnover",
+]
 
 
 def load_registry() -> pd.DataFrame:
     if not os.path.exists(REGISTRY):
-        raise SystemExit(f"缺注册表 {REGISTRY} → 先跑 scripts/fetch_baostock_full_history.py（它只用来取注册表）")
+        raise SystemExit(
+            f"缺注册表 {REGISTRY} → 先跑 scripts/fetch_baostock_full_history.py（它只用来取注册表）"
+        )
     reg = pd.read_parquet(REGISTRY)
     reg["status"] = pd.to_numeric(reg["status"], errors="coerce")
     return reg
@@ -54,11 +71,25 @@ def out_name(num: str, mkt: str) -> str:
     return f"{num}_{mkt.upper()}.parquet"
 
 
-def _hist(ak, symbol: str, adjust: str) -> pd.DataFrame | None:
+def mkt_of(num: str) -> str:
+    """6/9 → SH，4/8 → BJ，其余 SZ（东财代码段规则）。"""
+    if num.startswith(("6", "9")):
+        return "SH"
+    if num.startswith(("4", "8")):
+        return "BJ"
+    return "SZ"
+
+
+def _hist(ak, symbol: str, adjust: str, start: str, end: str) -> pd.DataFrame | None:
     for attempt in range(3):
         try:
-            df = ak.stock_zh_a_hist(symbol=symbol, period="daily", start_date=START,
-                                    end_date=END, adjust=adjust)
+            df = ak.stock_zh_a_hist(
+                symbol=symbol,
+                period="daily",
+                start_date=start,
+                end_date=end,
+                adjust=adjust,
+            )
             if df is None or len(df) == 0:
                 return None
             return df
@@ -67,24 +98,50 @@ def _hist(ak, symbol: str, adjust: str) -> pd.DataFrame | None:
     return None
 
 
-def fetch_one(symbol: str) -> tuple[str, int, str]:
+def fetch_one(symbol: str, start: str, end: str) -> tuple[str, int, str]:
     import akshare as ak
-    raw = _hist(ak, symbol, "")
+
+    raw = _hist(ak, symbol, "", start, end)
     if raw is None:
         return (symbol, 0, "raw empty/fail")
-    hfq = _hist(ak, symbol, "hfq")
+    hfq = _hist(ak, symbol, "hfq", start, end)
     if hfq is None:
         return (symbol, 0, "hfq empty/fail")
-    mkt = "SH" if symbol.startswith(("6", "9")) else ("BJ" if symbol.startswith(("4", "8")) else "SZ")
-    r = raw.rename(columns={"日期": "date", "开盘": "open", "最高": "high", "最低": "low", "收盘": "close",
-                            "成交量": "volume", "成交额": "amount", "涨跌幅": "pct_chg_raw", "换手率": "turnover"})
+    mkt = (
+        "SH"
+        if symbol.startswith(("6", "9"))
+        else ("BJ" if symbol.startswith(("4", "8")) else "SZ")
+    )
+    r = raw.rename(
+        columns={
+            "日期": "date",
+            "开盘": "open",
+            "最高": "high",
+            "最低": "low",
+            "收盘": "close",
+            "成交量": "volume",
+            "成交额": "amount",
+            "涨跌幅": "pct_chg_raw",
+            "换手率": "turnover",
+        }
+    )
     h = hfq.rename(columns={"日期": "date", "收盘": "close_hfq"})
     r["date"] = pd.to_datetime(r["date"])
     h["date"] = pd.to_datetime(h["date"])
     df = r.merge(h[["date", "close_hfq"]], on="date", how="left")
     if df["close_hfq"].isna().mean() > 0.02:
         return (symbol, 0, f"hfq 对齐缺口 {df['close_hfq'].isna().mean():.1%}")
-    for c in ("open", "high", "low", "close", "close_hfq", "volume", "amount", "pct_chg_raw", "turnover"):
+    for c in (
+        "open",
+        "high",
+        "low",
+        "close",
+        "close_hfq",
+        "volume",
+        "amount",
+        "pct_chg_raw",
+        "turnover",
+    ):
         df[c] = pd.to_numeric(df[c], errors="coerce")
     df["code"] = f"{symbol}.{mkt}"
     df = df[COLS].sort_values("date").drop_duplicates("date")
@@ -101,37 +158,85 @@ def main() -> int:
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--only-failures", action="store_true")
+    ap.add_argument(
+        "--start",
+        default=DEFAULT_START,
+        help="日线起点 YYYYMMDD（延长历史要显式给更早的起点）",
+    )
+    ap.add_argument(
+        "--end", default="", help="日线终点 YYYYMMDD，留空=今天（15:05 前退到昨天）"
+    )
+    ap.add_argument(
+        "--ipo-before",
+        default="",
+        help="只重拉该日期（YYYY-MM-DD）之前上市的票——延长历史时省流量用",
+    )
     args = ap.parse_args()
+
+    start = args.start
+    if args.end:
+        end = args.end
+    else:
+        from datetime import date, datetime, timedelta
+
+        today = date.today()
+        # date 对象的 strftime("%H%M") 恒为 "0000"（它没有时分）——判盘中必须用 datetime.now()
+        if datetime.now().strftime("%H%M") < "1505":
+            today = today - timedelta(days=1)
+            print(
+                "现在还没到 15:05，终点退到 "
+                + today.isoformat()
+                + "（避免写进半根当日 bar）"
+            )
+        end = today.strftime("%Y%m%d")
+    if end < start:
+        print(f"终点 {end} 早于起点 {start}")
+        return 1
 
     reg = load_registry()
     reg["num"] = reg["code"].str.split(".").str[1]
     delisted = reg[reg["status"] != 1]
-    print(f"注册表 {len(reg)} 只（上市 {(reg['status']==1).sum()}，已退市 {len(delisted)}）")
+    print(
+        f"注册表 {len(reg)} 只（上市 {(reg['status'] == 1).sum()}，已退市 {len(delisted)}）"
+    )
 
     todo = list(reg["num"])
+    if args.ipo_before:
+        ipo = pd.to_datetime(reg["ipoDate"], errors="coerce")
+        keep = set(reg.loc[ipo <= pd.Timestamp(args.ipo_before), "num"])
+        todo = [n for n in todo if n in keep]
+        print(f"--ipo-before {args.ipo_before}：只重拉 {len(todo)} 只")
     if args.only_failures and os.path.exists(FAILURES):
         bad = {ln.split(" ")[0] for ln in open(FAILURES) if ln.strip()}
         todo = [n for n in reg["num"] if n in bad]
     if not args.force:
-        mkt_of = lambda n: "SH" if n.startswith(("6", "9")) else ("BJ" if n.startswith(("4", "8")) else "SZ")  # noqa: E731
-        todo = [n for n in todo if not os.path.exists(os.path.join(OUT_DIR, out_name(n, mkt_of(n))))]
+        todo = [
+            n
+            for n in todo
+            if not os.path.exists(os.path.join(OUT_DIR, out_name(n, mkt_of(n))))
+        ]
     if args.limit:
         todo = todo[: args.limit]
     os.makedirs(OUT_DIR, exist_ok=True)
-    print(f"待拉 {len(todo)} 只（raw+hfq 各一次），起点 {START}，{args.workers} 线程")
+    print(
+        f"待拉 {len(todo)} 只（raw+hfq 各一次），窗口 {start}→{end}，{args.workers} 线程"
+    )
     if not todo:
         print("全部已存在")
         return 0
 
     # 摘牌日 < 2012 的老退市股本就没有 2012 后 bar —— 那是正常缺失，不能算拉取失败（会把失败率闸门污染）
+    start_iso = f"{start[:4]}-{start[4:6]}-{start[6:]}"
     out_of = {r["num"]: str(r["outDate"]) for _, r in reg.iterrows()}
-    expected_absent = {n for n, d in out_of.items() if d not in ("", "NaT", "nan") and d < "2012-01-01"}
+    expected_absent = {
+        n for n, d in out_of.items() if d not in ("", "NaT", "nan") and d < start_iso
+    }
     t0 = time.time()
     rows = fails = delisted_ok = absent_ok = 0
     delisted_nums = set(delisted["num"])
     failures: list[str] = []
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
-        futs = {pool.submit(fetch_one, n): n for n in todo}
+        futs = {pool.submit(fetch_one, n, start, end): n for n in todo}
         for i, fut in enumerate(as_completed(futs), 1):
             sym, n, err = fut.result()
             if err:
@@ -146,13 +251,18 @@ def main() -> int:
                     delisted_ok += 1
             if i % 200 == 0 or i == len(todo):
                 el = time.time() - t0
-                print(f"[{i}/{len(todo)}] 行数 {rows} 失败 {fails} 正常缺失 {absent_ok} 退市股已拉 {delisted_ok} "
-                      f"用时 {el:.0f}s 速率 {i/max(el,1):.2f}/s", flush=True)
-            time.sleep(0.05 + random.random() * 0.1)      #  polite：东财对无节制并发会翻脸
+                print(
+                    f"[{i}/{len(todo)}] 行数 {rows} 失败 {fails} 正常缺失 {absent_ok} 退市股已拉 {delisted_ok} "
+                    f"用时 {el:.0f}s 速率 {i / max(el, 1):.2f}/s",
+                    flush=True,
+                )
+            time.sleep(0.05 + random.random() * 0.1)  # polite：东财对无节制并发会翻脸
     with open(FAILURES, "w") as fh:
         fh.write("\n".join(failures) + ("\n" if failures else ""))
-    print(f"\n完成：成功 {len(todo)-fails-absent_ok}/{len(todo)}，行数 {rows}，失败 {fails}，"
-          f"正常缺失(摘牌<2012) {absent_ok}，退市股成功 {delisted_ok}/{len(delisted)}")
+    print(
+        f"\n完成：成功 {len(todo)-fails-absent_ok}/{len(todo)}，行数 {rows}，失败 {fails}，"
+        f"正常缺失(摘牌<{start_iso}) {absent_ok}，退市股成功 {delisted_ok}/{len(delisted)}"
+    )
     if failures:
         print(f"失败清单 → {FAILURES}")
     if fails > len(todo) * 0.1:
