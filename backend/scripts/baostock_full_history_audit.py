@@ -65,7 +65,8 @@ def coverage_ratio(bars: pd.Series, from_d: pd.Timestamp, to_d: pd.Timestamp, ca
     window = cal[(cal >= from_d) & (cal <= to_d)]
     if len(window) == 0:
         return 0.0
-    return len(bars) / len(window)
+    inwin = bars[(bars >= from_d) & (bars <= to_d)]      # 窗口外的 bar 不许 inflate 覆盖率
+    return len(inwin) / len(window)
 
 
 def endpoint_gap_days(last_bar: pd.Timestamp, out_date: pd.Timestamp) -> int:
@@ -142,8 +143,13 @@ def run_audit() -> dict:
     # 与现役层比链：**按日期对齐的累计口径**（hfq 用首末比值，baostock 用它自己 bar 上的 pctChg 连乘）。
     # 绝不逐日配对两条链：两侧停牌日不同会把两天涨跌当成一天，15 倍的假分歧就是这么造出来的（实测踩过）。
     old = _files(OLD_DIR)
-    chain = {"checked": 0, "skipped": 0, "gaps_pp": [], "worst": []}
-    for key, s in list(bars_map.items())[:1200]:
+    old_alive = len(old) >= 100
+    chain = {"checked": 0, "skipped": 0, "gaps_pp": [], "worst": [],
+             "status": ("现役层对照（只披露，不作闸门）" if old_alive else
+                        "旧 baostock bar 层已作废（10001011 IP 黑名单；半截 bar 隔离在 baostock_full/_killed_run_partial/）。"
+                        "而且两侧口径都已被地面真相判不合格（hfq 配股减法复权会算出负股价；pctChg 把送转虚增），"
+                        "两个坏口径互比不构成闸门 —— 口径闸门改在 build_total_return_panel.py")}
+    for key, s in (list(bars_map.items())[:1200] if old_alive else []):
         if key not in old:
             chain["skipped"] += 1
             continue
@@ -209,13 +215,13 @@ def run_audit() -> dict:
         and gates["delisted_endpoint_bad_n"] <= max(3, int(gates["delisted_with_bars"] * 0.05))
         and gates["coverage_median_pct"] is not None and gates["coverage_median_pct"] >= COVERAGE_MIN * 100
         and gates["low_coverage_n"] <= int(gates["files"] * 0.10)
-        and chain["checked"] >= 100 and (chain["abs_gap_median_pp"] or 99) <= CHAIN_GAP_MEDIAN_PP
-        and (chain["abs_gap_gt10pp_n"] or 0) <= max(3, int(chain["checked"] * 0.02))
-    )
+    )   # 口径/链对比不在这里判：见 chain_vs_live_layer.status 与 build_total_return_panel.py 的闸门
     gates["disclosed_gaps"] = [
         f"baostock 不覆盖北交所：现役层有 BJ 代码 {len([1 for k in _files(OLD_DIR) if k.endswith('_BJ')])} 只，新层 {len(bj_missing)} 只",
         "财务 roe 只有 2018 年后的披露记录 → 质量规则只能从 2019 年入场起测",
         "akshare 日线无 PE/PB → 2021 年前的估值类规则（低PE/低PB）需 qlib 层（1990-2020-11 有 peTTM/pbMrq）另行验收",
+        "baostock 行情源已被封禁（10001011 黑名单用户）→ 只保留它的注册表（含 341 只退市股 + ipoDate/outDate）",
+        "退市股在东财分红接口多数返回空 → 自建 TR 会漏计这些票早期分红，方向是低估退市股回报（保守偏差）",
     ]
     out["gates"] = gates
     return out

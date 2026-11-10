@@ -83,6 +83,8 @@ def build_one(path: str, events_path: str | None, val_path: str | None) -> dict:
     raw_ret = np.concatenate([[0.0], close.to_numpy()[1:] / close.to_numpy()[:-1] - 1.0])
     ak_pct = pd.to_numeric(d["pct_chg_raw"], errors="coerce").to_numpy() / 100.0
     plain = (~has_ev) & np.isfinite(ak_pct) & np.isfinite(raw_ret)
+    plain[0] = False        # 首行不算：raw_ret[0] 恒为 0，而东财首行涨跌幅是相对发行价（301018 首行 +241.62%）。
+                            # 不去掉就是每只白送 1 个「疑似漏计」，闸门退化成统计噪声
     bad_days = int(np.sum(np.abs(raw_ret[plain] - ak_pct[plain]) > 1e-4))
     plain_n = int(plain.sum())
     # 闸门 2：复权因子 tr_index/close 必须单调不减
